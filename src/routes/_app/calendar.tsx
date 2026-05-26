@@ -22,7 +22,7 @@ function CalendarPage() {
 
   return (
     <div className="p-8">
-      <PageHeader title="Calendar" description="Items with a scheduled date, grouped by day." />
+      <PageHeader title="Content Calendar" description="Content items with a scheduled date, grouped by day." />
       {Object.keys(groups).length === 0 && <p className="text-muted-foreground">Nothing scheduled yet.</p>}
       <div className="space-y-6">
         {Object.entries(groups).map(([day, items]) => (

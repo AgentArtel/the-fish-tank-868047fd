@@ -39,7 +39,7 @@ function ContentList() {
 
   return (
     <div className="p-8">
-      <PageHeader title="Content" description="All planned, drafted, and posted items."
+      <PageHeader title="Content Items" description="All planned, drafted, and posted items in the Content module."
         action={<Button asChild><Link to="/content/new"><Plus className="w-4 h-4 mr-1" /> New</Link></Button>} />
       <div className="flex gap-2 mb-4">
         <Input placeholder="Search title…" value={q ?? ""} className="max-w-xs"

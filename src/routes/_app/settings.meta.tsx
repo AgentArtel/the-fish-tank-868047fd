@@ -37,10 +37,10 @@ function MetaSettings() {
 
   return (
     <div className="p-8 max-w-2xl">
-      <PageHeader title="Meta integration" description="Placeholder configuration only — no API calls, no tokens, no OAuth." />
+      <PageHeader title="Meta Placeholder" description="Future integration settings for Meta Business tools. No OAuth, tokens, or API posting are active in this version." />
       <div className="rounded-lg border bg-amber-50 text-amber-900 p-4 mb-6 text-sm">
-        <strong>Not connected.</strong> The Meta Graph API integration is planned for a future release.
-        For now, store IDs and notes here so they're ready when posting is automated via Edge Functions or n8n.
+        <strong>Not connected.</strong> This is a placeholder for a future integration under Settings.
+        Store Meta Business IDs and notes here so they're ready when automated posting is built later.
       </div>
       <div className="space-y-4 rounded-lg border bg-card p-5">
         <div className="space-y-1.5"><Label>Meta Business ID</Label><Input value={f.meta_business_id ?? ""} onChange={e=>setF({...f, meta_business_id:e.target.value})} /></div>

@@ -26,7 +26,7 @@ function MediaPage() {
 
   return (
     <div className="p-8">
-      <PageHeader title="Media" description="Photo and video assets."
+      <PageHeader title="Media Library" description="Photo and video assets used across the workspace."
         action={<UploadDialog onDone={refetch} />} />
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
         {(data ?? []).map((m:any) => <MediaCard key={m.id} asset={m} />)}
