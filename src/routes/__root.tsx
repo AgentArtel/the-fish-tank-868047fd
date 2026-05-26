@@ -44,7 +44,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: "The Fish Tank CMS" },
       { name: "description", content: "Content management for The Fish Tank aquarium retail." },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "stylesheet", href: appCss },
+      { rel: "icon", type: "image/png", href: "/favicon.png" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
+    ],
   }),
   shellComponent: RootShell,
   component: RootComponent,

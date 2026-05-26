@@ -24,10 +24,11 @@ function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-muted/30">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-background">
+      <img src="/brand/fish-tank-badge.png" alt="The Fish Tank" className="w-24 h-24 mb-4 rounded-full" />
+      <h1 className="text-2xl font-semibold tracking-tight">The Fish Tank CMS</h1>
+      <p className="text-sm text-muted-foreground mb-6">Internal Content Management System</p>
       <div className="w-full max-w-sm rounded-xl border bg-card p-6 shadow-sm">
-        <h1 className="text-xl font-semibold">The Fish Tank CMS</h1>
-        <p className="text-sm text-muted-foreground mb-6">Sign in to continue.</p>
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="email">Email</Label>
@@ -39,7 +40,7 @@ function LoginPage() {
           </div>
           <Button type="submit" className="w-full" disabled={loading}>{loading?"Signing in…":"Sign in"}</Button>
         </form>
-        <p className="mt-4 text-sm text-muted-foreground">
+        <p className="mt-4 text-sm text-muted-foreground text-center">
           No account? <Link to="/signup" className="text-primary hover:underline">Request access</Link>
         </p>
       </div>

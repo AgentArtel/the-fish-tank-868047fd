@@ -32,12 +32,11 @@ function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-muted/30">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-background">
+      <img src="/brand/fish-tank-badge.png" alt="The Fish Tank" className="w-24 h-24 mb-4 rounded-full" />
+      <h1 className="text-2xl font-semibold tracking-tight">The Fish Tank CMS</h1>
+      <p className="text-sm text-muted-foreground mb-6 text-center max-w-sm">New accounts require admin approval before access.</p>
       <div className="w-full max-w-sm rounded-xl border bg-card p-6 shadow-sm">
-        <h1 className="text-xl font-semibold">Request access</h1>
-        <p className="text-sm text-muted-foreground mb-6">
-          The first account becomes the admin. Additional accounts must be approved.
-        </p>
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="name">Display name</Label>
@@ -53,7 +52,7 @@ function SignupPage() {
           </div>
           <Button type="submit" className="w-full" disabled={loading}>{loading?"Creating…":"Create account"}</Button>
         </form>
-        <p className="mt-4 text-sm text-muted-foreground">
+        <p className="mt-4 text-sm text-muted-foreground text-center">
           Already have access? <Link to="/login" className="text-primary hover:underline">Sign in</Link>
         </p>
       </div>
