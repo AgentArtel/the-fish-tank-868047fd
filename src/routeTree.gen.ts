@@ -12,7 +12,11 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as PendingApprovalRouteImport } from './routes/pending-approval'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
+import { Route as AppContentIndexRouteImport } from './routes/_app/content.index'
+import { Route as AppContentNewRouteImport } from './routes/_app/content.new'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -29,10 +33,29 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppRoute = AppRouteImport.update({
+  id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AppDashboardRoute = AppDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppContentIndexRoute = AppContentIndexRouteImport.update({
+  id: '/content/',
+  path: '/content/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppContentNewRoute = AppContentNewRouteImport.update({
+  id: '/content/new',
+  path: '/content/new',
+  getParentRoute: () => AppRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -40,30 +63,64 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/pending-approval': typeof PendingApprovalRoute
   '/signup': typeof SignupRoute
+  '/dashboard': typeof AppDashboardRoute
+  '/content/new': typeof AppContentNewRoute
+  '/content/': typeof AppContentIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/pending-approval': typeof PendingApprovalRoute
   '/signup': typeof SignupRoute
+  '/dashboard': typeof AppDashboardRoute
+  '/content/new': typeof AppContentNewRoute
+  '/content': typeof AppContentIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/pending-approval': typeof PendingApprovalRoute
   '/signup': typeof SignupRoute
+  '/_app/dashboard': typeof AppDashboardRoute
+  '/_app/content/new': typeof AppContentNewRoute
+  '/_app/content/': typeof AppContentIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/pending-approval' | '/signup'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/pending-approval'
+    | '/signup'
+    | '/dashboard'
+    | '/content/new'
+    | '/content/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/pending-approval' | '/signup'
-  id: '__root__' | '/' | '/login' | '/pending-approval' | '/signup'
+  to:
+    | '/'
+    | '/login'
+    | '/pending-approval'
+    | '/signup'
+    | '/dashboard'
+    | '/content/new'
+    | '/content'
+  id:
+    | '__root__'
+    | '/'
+    | '/_app'
+    | '/login'
+    | '/pending-approval'
+    | '/signup'
+    | '/_app/dashboard'
+    | '/_app/content/new'
+    | '/_app/content/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
   PendingApprovalRoute: typeof PendingApprovalRoute
   SignupRoute: typeof SignupRoute
@@ -92,6 +149,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app': {
+      id: '/_app'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -99,11 +163,47 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/dashboard': {
+      id: '/_app/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AppDashboardRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/content/': {
+      id: '/_app/content/'
+      path: '/content'
+      fullPath: '/content/'
+      preLoaderRoute: typeof AppContentIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/content/new': {
+      id: '/_app/content/new'
+      path: '/content/new'
+      fullPath: '/content/new'
+      preLoaderRoute: typeof AppContentNewRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
+interface AppRouteChildren {
+  AppDashboardRoute: typeof AppDashboardRoute
+  AppContentNewRoute: typeof AppContentNewRoute
+  AppContentIndexRoute: typeof AppContentIndexRoute
+}
+
+const AppRouteChildren: AppRouteChildren = {
+  AppDashboardRoute: AppDashboardRoute,
+  AppContentNewRoute: AppContentNewRoute,
+  AppContentIndexRoute: AppContentIndexRoute,
+}
+
+const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
   PendingApprovalRoute: PendingApprovalRoute,
   SignupRoute: SignupRoute,
@@ -111,3 +211,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
