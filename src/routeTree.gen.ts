@@ -16,19 +16,22 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppVendorsRouteImport } from './routes/_app/vendors'
 import { Route as AppTasksRouteImport } from './routes/_app/tasks'
-import { Route as AppStorePlacementRouteImport } from './routes/_app/store-placement'
+import { Route as AppStoreLocationsRouteImport } from './routes/_app/store-locations'
 import { Route as AppPublishingRouteImport } from './routes/_app/publishing'
 import { Route as AppProductsRouteImport } from './routes/_app/products'
+import { Route as AppPricingApprovalRouteImport } from './routes/_app/pricing-approval'
 import { Route as AppMediaRouteImport } from './routes/_app/media'
-import { Route as AppInventoryIntakeRouteImport } from './routes/_app/inventory-intake'
+import { Route as AppInventoryRouteImport } from './routes/_app/inventory'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppCampaignsRouteImport } from './routes/_app/campaigns'
 import { Route as AppCalendarRouteImport } from './routes/_app/calendar'
+import { Route as AppBatchesRouteImport } from './routes/_app/batches'
 import { Route as AppContentIndexRouteImport } from './routes/_app/content.index'
 import { Route as AppSettingsUsersRouteImport } from './routes/_app/settings.users'
 import { Route as AppSettingsMetaRouteImport } from './routes/_app/settings.meta'
 import { Route as AppContentNewRouteImport } from './routes/_app/content.new'
 import { Route as AppContentIdRouteImport } from './routes/_app/content.$id'
+import { Route as AppBatchesIdRouteImport } from './routes/_app/batches.$id'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -64,9 +67,9 @@ const AppTasksRoute = AppTasksRouteImport.update({
   path: '/tasks',
   getParentRoute: () => AppRoute,
 } as any)
-const AppStorePlacementRoute = AppStorePlacementRouteImport.update({
-  id: '/store-placement',
-  path: '/store-placement',
+const AppStoreLocationsRoute = AppStoreLocationsRouteImport.update({
+  id: '/store-locations',
+  path: '/store-locations',
   getParentRoute: () => AppRoute,
 } as any)
 const AppPublishingRoute = AppPublishingRouteImport.update({
@@ -79,14 +82,19 @@ const AppProductsRoute = AppProductsRouteImport.update({
   path: '/products',
   getParentRoute: () => AppRoute,
 } as any)
+const AppPricingApprovalRoute = AppPricingApprovalRouteImport.update({
+  id: '/pricing-approval',
+  path: '/pricing-approval',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppMediaRoute = AppMediaRouteImport.update({
   id: '/media',
   path: '/media',
   getParentRoute: () => AppRoute,
 } as any)
-const AppInventoryIntakeRoute = AppInventoryIntakeRouteImport.update({
-  id: '/inventory-intake',
-  path: '/inventory-intake',
+const AppInventoryRoute = AppInventoryRouteImport.update({
+  id: '/inventory',
+  path: '/inventory',
   getParentRoute: () => AppRoute,
 } as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
@@ -102,6 +110,11 @@ const AppCampaignsRoute = AppCampaignsRouteImport.update({
 const AppCalendarRoute = AppCalendarRouteImport.update({
   id: '/calendar',
   path: '/calendar',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppBatchesRoute = AppBatchesRouteImport.update({
+  id: '/batches',
+  path: '/batches',
   getParentRoute: () => AppRoute,
 } as any)
 const AppContentIndexRoute = AppContentIndexRouteImport.update({
@@ -129,22 +142,30 @@ const AppContentIdRoute = AppContentIdRouteImport.update({
   path: '/content/$id',
   getParentRoute: () => AppRoute,
 } as any)
+const AppBatchesIdRoute = AppBatchesIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AppBatchesRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/pending-approval': typeof PendingApprovalRoute
   '/signup': typeof SignupRoute
+  '/batches': typeof AppBatchesRouteWithChildren
   '/calendar': typeof AppCalendarRoute
   '/campaigns': typeof AppCampaignsRoute
   '/dashboard': typeof AppDashboardRoute
-  '/inventory-intake': typeof AppInventoryIntakeRoute
+  '/inventory': typeof AppInventoryRoute
   '/media': typeof AppMediaRoute
+  '/pricing-approval': typeof AppPricingApprovalRoute
   '/products': typeof AppProductsRoute
   '/publishing': typeof AppPublishingRoute
-  '/store-placement': typeof AppStorePlacementRoute
+  '/store-locations': typeof AppStoreLocationsRoute
   '/tasks': typeof AppTasksRoute
   '/vendors': typeof AppVendorsRoute
+  '/batches/$id': typeof AppBatchesIdRoute
   '/content/$id': typeof AppContentIdRoute
   '/content/new': typeof AppContentNewRoute
   '/settings/meta': typeof AppSettingsMetaRoute
@@ -156,16 +177,19 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/pending-approval': typeof PendingApprovalRoute
   '/signup': typeof SignupRoute
+  '/batches': typeof AppBatchesRouteWithChildren
   '/calendar': typeof AppCalendarRoute
   '/campaigns': typeof AppCampaignsRoute
   '/dashboard': typeof AppDashboardRoute
-  '/inventory-intake': typeof AppInventoryIntakeRoute
+  '/inventory': typeof AppInventoryRoute
   '/media': typeof AppMediaRoute
+  '/pricing-approval': typeof AppPricingApprovalRoute
   '/products': typeof AppProductsRoute
   '/publishing': typeof AppPublishingRoute
-  '/store-placement': typeof AppStorePlacementRoute
+  '/store-locations': typeof AppStoreLocationsRoute
   '/tasks': typeof AppTasksRoute
   '/vendors': typeof AppVendorsRoute
+  '/batches/$id': typeof AppBatchesIdRoute
   '/content/$id': typeof AppContentIdRoute
   '/content/new': typeof AppContentNewRoute
   '/settings/meta': typeof AppSettingsMetaRoute
@@ -179,16 +203,19 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/pending-approval': typeof PendingApprovalRoute
   '/signup': typeof SignupRoute
+  '/_app/batches': typeof AppBatchesRouteWithChildren
   '/_app/calendar': typeof AppCalendarRoute
   '/_app/campaigns': typeof AppCampaignsRoute
   '/_app/dashboard': typeof AppDashboardRoute
-  '/_app/inventory-intake': typeof AppInventoryIntakeRoute
+  '/_app/inventory': typeof AppInventoryRoute
   '/_app/media': typeof AppMediaRoute
+  '/_app/pricing-approval': typeof AppPricingApprovalRoute
   '/_app/products': typeof AppProductsRoute
   '/_app/publishing': typeof AppPublishingRoute
-  '/_app/store-placement': typeof AppStorePlacementRoute
+  '/_app/store-locations': typeof AppStoreLocationsRoute
   '/_app/tasks': typeof AppTasksRoute
   '/_app/vendors': typeof AppVendorsRoute
+  '/_app/batches/$id': typeof AppBatchesIdRoute
   '/_app/content/$id': typeof AppContentIdRoute
   '/_app/content/new': typeof AppContentNewRoute
   '/_app/settings/meta': typeof AppSettingsMetaRoute
@@ -202,16 +229,19 @@ export interface FileRouteTypes {
     | '/login'
     | '/pending-approval'
     | '/signup'
+    | '/batches'
     | '/calendar'
     | '/campaigns'
     | '/dashboard'
-    | '/inventory-intake'
+    | '/inventory'
     | '/media'
+    | '/pricing-approval'
     | '/products'
     | '/publishing'
-    | '/store-placement'
+    | '/store-locations'
     | '/tasks'
     | '/vendors'
+    | '/batches/$id'
     | '/content/$id'
     | '/content/new'
     | '/settings/meta'
@@ -223,16 +253,19 @@ export interface FileRouteTypes {
     | '/login'
     | '/pending-approval'
     | '/signup'
+    | '/batches'
     | '/calendar'
     | '/campaigns'
     | '/dashboard'
-    | '/inventory-intake'
+    | '/inventory'
     | '/media'
+    | '/pricing-approval'
     | '/products'
     | '/publishing'
-    | '/store-placement'
+    | '/store-locations'
     | '/tasks'
     | '/vendors'
+    | '/batches/$id'
     | '/content/$id'
     | '/content/new'
     | '/settings/meta'
@@ -245,16 +278,19 @@ export interface FileRouteTypes {
     | '/login'
     | '/pending-approval'
     | '/signup'
+    | '/_app/batches'
     | '/_app/calendar'
     | '/_app/campaigns'
     | '/_app/dashboard'
-    | '/_app/inventory-intake'
+    | '/_app/inventory'
     | '/_app/media'
+    | '/_app/pricing-approval'
     | '/_app/products'
     | '/_app/publishing'
-    | '/_app/store-placement'
+    | '/_app/store-locations'
     | '/_app/tasks'
     | '/_app/vendors'
+    | '/_app/batches/$id'
     | '/_app/content/$id'
     | '/_app/content/new'
     | '/_app/settings/meta'
@@ -321,11 +357,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTasksRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/store-placement': {
-      id: '/_app/store-placement'
-      path: '/store-placement'
-      fullPath: '/store-placement'
-      preLoaderRoute: typeof AppStorePlacementRouteImport
+    '/_app/store-locations': {
+      id: '/_app/store-locations'
+      path: '/store-locations'
+      fullPath: '/store-locations'
+      preLoaderRoute: typeof AppStoreLocationsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/publishing': {
@@ -342,6 +378,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProductsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/pricing-approval': {
+      id: '/_app/pricing-approval'
+      path: '/pricing-approval'
+      fullPath: '/pricing-approval'
+      preLoaderRoute: typeof AppPricingApprovalRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/media': {
       id: '/_app/media'
       path: '/media'
@@ -349,11 +392,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppMediaRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/inventory-intake': {
-      id: '/_app/inventory-intake'
-      path: '/inventory-intake'
-      fullPath: '/inventory-intake'
-      preLoaderRoute: typeof AppInventoryIntakeRouteImport
+    '/_app/inventory': {
+      id: '/_app/inventory'
+      path: '/inventory'
+      fullPath: '/inventory'
+      preLoaderRoute: typeof AppInventoryRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/dashboard': {
@@ -375,6 +418,13 @@ declare module '@tanstack/react-router' {
       path: '/calendar'
       fullPath: '/calendar'
       preLoaderRoute: typeof AppCalendarRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/batches': {
+      id: '/_app/batches'
+      path: '/batches'
+      fullPath: '/batches'
+      preLoaderRoute: typeof AppBatchesRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/content/': {
@@ -412,18 +462,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppContentIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/batches/$id': {
+      id: '/_app/batches/$id'
+      path: '/$id'
+      fullPath: '/batches/$id'
+      preLoaderRoute: typeof AppBatchesIdRouteImport
+      parentRoute: typeof AppBatchesRoute
+    }
   }
 }
 
+interface AppBatchesRouteChildren {
+  AppBatchesIdRoute: typeof AppBatchesIdRoute
+}
+
+const AppBatchesRouteChildren: AppBatchesRouteChildren = {
+  AppBatchesIdRoute: AppBatchesIdRoute,
+}
+
+const AppBatchesRouteWithChildren = AppBatchesRoute._addFileChildren(
+  AppBatchesRouteChildren,
+)
+
 interface AppRouteChildren {
+  AppBatchesRoute: typeof AppBatchesRouteWithChildren
   AppCalendarRoute: typeof AppCalendarRoute
   AppCampaignsRoute: typeof AppCampaignsRoute
   AppDashboardRoute: typeof AppDashboardRoute
-  AppInventoryIntakeRoute: typeof AppInventoryIntakeRoute
+  AppInventoryRoute: typeof AppInventoryRoute
   AppMediaRoute: typeof AppMediaRoute
+  AppPricingApprovalRoute: typeof AppPricingApprovalRoute
   AppProductsRoute: typeof AppProductsRoute
   AppPublishingRoute: typeof AppPublishingRoute
-  AppStorePlacementRoute: typeof AppStorePlacementRoute
+  AppStoreLocationsRoute: typeof AppStoreLocationsRoute
   AppTasksRoute: typeof AppTasksRoute
   AppVendorsRoute: typeof AppVendorsRoute
   AppContentIdRoute: typeof AppContentIdRoute
@@ -434,14 +505,16 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppBatchesRoute: AppBatchesRouteWithChildren,
   AppCalendarRoute: AppCalendarRoute,
   AppCampaignsRoute: AppCampaignsRoute,
   AppDashboardRoute: AppDashboardRoute,
-  AppInventoryIntakeRoute: AppInventoryIntakeRoute,
+  AppInventoryRoute: AppInventoryRoute,
   AppMediaRoute: AppMediaRoute,
+  AppPricingApprovalRoute: AppPricingApprovalRoute,
   AppProductsRoute: AppProductsRoute,
   AppPublishingRoute: AppPublishingRoute,
-  AppStorePlacementRoute: AppStorePlacementRoute,
+  AppStoreLocationsRoute: AppStoreLocationsRoute,
   AppTasksRoute: AppTasksRoute,
   AppVendorsRoute: AppVendorsRoute,
   AppContentIdRoute: AppContentIdRoute,

@@ -1,0 +1,393 @@
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { supabase } from "@/integrations/supabase/client";
+import { PageHeader } from "@/components/page-header";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Plus, Upload, ArrowLeft } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+import { useMe } from "@/hooks/use-me";
+import { OpsBadge, intakeTone, reviewTone, pricingTone } from "@/components/ops-badge";
+import {
+  VENDOR_BATCH_SOURCE_TYPES, VENDOR_BATCH_SOURCE_LABELS,
+  VENDOR_BATCH_INTAKE_STATUSES, VENDOR_BATCH_INTAKE_LABELS,
+  VENDOR_BATCH_EXTRACTION_STATUSES, VENDOR_BATCH_EXTRACTION_LABELS,
+  VENDOR_LINE_REVIEW, VENDOR_LINE_REVIEW_LABELS,
+  VENDOR_LINE_PRICING_LABELS,
+  VENDOR_CHARGE_TYPES, VENDOR_CHARGE_LABELS,
+  fmtMoney,
+} from "@/lib/ops";
+import { convertLineItemsToInventory, getSignedVendorInvoiceUrl } from "@/lib/ops.functions";
+
+export const Route = createFileRoute("/_app/batches/$id")({ component: BatchDetail });
+
+function BatchDetail() {
+  const { id } = Route.useParams();
+  const nav = useNavigate();
+  const qc = useQueryClient();
+  const { data: batch } = useQuery({
+    queryKey: ["batch", id],
+    queryFn: async () => (await supabase.from("vendor_batches")
+      .select("*, vendors(id,name)").eq("id", id).maybeSingle()).data,
+  });
+  const { data: lines } = useQuery({
+    queryKey: ["batch-lines", id],
+    queryFn: async () => (await supabase.from("vendor_line_items")
+      .select("*").eq("vendor_batch_id", id).order("line_number",{nullsFirst:false})).data ?? [],
+  });
+  const { data: charges } = useQuery({
+    queryKey: ["batch-charges", id],
+    queryFn: async () => (await supabase.from("vendor_batch_charges")
+      .select("*").eq("vendor_batch_id", id).order("created_at")).data ?? [],
+  });
+
+  if (!batch) return <div className="p-8 text-muted-foreground">Loading…</div>;
+
+  const refreshAll = () => {
+    qc.invalidateQueries({ queryKey: ["batch", id] });
+    qc.invalidateQueries({ queryKey: ["batch-lines", id] });
+    qc.invalidateQueries({ queryKey: ["batch-charges", id] });
+    qc.invalidateQueries({ queryKey: ["vendor-batches"] });
+  };
+
+  return (
+    <div className="p-8 space-y-6">
+      <button onClick={() => nav({ to: "/batches" })} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
+        <ArrowLeft className="w-3 h-3" /> Back to batches
+      </button>
+      <PageHeader
+        title={`${batch.vendors?.name ?? "Vendor"} — ${batch.invoice_number ?? "no invoice #"}`}
+        description={`${VENDOR_BATCH_SOURCE_LABELS[batch.source_document_type as keyof typeof VENDOR_BATCH_SOURCE_LABELS]} · ${VENDOR_BATCH_INTAKE_LABELS[batch.intake_status as keyof typeof VENDOR_BATCH_INTAKE_LABELS]}`}
+        action={<ConvertButton batchId={id} lines={lines ?? []} onDone={refreshAll} />}
+      />
+
+      <BatchHeaderForm batch={batch} onDone={refreshAll} />
+      <LineItemsSection batchId={id} vendorId={batch.vendor_id} lines={lines ?? []} onDone={refreshAll} />
+      <ChargesSection batchId={id} charges={charges ?? []} onDone={refreshAll} />
+    </div>
+  );
+}
+
+function BatchHeaderForm({ batch, onDone }: { batch: any; onDone: () => void }) {
+  const [f, setF] = useState<any>(batch);
+  const [busy, setBusy] = useState(false);
+  const [uploadBusy, setUploadBusy] = useState(false);
+  const getUrl = useServerFn(getSignedVendorInvoiceUrl);
+
+  const save = async () => {
+    setBusy(true);
+    const { id, vendors, ...patch } = f;
+    const { error } = await supabase.from("vendor_batches").update(patch).eq("id", batch.id);
+    setBusy(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Saved"); onDone();
+  };
+
+  const uploadPdf = async (file: File) => {
+    setUploadBusy(true);
+    try {
+      const path = `${batch.vendor_id}/${batch.id}/${Date.now()}-${file.name}`;
+      const { error } = await supabase.storage.from("vendor-invoices").upload(path, file);
+      if (error) throw error;
+      const { error: upErr } = await supabase.from("vendor_batches").update({
+        pdf_storage_path: path, pdf_file_name: file.name,
+        intake_status: batch.intake_status === "draft" ? "uploaded" : batch.intake_status,
+      }).eq("id", batch.id);
+      if (upErr) throw upErr;
+      toast.success("Invoice uploaded"); onDone();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setUploadBusy(false); }
+  };
+
+  const openPdf = async () => {
+    if (!batch.pdf_storage_path) return;
+    const { url } = await getUrl({ data: { path: batch.pdf_storage_path } });
+    window.open(url, "_blank");
+  };
+
+  return (
+    <div className="rounded-lg border bg-card p-5 space-y-4">
+      <h2 className="font-semibold">Header</h2>
+      <div className="grid md:grid-cols-3 gap-3">
+        <Field label="Document type">
+          <Select value={f.source_document_type} onValueChange={v=>setF({...f, source_document_type:v})}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>{VENDOR_BATCH_SOURCE_TYPES.map(t => <SelectItem key={t} value={t}>{VENDOR_BATCH_SOURCE_LABELS[t]}</SelectItem>)}</SelectContent>
+          </Select>
+        </Field>
+        <Field label="Intake status">
+          <Select value={f.intake_status} onValueChange={v=>setF({...f, intake_status:v})}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>{VENDOR_BATCH_INTAKE_STATUSES.map(t=> <SelectItem key={t} value={t}>{VENDOR_BATCH_INTAKE_LABELS[t]}</SelectItem>)}</SelectContent>
+          </Select>
+        </Field>
+        <Field label="Extraction status">
+          <Select value={f.extraction_status} onValueChange={v=>setF({...f, extraction_status:v})}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>{VENDOR_BATCH_EXTRACTION_STATUSES.map(t=> <SelectItem key={t} value={t}>{VENDOR_BATCH_EXTRACTION_LABELS[t]}</SelectItem>)}</SelectContent>
+          </Select>
+        </Field>
+        <Field label="Invoice #"><Input value={f.invoice_number ?? ""} onChange={e=>setF({...f, invoice_number:e.target.value})} /></Field>
+        <Field label="Order #"><Input value={f.order_number ?? ""} onChange={e=>setF({...f, order_number:e.target.value})} /></Field>
+        <Field label="PO #"><Input value={f.po_number ?? ""} onChange={e=>setF({...f, po_number:e.target.value})} /></Field>
+        <Field label="Sales order #"><Input value={f.sales_order_number ?? ""} onChange={e=>setF({...f, sales_order_number:e.target.value})} /></Field>
+        <Field label="Customer #"><Input value={f.customer_number ?? ""} onChange={e=>setF({...f, customer_number:e.target.value})} /></Field>
+        <Field label="Carrier"><Input value={f.carrier ?? ""} onChange={e=>setF({...f, carrier:e.target.value})} /></Field>
+        <Field label="Tracking #"><Input value={f.tracking_number ?? ""} onChange={e=>setF({...f, tracking_number:e.target.value})} /></Field>
+        <Field label="AWB #"><Input value={f.awb_number ?? ""} onChange={e=>setF({...f, awb_number:e.target.value})} /></Field>
+        <Field label="Terms"><Input value={f.terms ?? ""} onChange={e=>setF({...f, terms:e.target.value})} /></Field>
+        <Field label="Invoice date"><Input type="date" value={f.invoice_date ?? ""} onChange={e=>setF({...f, invoice_date:e.target.value||null})} /></Field>
+        <Field label="Ship date"><Input type="date" value={f.ship_date ?? ""} onChange={e=>setF({...f, ship_date:e.target.value||null})} /></Field>
+        <Field label="Arrival date"><Input type="date" value={f.arrival_date ?? ""} onChange={e=>setF({...f, arrival_date:e.target.value||null})} /></Field>
+        <Field label="Subtotal"><Input type="number" step="0.01" value={f.invoice_subtotal ?? ""} onChange={e=>setF({...f, invoice_subtotal:e.target.value===""?null:Number(e.target.value)})} /></Field>
+        <Field label="Discount"><Input type="number" step="0.01" value={f.invoice_discount ?? ""} onChange={e=>setF({...f, invoice_discount:e.target.value===""?null:Number(e.target.value)})} /></Field>
+        <Field label="Invoice total"><Input type="number" step="0.01" value={f.invoice_total ?? ""} onChange={e=>setF({...f, invoice_total:e.target.value===""?null:Number(e.target.value)})} /></Field>
+        <Field label="Balance due"><Input type="number" step="0.01" value={f.balance_due ?? ""} onChange={e=>setF({...f, balance_due:e.target.value===""?null:Number(e.target.value)})} /></Field>
+      </div>
+      <div className="space-y-1.5"><Label>Notes</Label><Textarea rows={2} value={f.notes ?? ""} onChange={e=>setF({...f, notes:e.target.value})} /></div>
+
+      <div className="flex items-center gap-2 pt-2 border-t">
+        <Button onClick={save} disabled={busy}>{busy ? "Saving…" : "Save header"}</Button>
+        <label className="inline-flex items-center gap-2 text-sm cursor-pointer">
+          <input type="file" accept="application/pdf" className="hidden"
+            onChange={e => { const file = e.target.files?.[0]; if (file) uploadPdf(file); }} />
+          <Button asChild variant="outline" disabled={uploadBusy}>
+            <span><Upload className="w-4 h-4 mr-1" /> {uploadBusy ? "Uploading…" : batch.pdf_storage_path ? "Replace PDF" : "Upload PDF"}</span>
+          </Button>
+        </label>
+        {batch.pdf_storage_path && (
+          <Button variant="ghost" onClick={openPdf}>Open {batch.pdf_file_name ?? "PDF"}</Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div className="space-y-1.5"><Label className="text-xs">{label}</Label>{children}</div>;
+}
+
+function LineItemsSection({ batchId, vendorId, lines, onDone }:
+  { batchId: string; vendorId: string; lines: any[]; onDone: () => void }) {
+  return (
+    <div className="rounded-lg border bg-card p-5 space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 className="font-semibold">Draft line items</h2>
+        <NewLineDialog batchId={batchId} vendorId={vendorId} onDone={onDone} />
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50 text-left">
+            <tr>
+              <th className="p-2">#</th><th className="p-2">Item</th><th className="p-2">Qty</th>
+              <th className="p-2">Cost</th><th className="p-2">Suggested</th><th className="p-2">Approved</th>
+              <th className="p-2">Review</th><th className="p-2">Pricing</th><th className="p-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {lines.map(l => <LineRow key={l.id} line={l} onDone={onDone} />)}
+            {lines.length === 0 && <tr><td colSpan={9} className="p-6 text-center text-muted-foreground">No line items. Add one to start review.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function LineRow({ line, onDone }: { line: any; onDone: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const updateReview = async (review_status: string) => {
+    const { error } = await supabase.from("vendor_line_items").update({ review_status }).eq("id", line.id);
+    if (error) toast.error(error.message); else onDone();
+  };
+  return (
+    <>
+      <tr className="border-t hover:bg-muted/30">
+        <td className="p-2 text-muted-foreground">{line.line_number ?? "—"}</td>
+        <td className="p-2">
+          <div className="font-medium">{line.clean_item_name || line.raw_description || "(no name)"}</div>
+          {line.scientific_name && <div className="text-xs italic text-muted-foreground">{line.scientific_name}</div>}
+          {line.extraction_warning && <div className="text-xs text-amber-700">⚠ {line.extraction_warning}</div>}
+        </td>
+        <td className="p-2">{line.quantity} {line.size && <span className="text-xs text-muted-foreground">{line.size}</span>}</td>
+        <td className="p-2">{fmtMoney(line.wholesale_cost)}</td>
+        <td className="p-2">{fmtMoney(line.suggested_retail_price)}</td>
+        <td className="p-2 font-medium">{fmtMoney(line.approved_retail_price)}</td>
+        <td className="p-2">
+          <Select value={line.review_status} onValueChange={updateReview}>
+            <SelectTrigger className="h-7 text-xs w-[110px]"><SelectValue /></SelectTrigger>
+            <SelectContent>{VENDOR_LINE_REVIEW.map(s => <SelectItem key={s} value={s}>{VENDOR_LINE_REVIEW_LABELS[s]}</SelectItem>)}</SelectContent>
+          </Select>
+        </td>
+        <td className="p-2"><OpsBadge label={VENDOR_LINE_PRICING_LABELS[line.pricing_status as keyof typeof VENDOR_LINE_PRICING_LABELS]} tone={pricingTone(line.pricing_status)} /></td>
+        <td className="p-2"><Button variant="ghost" size="sm" onClick={()=>setEditing(true)}>Edit</Button></td>
+      </tr>
+      {editing && <EditLineDialog line={line} onClose={()=>{setEditing(false); onDone();}} />}
+    </>
+  );
+}
+
+function NewLineDialog({ batchId, vendorId, onDone }: { batchId: string; vendorId: string; onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState<any>({ kind: "sellable", quantity: 1 });
+  const submit = async () => {
+    const { error } = await supabase.from("vendor_line_items").insert({
+      ...f, vendor_batch_id: batchId, vendor_id: vendorId,
+    });
+    if (error) { toast.error(error.message); return; }
+    toast.success("Line added"); setOpen(false); setF({ kind: "sellable", quantity: 1 }); onDone();
+  };
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild><Button size="sm"><Plus className="w-3 h-3 mr-1" /> Add line</Button></DialogTrigger>
+      <DialogContent className="max-h-[90vh] overflow-auto">
+        <DialogHeader><DialogTitle>New line item</DialogTitle></DialogHeader>
+        <LineFormFields f={f} setF={setF} />
+        <Button onClick={submit} className="w-full">Add</Button>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditLineDialog({ line, onClose }: { line: any; onClose: () => void }) {
+  const [f, setF] = useState<any>(line);
+  const save = async () => {
+    const { id, vendor_batch_id, vendor_id, approved_by, approved_at, pricing_status, approved_retail_price, ...patch } = f;
+    const { error } = await supabase.from("vendor_line_items").update(patch).eq("id", line.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Saved"); onClose();
+  };
+  const del = async () => {
+    if (!confirm("Delete this line?")) return;
+    const { error } = await supabase.from("vendor_line_items").delete().eq("id", line.id);
+    if (error) toast.error(error.message); else { toast.success("Deleted"); onClose(); }
+  };
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-h-[90vh] overflow-auto">
+        <DialogHeader><DialogTitle>Edit line</DialogTitle></DialogHeader>
+        <LineFormFields f={f} setF={setF} />
+        <div className="flex gap-2"><Button onClick={save} className="flex-1">Save</Button><Button variant="destructive" onClick={del}>Delete</Button></div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function LineFormFields({ f, setF }: { f: any; setF: (v: any) => void }) {
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Kind">
+          <Select value={f.kind} onValueChange={v=>setF({...f, kind:v})}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent><SelectItem value="sellable">Sellable</SelectItem><SelectItem value="charge">Charge</SelectItem></SelectContent>
+          </Select>
+        </Field>
+        <Field label="Line #"><Input type="number" value={f.line_number ?? ""} onChange={e=>setF({...f, line_number:e.target.value===""?null:Number(e.target.value)})} /></Field>
+      </div>
+      <Field label="Clean item name"><Input value={f.clean_item_name ?? ""} onChange={e=>setF({...f, clean_item_name:e.target.value})} /></Field>
+      <Field label="Raw description"><Textarea rows={2} value={f.raw_description ?? ""} onChange={e=>setF({...f, raw_description:e.target.value})} /></Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Scientific name"><Input value={f.scientific_name ?? ""} onChange={e=>setF({...f, scientific_name:e.target.value})} /></Field>
+        <Field label="Vendor item ID"><Input value={f.vendor_item_id ?? ""} onChange={e=>setF({...f, vendor_item_id:e.target.value})} /></Field>
+        <Field label="Category"><Input value={f.category ?? ""} onChange={e=>setF({...f, category:e.target.value})} /></Field>
+        <Field label="Subcategory"><Input value={f.subcategory ?? ""} onChange={e=>setF({...f, subcategory:e.target.value})} /></Field>
+        <Field label="Origin / region"><Input value={f.origin_region ?? ""} onChange={e=>setF({...f, origin_region:e.target.value})} /></Field>
+        <Field label="Size"><Input value={f.size ?? ""} onChange={e=>setF({...f, size:e.target.value})} /></Field>
+        <Field label="Quantity"><Input type="number" step="0.01" value={f.quantity ?? ""} onChange={e=>setF({...f, quantity:e.target.value===""?null:Number(e.target.value)})} /></Field>
+        <Field label="Wholesale cost"><Input type="number" step="0.01" value={f.wholesale_cost ?? ""} onChange={e=>setF({...f, wholesale_cost:e.target.value===""?null:Number(e.target.value)})} /></Field>
+        <Field label="Vendor sell price"><Input type="number" step="0.01" value={f.vendor_sell_price ?? ""} onChange={e=>setF({...f, vendor_sell_price:e.target.value===""?null:Number(e.target.value)})} /></Field>
+        <Field label="Regular price"><Input type="number" step="0.01" value={f.regular_price ?? ""} onChange={e=>setF({...f, regular_price:e.target.value===""?null:Number(e.target.value)})} /></Field>
+        <Field label="Line total"><Input type="number" step="0.01" value={f.line_total ?? ""} onChange={e=>setF({...f, line_total:e.target.value===""?null:Number(e.target.value)})} /></Field>
+        <Field label="Suggested retail"><Input type="number" step="0.01" value={f.suggested_retail_price ?? ""} onChange={e=>setF({...f, suggested_retail_price:e.target.value===""?null:Number(e.target.value)})} /></Field>
+      </div>
+      <Field label="Extraction warning"><Input value={f.extraction_warning ?? ""} onChange={e=>setF({...f, extraction_warning:e.target.value})} /></Field>
+      <Field label="Notes"><Textarea rows={2} value={f.notes ?? ""} onChange={e=>setF({...f, notes:e.target.value})} /></Field>
+    </div>
+  );
+}
+
+function ChargesSection({ batchId, charges, onDone }: { batchId: string; charges: any[]; onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState<any>({ charge_type: "freight", amount: 0, quantity: 1 });
+  const submit = async () => {
+    const { error } = await supabase.from("vendor_batch_charges").insert({ ...f, vendor_batch_id: batchId });
+    if (error) { toast.error(error.message); return; }
+    toast.success("Charge added"); setOpen(false); setF({ charge_type: "freight", amount: 0, quantity: 1 }); onDone();
+  };
+  const del = async (id: string) => {
+    const { error } = await supabase.from("vendor_batch_charges").delete().eq("id", id);
+    if (error) toast.error(error.message); else onDone();
+  };
+  return (
+    <div className="rounded-lg border bg-card p-5 space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 className="font-semibold">Batch charges</h2>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild><Button size="sm"><Plus className="w-3 h-3 mr-1" /> Add charge</Button></DialogTrigger>
+          <DialogContent>
+            <DialogHeader><DialogTitle>New batch charge</DialogTitle></DialogHeader>
+            <div className="space-y-3">
+              <Field label="Type">
+                <Select value={f.charge_type} onValueChange={v=>setF({...f, charge_type:v})}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{VENDOR_CHARGE_TYPES.map(t=> <SelectItem key={t} value={t}>{VENDOR_CHARGE_LABELS[t]}</SelectItem>)}</SelectContent>
+                </Select>
+              </Field>
+              <Field label="Label"><Input value={f.label ?? ""} onChange={e=>setF({...f, label:e.target.value})} /></Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Amount"><Input type="number" step="0.01" value={f.amount} onChange={e=>setF({...f, amount:Number(e.target.value)})} /></Field>
+                <Field label="Quantity"><Input type="number" value={f.quantity} onChange={e=>setF({...f, quantity:Number(e.target.value)})} /></Field>
+              </div>
+              <Field label="Notes"><Textarea rows={2} value={f.notes ?? ""} onChange={e=>setF({...f, notes:e.target.value})} /></Field>
+              <Button onClick={submit} className="w-full">Add</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+      <table className="w-full text-sm">
+        <thead className="bg-muted/50 text-left">
+          <tr><th className="p-2">Type</th><th className="p-2">Label</th><th className="p-2">Qty</th><th className="p-2">Amount</th><th className="p-2"></th></tr>
+        </thead>
+        <tbody>
+          {charges.map(c => (
+            <tr key={c.id} className="border-t">
+              <td className="p-2">{VENDOR_CHARGE_LABELS[c.charge_type as keyof typeof VENDOR_CHARGE_LABELS]}</td>
+              <td className="p-2 text-muted-foreground">{c.label ?? "—"}</td>
+              <td className="p-2">{c.quantity}</td>
+              <td className="p-2">{fmtMoney(c.amount)}</td>
+              <td className="p-2"><Button variant="ghost" size="sm" onClick={()=>del(c.id)}>Delete</Button></td>
+            </tr>
+          ))}
+          {charges.length === 0 && <tr><td colSpan={5} className="p-4 text-center text-muted-foreground">No charges yet.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ConvertButton({ batchId: _b, lines, onDone }: { batchId: string; lines: any[]; onDone: () => void }) {
+  const convert = useServerFn(convertLineItemsToInventory);
+  const [busy, setBusy] = useState(false);
+  const eligible = lines.filter(l =>
+    l.kind === "sellable" && l.review_status === "approved" &&
+    l.pricing_status === "approved" && !l.converted_inventory_item_id
+  );
+  const run = async () => {
+    if (eligible.length === 0) { toast.info("No eligible lines (need approved review + approved pricing)"); return; }
+    setBusy(true);
+    try {
+      const res = await convert({ data: { lineItemIds: eligible.map(l => l.id) } });
+      toast.success(`Converted ${res.created.length}, skipped ${res.skipped.length}`);
+      onDone();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setBusy(false); }
+  };
+  return <Button onClick={run} disabled={busy}>{busy ? "Converting…" : `Convert ${eligible.length} to inventory`}</Button>;
+}
