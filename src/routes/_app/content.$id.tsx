@@ -63,6 +63,12 @@ function ContentDetail() {
   const [form, setForm] = useState<any>(null);
   useEffect(() => { if (item) setForm(item); }, [item]);
 
+  const transition = useMutation({
+    mutationFn: (next: ContentStatus) => updateStatusFn({ data: { id, next } }),
+    onSuccess: () => { toast.success("Status updated"); qc.invalidateQueries({ queryKey: ["content", id] }); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   if (!item || !form) return <div className="p-8">Loading…</div>;
 
   const save = async () => {
@@ -88,12 +94,6 @@ function ContentDetail() {
     }
     refetchPlatforms();
   };
-
-  const transition = useMutation({
-    mutationFn: (next: ContentStatus) => updateStatusFn({ data: { id, next } }),
-    onSuccess: () => { toast.success("Status updated"); qc.invalidateQueries({ queryKey: ["content", id] }); },
-    onError: (e: any) => toast.error(e.message),
-  });
 
   return (
     <div className="p-8 max-w-5xl">
