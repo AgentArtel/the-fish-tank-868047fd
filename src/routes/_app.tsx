@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard, Calendar, FileText, Image, Package,
   Megaphone, CheckSquare, Settings, Users, LogOut,
-  PackageOpen, Truck, MapPin, ListChecks,
+  PackageOpen, Truck, MapPin, ListChecks, DollarSign, Boxes,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_app")({
@@ -44,9 +44,11 @@ const GROUPS: NavGroup[] = [
   {
     label: "Operations",
     items: [
-      { to: "/inventory-intake", label: "Inventory Intake", icon: PackageOpen, soon: true },
-      { to: "/vendors", label: "Vendors", icon: Truck, soon: true },
-      { to: "/store-placement", label: "Store Placement", icon: MapPin, soon: true },
+      { to: "/batches", label: "Inventory Intake", icon: PackageOpen },
+      { to: "/pricing-approval", label: "Pricing Approval", icon: DollarSign },
+      { to: "/inventory", label: "Inventory", icon: Boxes },
+      { to: "/vendors", label: "Vendors", icon: Truck },
+      { to: "/store-locations", label: "Store Locations", icon: MapPin },
       { to: "/tasks", label: "Tasks / SOPs", icon: ListChecks, soon: true },
     ],
   },
