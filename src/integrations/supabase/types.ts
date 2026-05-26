@@ -205,6 +205,233 @@ export type Database = {
           },
         ]
       }
+      inventory_activity_logs: {
+        Row: {
+          action: Database["public"]["Enums"]["inventory_activity_action"]
+          actor_id: string | null
+          created_at: string
+          detail: Json
+          id: string
+          inventory_item_id: string | null
+          summary: string | null
+          vendor_batch_id: string | null
+          vendor_line_item_id: string | null
+        }
+        Insert: {
+          action: Database["public"]["Enums"]["inventory_activity_action"]
+          actor_id?: string | null
+          created_at?: string
+          detail?: Json
+          id?: string
+          inventory_item_id?: string | null
+          summary?: string | null
+          vendor_batch_id?: string | null
+          vendor_line_item_id?: string | null
+        }
+        Update: {
+          action?: Database["public"]["Enums"]["inventory_activity_action"]
+          actor_id?: string | null
+          created_at?: string
+          detail?: Json
+          id?: string
+          inventory_item_id?: string | null
+          summary?: string | null
+          vendor_batch_id?: string | null
+          vendor_line_item_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_activity_logs_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_activity_logs_vendor_batch_id_fkey"
+            columns: ["vendor_batch_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_activity_logs_vendor_line_item_id_fkey"
+            columns: ["vendor_line_item_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_line_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_items: {
+        Row: {
+          availability_status: Database["public"]["Enums"]["inventory_availability_status"]
+          category: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          item_name: string
+          live_sale_status: Database["public"]["Enums"]["inventory_live_sale_status"]
+          location_id: string | null
+          needs_photo: boolean
+          notes: string | null
+          origin_region: string | null
+          pricing_status: Database["public"]["Enums"]["inventory_pricing_status"]
+          quantity_available: number
+          quantity_lost: number
+          quantity_on_hold: number
+          quantity_received: number
+          quantity_sold: number
+          retail_price: number | null
+          scientific_name: string | null
+          size: string | null
+          source_vendor_batch_id: string | null
+          source_vendor_line_item_id: string | null
+          subcategory: string | null
+          updated_at: string
+          vendor_id: string | null
+          website_ready_later: boolean
+          wholesale_cost: number | null
+        }
+        Insert: {
+          availability_status?: Database["public"]["Enums"]["inventory_availability_status"]
+          category?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          item_name: string
+          live_sale_status?: Database["public"]["Enums"]["inventory_live_sale_status"]
+          location_id?: string | null
+          needs_photo?: boolean
+          notes?: string | null
+          origin_region?: string | null
+          pricing_status?: Database["public"]["Enums"]["inventory_pricing_status"]
+          quantity_available?: number
+          quantity_lost?: number
+          quantity_on_hold?: number
+          quantity_received?: number
+          quantity_sold?: number
+          retail_price?: number | null
+          scientific_name?: string | null
+          size?: string | null
+          source_vendor_batch_id?: string | null
+          source_vendor_line_item_id?: string | null
+          subcategory?: string | null
+          updated_at?: string
+          vendor_id?: string | null
+          website_ready_later?: boolean
+          wholesale_cost?: number | null
+        }
+        Update: {
+          availability_status?: Database["public"]["Enums"]["inventory_availability_status"]
+          category?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          item_name?: string
+          live_sale_status?: Database["public"]["Enums"]["inventory_live_sale_status"]
+          location_id?: string | null
+          needs_photo?: boolean
+          notes?: string | null
+          origin_region?: string | null
+          pricing_status?: Database["public"]["Enums"]["inventory_pricing_status"]
+          quantity_available?: number
+          quantity_lost?: number
+          quantity_on_hold?: number
+          quantity_received?: number
+          quantity_sold?: number
+          retail_price?: number | null
+          scientific_name?: string | null
+          size?: string | null
+          source_vendor_batch_id?: string | null
+          source_vendor_line_item_id?: string | null
+          subcategory?: string | null
+          updated_at?: string
+          vendor_id?: string | null
+          website_ready_later?: boolean
+          wholesale_cost?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_items_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "store_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_items_source_vendor_batch_id_fkey"
+            columns: ["source_vendor_batch_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_items_source_vendor_line_item_id_fkey"
+            columns: ["source_vendor_line_item_id"]
+            isOneToOne: true
+            referencedRelation: "vendor_line_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_items_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_media: {
+        Row: {
+          alt_text: string | null
+          created_at: string
+          file_name: string
+          id: string
+          inventory_item_id: string
+          media_type: string
+          notes: string | null
+          storage_path: string
+          tag: Database["public"]["Enums"]["inventory_media_tag"]
+          updated_at: string
+          uploader_id: string | null
+        }
+        Insert: {
+          alt_text?: string | null
+          created_at?: string
+          file_name: string
+          id?: string
+          inventory_item_id: string
+          media_type?: string
+          notes?: string | null
+          storage_path: string
+          tag?: Database["public"]["Enums"]["inventory_media_tag"]
+          updated_at?: string
+          uploader_id?: string | null
+        }
+        Update: {
+          alt_text?: string | null
+          created_at?: string
+          file_name?: string
+          id?: string
+          inventory_item_id?: string
+          media_type?: string
+          notes?: string | null
+          storage_path?: string
+          tag?: Database["public"]["Enums"]["inventory_media_tag"]
+          updated_at?: string
+          uploader_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_media_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       media_assets: {
         Row: {
           alt_text: string | null
@@ -455,6 +682,45 @@ export type Database = {
           },
         ]
       }
+      store_locations: {
+        Row: {
+          capacity_notes: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          is_live_sale: boolean
+          kind: Database["public"]["Enums"]["store_location_kind"]
+          name: string
+          notes: string | null
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          capacity_notes?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_live_sale?: boolean
+          kind?: Database["public"]["Enums"]["store_location_kind"]
+          name: string
+          notes?: string | null
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          capacity_notes?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_live_sale?: boolean
+          kind?: Database["public"]["Enums"]["store_location_kind"]
+          name?: string
+          notes?: string | null
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -473,6 +739,329 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      vendor_batch_charges: {
+        Row: {
+          amount: number
+          charge_type: Database["public"]["Enums"]["vendor_batch_charge_type"]
+          created_at: string
+          id: string
+          label: string | null
+          notes: string | null
+          quantity: number
+          updated_at: string
+          vendor_batch_id: string
+        }
+        Insert: {
+          amount?: number
+          charge_type?: Database["public"]["Enums"]["vendor_batch_charge_type"]
+          created_at?: string
+          id?: string
+          label?: string | null
+          notes?: string | null
+          quantity?: number
+          updated_at?: string
+          vendor_batch_id: string
+        }
+        Update: {
+          amount?: number
+          charge_type?: Database["public"]["Enums"]["vendor_batch_charge_type"]
+          created_at?: string
+          id?: string
+          label?: string | null
+          notes?: string | null
+          quantity?: number
+          updated_at?: string
+          vendor_batch_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_batch_charges_vendor_batch_id_fkey"
+            columns: ["vendor_batch_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vendor_batches: {
+        Row: {
+          arrival_date: string | null
+          awb_number: string | null
+          balance_due: number | null
+          carrier: string | null
+          created_at: string
+          created_by: string | null
+          customer_number: string | null
+          extraction_status: Database["public"]["Enums"]["vendor_batch_extraction_status"]
+          id: string
+          intake_status: Database["public"]["Enums"]["vendor_batch_intake_status"]
+          invoice_date: string | null
+          invoice_discount: number | null
+          invoice_number: string | null
+          invoice_subtotal: number | null
+          invoice_total: number | null
+          notes: string | null
+          order_number: string | null
+          pdf_file_name: string | null
+          pdf_storage_path: string | null
+          po_number: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          sales_order_number: string | null
+          ship_date: string | null
+          source_document_type: Database["public"]["Enums"]["vendor_batch_source_document_type"]
+          terms: string | null
+          tracking_number: string | null
+          updated_at: string
+          vendor_id: string
+        }
+        Insert: {
+          arrival_date?: string | null
+          awb_number?: string | null
+          balance_due?: number | null
+          carrier?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_number?: string | null
+          extraction_status?: Database["public"]["Enums"]["vendor_batch_extraction_status"]
+          id?: string
+          intake_status?: Database["public"]["Enums"]["vendor_batch_intake_status"]
+          invoice_date?: string | null
+          invoice_discount?: number | null
+          invoice_number?: string | null
+          invoice_subtotal?: number | null
+          invoice_total?: number | null
+          notes?: string | null
+          order_number?: string | null
+          pdf_file_name?: string | null
+          pdf_storage_path?: string | null
+          po_number?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sales_order_number?: string | null
+          ship_date?: string | null
+          source_document_type?: Database["public"]["Enums"]["vendor_batch_source_document_type"]
+          terms?: string | null
+          tracking_number?: string | null
+          updated_at?: string
+          vendor_id: string
+        }
+        Update: {
+          arrival_date?: string | null
+          awb_number?: string | null
+          balance_due?: number | null
+          carrier?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_number?: string | null
+          extraction_status?: Database["public"]["Enums"]["vendor_batch_extraction_status"]
+          id?: string
+          intake_status?: Database["public"]["Enums"]["vendor_batch_intake_status"]
+          invoice_date?: string | null
+          invoice_discount?: number | null
+          invoice_number?: string | null
+          invoice_subtotal?: number | null
+          invoice_total?: number | null
+          notes?: string | null
+          order_number?: string | null
+          pdf_file_name?: string | null
+          pdf_storage_path?: string | null
+          po_number?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sales_order_number?: string | null
+          ship_date?: string | null
+          source_document_type?: Database["public"]["Enums"]["vendor_batch_source_document_type"]
+          terms?: string | null
+          tracking_number?: string | null
+          updated_at?: string
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_batches_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vendor_line_items: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          approved_retail_price: number | null
+          category: string | null
+          clean_item_name: string | null
+          converted_inventory_item_id: string | null
+          created_at: string
+          extraction_confidence: number | null
+          extraction_warning: string | null
+          has_discount: boolean
+          id: string
+          kind: Database["public"]["Enums"]["vendor_line_kind"]
+          line_number: number | null
+          line_total: number | null
+          notes: string | null
+          origin_region: string | null
+          pricing_status: Database["public"]["Enums"]["vendor_line_pricing_status"]
+          quantity: number
+          raw_description: string | null
+          regular_price: number | null
+          review_status: Database["public"]["Enums"]["vendor_line_review_status"]
+          scientific_name: string | null
+          size: string | null
+          subcategory: string | null
+          suggested_retail_price: number | null
+          updated_at: string
+          vendor_batch_id: string
+          vendor_id: string
+          vendor_item_id: string | null
+          vendor_sell_price: number | null
+          wholesale_cost: number | null
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_retail_price?: number | null
+          category?: string | null
+          clean_item_name?: string | null
+          converted_inventory_item_id?: string | null
+          created_at?: string
+          extraction_confidence?: number | null
+          extraction_warning?: string | null
+          has_discount?: boolean
+          id?: string
+          kind?: Database["public"]["Enums"]["vendor_line_kind"]
+          line_number?: number | null
+          line_total?: number | null
+          notes?: string | null
+          origin_region?: string | null
+          pricing_status?: Database["public"]["Enums"]["vendor_line_pricing_status"]
+          quantity?: number
+          raw_description?: string | null
+          regular_price?: number | null
+          review_status?: Database["public"]["Enums"]["vendor_line_review_status"]
+          scientific_name?: string | null
+          size?: string | null
+          subcategory?: string | null
+          suggested_retail_price?: number | null
+          updated_at?: string
+          vendor_batch_id: string
+          vendor_id: string
+          vendor_item_id?: string | null
+          vendor_sell_price?: number | null
+          wholesale_cost?: number | null
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_retail_price?: number | null
+          category?: string | null
+          clean_item_name?: string | null
+          converted_inventory_item_id?: string | null
+          created_at?: string
+          extraction_confidence?: number | null
+          extraction_warning?: string | null
+          has_discount?: boolean
+          id?: string
+          kind?: Database["public"]["Enums"]["vendor_line_kind"]
+          line_number?: number | null
+          line_total?: number | null
+          notes?: string | null
+          origin_region?: string | null
+          pricing_status?: Database["public"]["Enums"]["vendor_line_pricing_status"]
+          quantity?: number
+          raw_description?: string | null
+          regular_price?: number | null
+          review_status?: Database["public"]["Enums"]["vendor_line_review_status"]
+          scientific_name?: string | null
+          size?: string | null
+          subcategory?: string | null
+          suggested_retail_price?: number | null
+          updated_at?: string
+          vendor_batch_id?: string
+          vendor_id?: string
+          vendor_item_id?: string | null
+          vendor_sell_price?: number | null
+          wholesale_cost?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_line_items_vendor_batch_id_fkey"
+            columns: ["vendor_batch_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_line_items_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vli_converted_fk"
+            columns: ["converted_inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vendors: {
+        Row: {
+          address: string | null
+          contact_email: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          created_at: string
+          default_carrier: string | null
+          default_terms: string | null
+          id: string
+          is_active: boolean
+          name: string
+          notes: string | null
+          slug: string
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          address?: string | null
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          default_carrier?: string | null
+          default_terms?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          notes?: string | null
+          slug: string
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          address?: string | null
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          default_carrier?: string | null
+          default_terms?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          notes?: string | null
+          slug?: string
+          updated_at?: string
+          website?: string | null
         }
         Relationships: []
       }
@@ -522,6 +1111,32 @@ export type Database = {
         | "promo"
         | "educational"
         | "other"
+      inventory_activity_action:
+        | "created"
+        | "updated"
+        | "status_change"
+        | "location_change"
+        | "quantity_change"
+        | "pricing_change"
+        | "converted_from_line"
+        | "note"
+      inventory_availability_status:
+        | "incoming"
+        | "quarantine"
+        | "needs_id"
+        | "available"
+        | "on_hold"
+        | "sold_out"
+        | "not_for_sale"
+        | "dead_lost"
+      inventory_live_sale_status:
+        | "not_eligible"
+        | "eligible"
+        | "staged"
+        | "live"
+        | "ended"
+      inventory_media_tag: "internal" | "social" | "website" | "live_sale"
+      inventory_pricing_status: "not_priced" | "approved"
       media_type: "image" | "video"
       platform:
         | "facebook"
@@ -543,8 +1158,54 @@ export type Database = {
         | "vendor_asset"
         | "ai_generated"
         | "edited_asset"
+      store_location_kind:
+        | "display_tank"
+        | "coral_flat"
+        | "live_sale_tank"
+        | "quarantine"
+        | "holding"
+        | "dry_goods"
+        | "back_of_house"
+        | "other"
       usage_rights: "owned" | "vendor_allowed" | "needs_permission" | "unknown"
       usage_status: "unused" | "in_use" | "archived"
+      vendor_batch_charge_type:
+        | "freight"
+        | "packaging"
+        | "heat_pack"
+        | "box"
+        | "fuel_surcharge"
+        | "discount"
+        | "credit"
+        | "tax"
+        | "other"
+      vendor_batch_extraction_status:
+        | "not_started"
+        | "manual"
+        | "ai_pending"
+        | "ai_done"
+        | "failed"
+      vendor_batch_intake_status:
+        | "draft"
+        | "uploaded"
+        | "parsing"
+        | "review"
+        | "approved"
+        | "converted"
+        | "archived"
+      vendor_batch_source_document_type:
+        | "invoice"
+        | "order_sheet"
+        | "packing_list"
+        | "manual_entry"
+        | "other"
+      vendor_line_kind: "sellable" | "charge"
+      vendor_line_pricing_status: "not_priced" | "suggested" | "approved"
+      vendor_line_review_status:
+        | "pending"
+        | "approved"
+        | "rejected"
+        | "needs_info"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -705,6 +1366,35 @@ export const Constants = {
         "educational",
         "other",
       ],
+      inventory_activity_action: [
+        "created",
+        "updated",
+        "status_change",
+        "location_change",
+        "quantity_change",
+        "pricing_change",
+        "converted_from_line",
+        "note",
+      ],
+      inventory_availability_status: [
+        "incoming",
+        "quarantine",
+        "needs_id",
+        "available",
+        "on_hold",
+        "sold_out",
+        "not_for_sale",
+        "dead_lost",
+      ],
+      inventory_live_sale_status: [
+        "not_eligible",
+        "eligible",
+        "staged",
+        "live",
+        "ended",
+      ],
+      inventory_media_tag: ["internal", "social", "website", "live_sale"],
+      inventory_pricing_status: ["not_priced", "approved"],
       media_type: ["image", "video"],
       platform: [
         "facebook",
@@ -729,8 +1419,60 @@ export const Constants = {
         "ai_generated",
         "edited_asset",
       ],
+      store_location_kind: [
+        "display_tank",
+        "coral_flat",
+        "live_sale_tank",
+        "quarantine",
+        "holding",
+        "dry_goods",
+        "back_of_house",
+        "other",
+      ],
       usage_rights: ["owned", "vendor_allowed", "needs_permission", "unknown"],
       usage_status: ["unused", "in_use", "archived"],
+      vendor_batch_charge_type: [
+        "freight",
+        "packaging",
+        "heat_pack",
+        "box",
+        "fuel_surcharge",
+        "discount",
+        "credit",
+        "tax",
+        "other",
+      ],
+      vendor_batch_extraction_status: [
+        "not_started",
+        "manual",
+        "ai_pending",
+        "ai_done",
+        "failed",
+      ],
+      vendor_batch_intake_status: [
+        "draft",
+        "uploaded",
+        "parsing",
+        "review",
+        "approved",
+        "converted",
+        "archived",
+      ],
+      vendor_batch_source_document_type: [
+        "invoice",
+        "order_sheet",
+        "packing_list",
+        "manual_entry",
+        "other",
+      ],
+      vendor_line_kind: ["sellable", "charge"],
+      vendor_line_pricing_status: ["not_priced", "suggested", "approved"],
+      vendor_line_review_status: [
+        "pending",
+        "approved",
+        "rejected",
+        "needs_info",
+      ],
     },
   },
 } as const
