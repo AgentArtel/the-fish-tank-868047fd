@@ -39,8 +39,10 @@ export const updateContentStatus = createServerFn({ method: "POST" })
       const ok = (roles ?? []).some((r: any) => r.role === "admin" || r.role === "reviewer");
       if (!ok) throw new Error("Only reviewers or admins can approve");
     }
-    const patch: Record<string, unknown> = { status: data.next };
-    if (data.next === "posted") patch.posted_date = new Date().toISOString();
+    const patch = {
+      status: data.next,
+      ...(data.next === "posted" ? { posted_date: new Date().toISOString() } : {}),
+    };
     const { error: upErr } = await supabase.from("content_items").update(patch).eq("id", data.id);
     if (upErr) throw new Error(upErr.message);
     return { ok: true };
