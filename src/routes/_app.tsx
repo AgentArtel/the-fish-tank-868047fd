@@ -42,9 +42,12 @@ function AppLayout() {
   return (
     <div className="min-h-screen flex bg-muted/20">
       <aside className="w-60 border-r bg-sidebar text-sidebar-foreground flex flex-col">
-        <div className="p-4 border-b">
-          <div className="font-semibold">🐠 The Fish Tank</div>
-          <div className="text-xs text-muted-foreground">CMS</div>
+        <div className="p-4 border-b flex items-center gap-2.5">
+          <img src="/brand/fish-tank-mascot.png" alt="" className="w-9 h-9 rounded-md object-cover" />
+          <div className="leading-tight">
+            <div className="font-semibold text-sm">The Fish Tank</div>
+            <div className="text-xs text-muted-foreground">CMS</div>
+          </div>
         </div>
         <nav className="flex-1 p-2 space-y-0.5">
           {NAV.map(item => {

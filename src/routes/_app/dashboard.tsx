@@ -33,6 +33,13 @@ function Dashboard() {
 
   return (
     <div className="p-8">
+      <div className="mb-6 rounded-xl border p-5 flex items-center gap-4 overflow-hidden" style={{ background: "var(--brand-ink)", color: "white" }}>
+        <img src="/brand/fish-tank-mascot.png" alt="" className="w-14 h-14 object-contain flex-shrink-0" />
+        <div>
+          <h1 className="text-lg font-semibold">The Fish Tank CMS</h1>
+          <p className="text-sm opacity-70">Manage content, media, products, campaigns, and publishing workflows.</p>
+        </div>
+      </div>
       <PageHeader title="Dashboard" description="Pipeline health for The Fish Tank." />
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-8">
         {statuses.map(s => (
