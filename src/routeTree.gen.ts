@@ -14,9 +14,13 @@ import { Route as PendingApprovalRouteImport } from './routes/pending-approval'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppVendorsRouteImport } from './routes/_app/vendors'
+import { Route as AppTasksRouteImport } from './routes/_app/tasks'
+import { Route as AppStorePlacementRouteImport } from './routes/_app/store-placement'
 import { Route as AppPublishingRouteImport } from './routes/_app/publishing'
 import { Route as AppProductsRouteImport } from './routes/_app/products'
 import { Route as AppMediaRouteImport } from './routes/_app/media'
+import { Route as AppInventoryIntakeRouteImport } from './routes/_app/inventory-intake'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppCampaignsRouteImport } from './routes/_app/campaigns'
 import { Route as AppCalendarRouteImport } from './routes/_app/calendar'
@@ -50,6 +54,21 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppVendorsRoute = AppVendorsRouteImport.update({
+  id: '/vendors',
+  path: '/vendors',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTasksRoute = AppTasksRouteImport.update({
+  id: '/tasks',
+  path: '/tasks',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppStorePlacementRoute = AppStorePlacementRouteImport.update({
+  id: '/store-placement',
+  path: '/store-placement',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppPublishingRoute = AppPublishingRouteImport.update({
   id: '/publishing',
   path: '/publishing',
@@ -63,6 +82,11 @@ const AppProductsRoute = AppProductsRouteImport.update({
 const AppMediaRoute = AppMediaRouteImport.update({
   id: '/media',
   path: '/media',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppInventoryIntakeRoute = AppInventoryIntakeRouteImport.update({
+  id: '/inventory-intake',
+  path: '/inventory-intake',
   getParentRoute: () => AppRoute,
 } as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
@@ -114,9 +138,13 @@ export interface FileRoutesByFullPath {
   '/calendar': typeof AppCalendarRoute
   '/campaigns': typeof AppCampaignsRoute
   '/dashboard': typeof AppDashboardRoute
+  '/inventory-intake': typeof AppInventoryIntakeRoute
   '/media': typeof AppMediaRoute
   '/products': typeof AppProductsRoute
   '/publishing': typeof AppPublishingRoute
+  '/store-placement': typeof AppStorePlacementRoute
+  '/tasks': typeof AppTasksRoute
+  '/vendors': typeof AppVendorsRoute
   '/content/$id': typeof AppContentIdRoute
   '/content/new': typeof AppContentNewRoute
   '/settings/meta': typeof AppSettingsMetaRoute
@@ -131,9 +159,13 @@ export interface FileRoutesByTo {
   '/calendar': typeof AppCalendarRoute
   '/campaigns': typeof AppCampaignsRoute
   '/dashboard': typeof AppDashboardRoute
+  '/inventory-intake': typeof AppInventoryIntakeRoute
   '/media': typeof AppMediaRoute
   '/products': typeof AppProductsRoute
   '/publishing': typeof AppPublishingRoute
+  '/store-placement': typeof AppStorePlacementRoute
+  '/tasks': typeof AppTasksRoute
+  '/vendors': typeof AppVendorsRoute
   '/content/$id': typeof AppContentIdRoute
   '/content/new': typeof AppContentNewRoute
   '/settings/meta': typeof AppSettingsMetaRoute
@@ -150,9 +182,13 @@ export interface FileRoutesById {
   '/_app/calendar': typeof AppCalendarRoute
   '/_app/campaigns': typeof AppCampaignsRoute
   '/_app/dashboard': typeof AppDashboardRoute
+  '/_app/inventory-intake': typeof AppInventoryIntakeRoute
   '/_app/media': typeof AppMediaRoute
   '/_app/products': typeof AppProductsRoute
   '/_app/publishing': typeof AppPublishingRoute
+  '/_app/store-placement': typeof AppStorePlacementRoute
+  '/_app/tasks': typeof AppTasksRoute
+  '/_app/vendors': typeof AppVendorsRoute
   '/_app/content/$id': typeof AppContentIdRoute
   '/_app/content/new': typeof AppContentNewRoute
   '/_app/settings/meta': typeof AppSettingsMetaRoute
@@ -169,9 +205,13 @@ export interface FileRouteTypes {
     | '/calendar'
     | '/campaigns'
     | '/dashboard'
+    | '/inventory-intake'
     | '/media'
     | '/products'
     | '/publishing'
+    | '/store-placement'
+    | '/tasks'
+    | '/vendors'
     | '/content/$id'
     | '/content/new'
     | '/settings/meta'
@@ -186,9 +226,13 @@ export interface FileRouteTypes {
     | '/calendar'
     | '/campaigns'
     | '/dashboard'
+    | '/inventory-intake'
     | '/media'
     | '/products'
     | '/publishing'
+    | '/store-placement'
+    | '/tasks'
+    | '/vendors'
     | '/content/$id'
     | '/content/new'
     | '/settings/meta'
@@ -204,9 +248,13 @@ export interface FileRouteTypes {
     | '/_app/calendar'
     | '/_app/campaigns'
     | '/_app/dashboard'
+    | '/_app/inventory-intake'
     | '/_app/media'
     | '/_app/products'
     | '/_app/publishing'
+    | '/_app/store-placement'
+    | '/_app/tasks'
+    | '/_app/vendors'
     | '/_app/content/$id'
     | '/_app/content/new'
     | '/_app/settings/meta'
@@ -259,6 +307,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/vendors': {
+      id: '/_app/vendors'
+      path: '/vendors'
+      fullPath: '/vendors'
+      preLoaderRoute: typeof AppVendorsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/tasks': {
+      id: '/_app/tasks'
+      path: '/tasks'
+      fullPath: '/tasks'
+      preLoaderRoute: typeof AppTasksRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/store-placement': {
+      id: '/_app/store-placement'
+      path: '/store-placement'
+      fullPath: '/store-placement'
+      preLoaderRoute: typeof AppStorePlacementRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/publishing': {
       id: '/_app/publishing'
       path: '/publishing'
@@ -278,6 +347,13 @@ declare module '@tanstack/react-router' {
       path: '/media'
       fullPath: '/media'
       preLoaderRoute: typeof AppMediaRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/inventory-intake': {
+      id: '/_app/inventory-intake'
+      path: '/inventory-intake'
+      fullPath: '/inventory-intake'
+      preLoaderRoute: typeof AppInventoryIntakeRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/dashboard': {
@@ -343,9 +419,13 @@ interface AppRouteChildren {
   AppCalendarRoute: typeof AppCalendarRoute
   AppCampaignsRoute: typeof AppCampaignsRoute
   AppDashboardRoute: typeof AppDashboardRoute
+  AppInventoryIntakeRoute: typeof AppInventoryIntakeRoute
   AppMediaRoute: typeof AppMediaRoute
   AppProductsRoute: typeof AppProductsRoute
   AppPublishingRoute: typeof AppPublishingRoute
+  AppStorePlacementRoute: typeof AppStorePlacementRoute
+  AppTasksRoute: typeof AppTasksRoute
+  AppVendorsRoute: typeof AppVendorsRoute
   AppContentIdRoute: typeof AppContentIdRoute
   AppContentNewRoute: typeof AppContentNewRoute
   AppSettingsMetaRoute: typeof AppSettingsMetaRoute
@@ -357,9 +437,13 @@ const AppRouteChildren: AppRouteChildren = {
   AppCalendarRoute: AppCalendarRoute,
   AppCampaignsRoute: AppCampaignsRoute,
   AppDashboardRoute: AppDashboardRoute,
+  AppInventoryIntakeRoute: AppInventoryIntakeRoute,
   AppMediaRoute: AppMediaRoute,
   AppProductsRoute: AppProductsRoute,
   AppPublishingRoute: AppPublishingRoute,
+  AppStorePlacementRoute: AppStorePlacementRoute,
+  AppTasksRoute: AppTasksRoute,
+  AppVendorsRoute: AppVendorsRoute,
   AppContentIdRoute: AppContentIdRoute,
   AppContentNewRoute: AppContentNewRoute,
   AppSettingsMetaRoute: AppSettingsMetaRoute,

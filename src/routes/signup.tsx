@@ -34,8 +34,8 @@ function SignupPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-background">
       <img src="/brand/fish-tank-badge.png" alt="The Fish Tank" className="w-24 h-24 mb-4 rounded-full" />
-      <h1 className="text-2xl font-semibold tracking-tight">The Fish Tank CMS</h1>
-      <p className="text-sm text-muted-foreground mb-6 text-center max-w-sm">New accounts require admin approval before access.</p>
+      <h1 className="text-2xl font-semibold tracking-tight">The Fish Tank Workspace</h1>
+      <p className="text-sm text-muted-foreground mb-6 text-center max-w-sm">New accounts require admin approval before accessing The Fish Tank Workspace.</p>
       <div className="w-full max-w-sm rounded-xl border bg-card p-6 shadow-sm">
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-1.5">

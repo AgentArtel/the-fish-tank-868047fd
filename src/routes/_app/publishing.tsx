@@ -38,7 +38,7 @@ function PublishingPage() {
 
   return (
     <div className="p-8">
-      <PageHeader title="Publishing checklist" description="Approved / scheduled items ready to post manually. Export caption, then save the live URL." />
+      <PageHeader title="Publishing Checklist" description="Approved / scheduled content items ready to post manually. Export caption, then save the live URL." />
       <div className="space-y-4">
         {(data ?? []).map((row:any) => (
           <PublishCard key={row.item.id} row={row} onChange={() => qc.invalidateQueries({ queryKey: ["publishing"] })} />

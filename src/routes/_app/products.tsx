@@ -25,8 +25,11 @@ function ProductsPage() {
 
   return (
     <div className="p-8">
-      <PageHeader title="Products" description="Content-support records — not full inventory."
-        action={<NewProductDialog onDone={refetch} />} />
+      <PageHeader
+        title="Products"
+        description="Products in the workspace should eventually support content, website readiness, inventory workflows, and future Clover sync. For now these are lightweight content-support records — not full inventory."
+        action={<NewProductDialog onDone={refetch} />}
+      />
       <div className="rounded-lg border bg-card overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-left">
