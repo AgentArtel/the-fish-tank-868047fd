@@ -17,6 +17,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppVendorsRouteImport } from './routes/_app/vendors'
 import { Route as AppTasksRouteImport } from './routes/_app/tasks'
 import { Route as AppStorePlacementRouteImport } from './routes/_app/store-placement'
+import { Route as AppStoreLocationsRouteImport } from './routes/_app/store-locations'
 import { Route as AppPublishingRouteImport } from './routes/_app/publishing'
 import { Route as AppProductsRouteImport } from './routes/_app/products'
 import { Route as AppMediaRouteImport } from './routes/_app/media'
@@ -24,6 +25,7 @@ import { Route as AppInventoryIntakeRouteImport } from './routes/_app/inventory-
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppCampaignsRouteImport } from './routes/_app/campaigns'
 import { Route as AppCalendarRouteImport } from './routes/_app/calendar'
+import { Route as AppBatchesRouteImport } from './routes/_app/batches'
 import { Route as AppContentIndexRouteImport } from './routes/_app/content.index'
 import { Route as AppSettingsUsersRouteImport } from './routes/_app/settings.users'
 import { Route as AppSettingsMetaRouteImport } from './routes/_app/settings.meta'
@@ -69,6 +71,11 @@ const AppStorePlacementRoute = AppStorePlacementRouteImport.update({
   path: '/store-placement',
   getParentRoute: () => AppRoute,
 } as any)
+const AppStoreLocationsRoute = AppStoreLocationsRouteImport.update({
+  id: '/store-locations',
+  path: '/store-locations',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppPublishingRoute = AppPublishingRouteImport.update({
   id: '/publishing',
   path: '/publishing',
@@ -104,6 +111,11 @@ const AppCalendarRoute = AppCalendarRouteImport.update({
   path: '/calendar',
   getParentRoute: () => AppRoute,
 } as any)
+const AppBatchesRoute = AppBatchesRouteImport.update({
+  id: '/batches',
+  path: '/batches',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppContentIndexRoute = AppContentIndexRouteImport.update({
   id: '/content/',
   path: '/content/',
@@ -135,6 +147,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/pending-approval': typeof PendingApprovalRoute
   '/signup': typeof SignupRoute
+  '/batches': typeof AppBatchesRoute
   '/calendar': typeof AppCalendarRoute
   '/campaigns': typeof AppCampaignsRoute
   '/dashboard': typeof AppDashboardRoute
@@ -142,6 +155,7 @@ export interface FileRoutesByFullPath {
   '/media': typeof AppMediaRoute
   '/products': typeof AppProductsRoute
   '/publishing': typeof AppPublishingRoute
+  '/store-locations': typeof AppStoreLocationsRoute
   '/store-placement': typeof AppStorePlacementRoute
   '/tasks': typeof AppTasksRoute
   '/vendors': typeof AppVendorsRoute
@@ -156,6 +170,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/pending-approval': typeof PendingApprovalRoute
   '/signup': typeof SignupRoute
+  '/batches': typeof AppBatchesRoute
   '/calendar': typeof AppCalendarRoute
   '/campaigns': typeof AppCampaignsRoute
   '/dashboard': typeof AppDashboardRoute
@@ -163,6 +178,7 @@ export interface FileRoutesByTo {
   '/media': typeof AppMediaRoute
   '/products': typeof AppProductsRoute
   '/publishing': typeof AppPublishingRoute
+  '/store-locations': typeof AppStoreLocationsRoute
   '/store-placement': typeof AppStorePlacementRoute
   '/tasks': typeof AppTasksRoute
   '/vendors': typeof AppVendorsRoute
@@ -179,6 +195,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/pending-approval': typeof PendingApprovalRoute
   '/signup': typeof SignupRoute
+  '/_app/batches': typeof AppBatchesRoute
   '/_app/calendar': typeof AppCalendarRoute
   '/_app/campaigns': typeof AppCampaignsRoute
   '/_app/dashboard': typeof AppDashboardRoute
@@ -186,6 +203,7 @@ export interface FileRoutesById {
   '/_app/media': typeof AppMediaRoute
   '/_app/products': typeof AppProductsRoute
   '/_app/publishing': typeof AppPublishingRoute
+  '/_app/store-locations': typeof AppStoreLocationsRoute
   '/_app/store-placement': typeof AppStorePlacementRoute
   '/_app/tasks': typeof AppTasksRoute
   '/_app/vendors': typeof AppVendorsRoute
@@ -202,6 +220,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/pending-approval'
     | '/signup'
+    | '/batches'
     | '/calendar'
     | '/campaigns'
     | '/dashboard'
@@ -209,6 +228,7 @@ export interface FileRouteTypes {
     | '/media'
     | '/products'
     | '/publishing'
+    | '/store-locations'
     | '/store-placement'
     | '/tasks'
     | '/vendors'
@@ -223,6 +243,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/pending-approval'
     | '/signup'
+    | '/batches'
     | '/calendar'
     | '/campaigns'
     | '/dashboard'
@@ -230,6 +251,7 @@ export interface FileRouteTypes {
     | '/media'
     | '/products'
     | '/publishing'
+    | '/store-locations'
     | '/store-placement'
     | '/tasks'
     | '/vendors'
@@ -245,6 +267,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/pending-approval'
     | '/signup'
+    | '/_app/batches'
     | '/_app/calendar'
     | '/_app/campaigns'
     | '/_app/dashboard'
@@ -252,6 +275,7 @@ export interface FileRouteTypes {
     | '/_app/media'
     | '/_app/products'
     | '/_app/publishing'
+    | '/_app/store-locations'
     | '/_app/store-placement'
     | '/_app/tasks'
     | '/_app/vendors'
@@ -328,6 +352,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppStorePlacementRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/store-locations': {
+      id: '/_app/store-locations'
+      path: '/store-locations'
+      fullPath: '/store-locations'
+      preLoaderRoute: typeof AppStoreLocationsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/publishing': {
       id: '/_app/publishing'
       path: '/publishing'
@@ -377,6 +408,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCalendarRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/batches': {
+      id: '/_app/batches'
+      path: '/batches'
+      fullPath: '/batches'
+      preLoaderRoute: typeof AppBatchesRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/content/': {
       id: '/_app/content/'
       path: '/content'
@@ -416,6 +454,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteChildren {
+  AppBatchesRoute: typeof AppBatchesRoute
   AppCalendarRoute: typeof AppCalendarRoute
   AppCampaignsRoute: typeof AppCampaignsRoute
   AppDashboardRoute: typeof AppDashboardRoute
@@ -423,6 +462,7 @@ interface AppRouteChildren {
   AppMediaRoute: typeof AppMediaRoute
   AppProductsRoute: typeof AppProductsRoute
   AppPublishingRoute: typeof AppPublishingRoute
+  AppStoreLocationsRoute: typeof AppStoreLocationsRoute
   AppStorePlacementRoute: typeof AppStorePlacementRoute
   AppTasksRoute: typeof AppTasksRoute
   AppVendorsRoute: typeof AppVendorsRoute
@@ -434,6 +474,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppBatchesRoute: AppBatchesRoute,
   AppCalendarRoute: AppCalendarRoute,
   AppCampaignsRoute: AppCampaignsRoute,
   AppDashboardRoute: AppDashboardRoute,
@@ -441,6 +482,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppMediaRoute: AppMediaRoute,
   AppProductsRoute: AppProductsRoute,
   AppPublishingRoute: AppPublishingRoute,
+  AppStoreLocationsRoute: AppStoreLocationsRoute,
   AppStorePlacementRoute: AppStorePlacementRoute,
   AppTasksRoute: AppTasksRoute,
   AppVendorsRoute: AppVendorsRoute,
@@ -463,3 +505,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
