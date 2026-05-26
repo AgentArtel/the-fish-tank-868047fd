@@ -14,9 +14,17 @@ import { Route as PendingApprovalRouteImport } from './routes/pending-approval'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppPublishingRouteImport } from './routes/_app/publishing'
+import { Route as AppProductsRouteImport } from './routes/_app/products'
+import { Route as AppMediaRouteImport } from './routes/_app/media'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
+import { Route as AppCampaignsRouteImport } from './routes/_app/campaigns'
+import { Route as AppCalendarRouteImport } from './routes/_app/calendar'
 import { Route as AppContentIndexRouteImport } from './routes/_app/content.index'
+import { Route as AppSettingsUsersRouteImport } from './routes/_app/settings.users'
+import { Route as AppSettingsMetaRouteImport } from './routes/_app/settings.meta'
 import { Route as AppContentNewRouteImport } from './routes/_app/content.new'
+import { Route as AppContentIdRouteImport } from './routes/_app/content.$id'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -42,9 +50,34 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppPublishingRoute = AppPublishingRouteImport.update({
+  id: '/publishing',
+  path: '/publishing',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppProductsRoute = AppProductsRouteImport.update({
+  id: '/products',
+  path: '/products',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMediaRoute = AppMediaRouteImport.update({
+  id: '/media',
+  path: '/media',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCampaignsRoute = AppCampaignsRouteImport.update({
+  id: '/campaigns',
+  path: '/campaigns',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCalendarRoute = AppCalendarRouteImport.update({
+  id: '/calendar',
+  path: '/calendar',
   getParentRoute: () => AppRoute,
 } as any)
 const AppContentIndexRoute = AppContentIndexRouteImport.update({
@@ -52,9 +85,24 @@ const AppContentIndexRoute = AppContentIndexRouteImport.update({
   path: '/content/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppSettingsUsersRoute = AppSettingsUsersRouteImport.update({
+  id: '/settings/users',
+  path: '/settings/users',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSettingsMetaRoute = AppSettingsMetaRouteImport.update({
+  id: '/settings/meta',
+  path: '/settings/meta',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppContentNewRoute = AppContentNewRouteImport.update({
   id: '/content/new',
   path: '/content/new',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppContentIdRoute = AppContentIdRouteImport.update({
+  id: '/content/$id',
+  path: '/content/$id',
   getParentRoute: () => AppRoute,
 } as any)
 
@@ -63,8 +111,16 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/pending-approval': typeof PendingApprovalRoute
   '/signup': typeof SignupRoute
+  '/calendar': typeof AppCalendarRoute
+  '/campaigns': typeof AppCampaignsRoute
   '/dashboard': typeof AppDashboardRoute
+  '/media': typeof AppMediaRoute
+  '/products': typeof AppProductsRoute
+  '/publishing': typeof AppPublishingRoute
+  '/content/$id': typeof AppContentIdRoute
   '/content/new': typeof AppContentNewRoute
+  '/settings/meta': typeof AppSettingsMetaRoute
+  '/settings/users': typeof AppSettingsUsersRoute
   '/content/': typeof AppContentIndexRoute
 }
 export interface FileRoutesByTo {
@@ -72,8 +128,16 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/pending-approval': typeof PendingApprovalRoute
   '/signup': typeof SignupRoute
+  '/calendar': typeof AppCalendarRoute
+  '/campaigns': typeof AppCampaignsRoute
   '/dashboard': typeof AppDashboardRoute
+  '/media': typeof AppMediaRoute
+  '/products': typeof AppProductsRoute
+  '/publishing': typeof AppPublishingRoute
+  '/content/$id': typeof AppContentIdRoute
   '/content/new': typeof AppContentNewRoute
+  '/settings/meta': typeof AppSettingsMetaRoute
+  '/settings/users': typeof AppSettingsUsersRoute
   '/content': typeof AppContentIndexRoute
 }
 export interface FileRoutesById {
@@ -83,8 +147,16 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/pending-approval': typeof PendingApprovalRoute
   '/signup': typeof SignupRoute
+  '/_app/calendar': typeof AppCalendarRoute
+  '/_app/campaigns': typeof AppCampaignsRoute
   '/_app/dashboard': typeof AppDashboardRoute
+  '/_app/media': typeof AppMediaRoute
+  '/_app/products': typeof AppProductsRoute
+  '/_app/publishing': typeof AppPublishingRoute
+  '/_app/content/$id': typeof AppContentIdRoute
   '/_app/content/new': typeof AppContentNewRoute
+  '/_app/settings/meta': typeof AppSettingsMetaRoute
+  '/_app/settings/users': typeof AppSettingsUsersRoute
   '/_app/content/': typeof AppContentIndexRoute
 }
 export interface FileRouteTypes {
@@ -94,8 +166,16 @@ export interface FileRouteTypes {
     | '/login'
     | '/pending-approval'
     | '/signup'
+    | '/calendar'
+    | '/campaigns'
     | '/dashboard'
+    | '/media'
+    | '/products'
+    | '/publishing'
+    | '/content/$id'
     | '/content/new'
+    | '/settings/meta'
+    | '/settings/users'
     | '/content/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -103,8 +183,16 @@ export interface FileRouteTypes {
     | '/login'
     | '/pending-approval'
     | '/signup'
+    | '/calendar'
+    | '/campaigns'
     | '/dashboard'
+    | '/media'
+    | '/products'
+    | '/publishing'
+    | '/content/$id'
     | '/content/new'
+    | '/settings/meta'
+    | '/settings/users'
     | '/content'
   id:
     | '__root__'
@@ -113,8 +201,16 @@ export interface FileRouteTypes {
     | '/login'
     | '/pending-approval'
     | '/signup'
+    | '/_app/calendar'
+    | '/_app/campaigns'
     | '/_app/dashboard'
+    | '/_app/media'
+    | '/_app/products'
+    | '/_app/publishing'
+    | '/_app/content/$id'
     | '/_app/content/new'
+    | '/_app/settings/meta'
+    | '/_app/settings/users'
     | '/_app/content/'
   fileRoutesById: FileRoutesById
 }
@@ -163,11 +259,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/publishing': {
+      id: '/_app/publishing'
+      path: '/publishing'
+      fullPath: '/publishing'
+      preLoaderRoute: typeof AppPublishingRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/products': {
+      id: '/_app/products'
+      path: '/products'
+      fullPath: '/products'
+      preLoaderRoute: typeof AppProductsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/media': {
+      id: '/_app/media'
+      path: '/media'
+      fullPath: '/media'
+      preLoaderRoute: typeof AppMediaRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/dashboard': {
       id: '/_app/dashboard'
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof AppDashboardRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/campaigns': {
+      id: '/_app/campaigns'
+      path: '/campaigns'
+      fullPath: '/campaigns'
+      preLoaderRoute: typeof AppCampaignsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/calendar': {
+      id: '/_app/calendar'
+      path: '/calendar'
+      fullPath: '/calendar'
+      preLoaderRoute: typeof AppCalendarRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/content/': {
@@ -177,6 +308,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppContentIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/settings/users': {
+      id: '/_app/settings/users'
+      path: '/settings/users'
+      fullPath: '/settings/users'
+      preLoaderRoute: typeof AppSettingsUsersRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/settings/meta': {
+      id: '/_app/settings/meta'
+      path: '/settings/meta'
+      fullPath: '/settings/meta'
+      preLoaderRoute: typeof AppSettingsMetaRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/content/new': {
       id: '/_app/content/new'
       path: '/content/new'
@@ -184,18 +329,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppContentNewRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/content/$id': {
+      id: '/_app/content/$id'
+      path: '/content/$id'
+      fullPath: '/content/$id'
+      preLoaderRoute: typeof AppContentIdRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
+  AppCalendarRoute: typeof AppCalendarRoute
+  AppCampaignsRoute: typeof AppCampaignsRoute
   AppDashboardRoute: typeof AppDashboardRoute
+  AppMediaRoute: typeof AppMediaRoute
+  AppProductsRoute: typeof AppProductsRoute
+  AppPublishingRoute: typeof AppPublishingRoute
+  AppContentIdRoute: typeof AppContentIdRoute
   AppContentNewRoute: typeof AppContentNewRoute
+  AppSettingsMetaRoute: typeof AppSettingsMetaRoute
+  AppSettingsUsersRoute: typeof AppSettingsUsersRoute
   AppContentIndexRoute: typeof AppContentIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppCalendarRoute: AppCalendarRoute,
+  AppCampaignsRoute: AppCampaignsRoute,
   AppDashboardRoute: AppDashboardRoute,
+  AppMediaRoute: AppMediaRoute,
+  AppProductsRoute: AppProductsRoute,
+  AppPublishingRoute: AppPublishingRoute,
+  AppContentIdRoute: AppContentIdRoute,
   AppContentNewRoute: AppContentNewRoute,
+  AppSettingsMetaRoute: AppSettingsMetaRoute,
+  AppSettingsUsersRoute: AppSettingsUsersRoute,
   AppContentIndexRoute: AppContentIndexRoute,
 }
 
