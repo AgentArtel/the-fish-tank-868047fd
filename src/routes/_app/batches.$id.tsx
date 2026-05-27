@@ -25,7 +25,7 @@ import {
   fmtMoney,
   type VendorLineReview,
 } from "@/lib/ops";
-import { convertLineItemsToInventory, getSignedVendorInvoiceUrl } from "@/lib/ops.functions";
+import { convertLineItemsToInventory, getSignedVendorInvoiceUrl, extractBatchWithAI } from "@/lib/ops.functions";
 
 export const Route = createFileRoute("/_app/batches/$id")({ component: BatchDetail });
 
