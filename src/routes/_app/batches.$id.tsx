@@ -204,7 +204,8 @@ function LineItemsSection({ batchId, vendorId, lines, onDone }:
 function LineRow({ line, onDone }: { line: any; onDone: () => void }) {
   const [editing, setEditing] = useState(false);
   const updateReview = async (review_status: string) => {
-    const { error } = await supabase.from("vendor_line_items").update({ review_status }).eq("id", line.id);
+    const { error } = await supabase.from("vendor_line_items")
+      .update({ review_status: review_status as VendorLineReview }).eq("id", line.id);
     if (error) toast.error(error.message); else onDone();
   };
   return (
