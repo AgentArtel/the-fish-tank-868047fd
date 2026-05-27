@@ -231,6 +231,9 @@ function LineRow({ line, onDone }: { line: any; onDone: () => void }) {
         <td className="p-2">
           <div className="font-medium">{line.clean_item_name || line.raw_description || "(no name)"}</div>
           {line.scientific_name && <div className="text-xs italic text-muted-foreground">{line.scientific_name}</div>}
+          {typeof line.extraction_confidence === "number" && (
+            <div className="text-[10px] text-muted-foreground">AI confidence: {Math.round(line.extraction_confidence * 100)}%</div>
+          )}
           {line.extraction_warning && <div className="text-xs text-amber-700">⚠ {line.extraction_warning}</div>}
         </td>
         <td className="p-2">{line.quantity} {line.size && <span className="text-xs text-muted-foreground">{line.size}</span>}</td>
