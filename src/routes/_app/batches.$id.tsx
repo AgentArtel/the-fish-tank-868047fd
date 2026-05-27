@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Upload, ArrowLeft } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Plus, Upload, ArrowLeft, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useMe } from "@/hooks/use-me";
@@ -24,7 +25,7 @@ import {
   fmtMoney,
   type VendorLineReview,
 } from "@/lib/ops";
-import { convertLineItemsToInventory, getSignedVendorInvoiceUrl } from "@/lib/ops.functions";
+import { convertLineItemsToInventory, getSignedVendorInvoiceUrl, extractBatchWithAI } from "@/lib/ops.functions";
 
 export const Route = createFileRoute("/_app/batches/$id")({ component: BatchDetail });
 
@@ -64,8 +65,13 @@ function BatchDetail() {
       </button>
       <PageHeader
         title={`${batch.vendors?.name ?? "Vendor"} — ${batch.invoice_number ?? "no invoice #"}`}
-        description={`${VENDOR_BATCH_SOURCE_LABELS[batch.source_document_type as keyof typeof VENDOR_BATCH_SOURCE_LABELS]} · ${VENDOR_BATCH_INTAKE_LABELS[batch.intake_status as keyof typeof VENDOR_BATCH_INTAKE_LABELS]}`}
-        action={<ConvertButton batchId={id} lines={lines ?? []} onDone={refreshAll} />}
+        description={`${VENDOR_BATCH_SOURCE_LABELS[batch.source_document_type as keyof typeof VENDOR_BATCH_SOURCE_LABELS]} · ${VENDOR_BATCH_INTAKE_LABELS[batch.intake_status as keyof typeof VENDOR_BATCH_INTAKE_LABELS]} · AI: ${VENDOR_BATCH_EXTRACTION_LABELS[batch.extraction_status as keyof typeof VENDOR_BATCH_EXTRACTION_LABELS]}`}
+        action={
+          <div className="flex gap-2">
+            <ExtractAiButton batchId={id} hasPdf={!!batch.pdf_storage_path} extractionStatus={batch.extraction_status} onDone={refreshAll} />
+            <ConvertButton batchId={id} lines={lines ?? []} onDone={refreshAll} />
+          </div>
+        }
       />
 
       <BatchHeaderForm batch={batch} onDone={refreshAll} />
@@ -225,6 +231,9 @@ function LineRow({ line, onDone }: { line: any; onDone: () => void }) {
         <td className="p-2">
           <div className="font-medium">{line.clean_item_name || line.raw_description || "(no name)"}</div>
           {line.scientific_name && <div className="text-xs italic text-muted-foreground">{line.scientific_name}</div>}
+          {typeof line.extraction_confidence === "number" && (
+            <div className="text-[10px] text-muted-foreground">AI confidence: {Math.round(line.extraction_confidence * 100)}%</div>
+          )}
           {line.extraction_warning && <div className="text-xs text-amber-700">⚠ {line.extraction_warning}</div>}
         </td>
         <td className="p-2">{line.quantity} {line.size && <span className="text-xs text-muted-foreground">{line.size}</span>}</td>
@@ -409,4 +418,74 @@ function ConvertButton({ batchId: _b, lines, onDone }: { batchId: string; lines:
     finally { setBusy(false); }
   };
   return <Button onClick={run} disabled={busy}>{busy ? "Converting…" : `Convert ${eligible.length} to inventory`}</Button>;
+}
+
+function ExtractAiButton({ batchId, hasPdf, extractionStatus, onDone }:
+  { batchId: string; hasPdf: boolean; extractionStatus: string; onDone: () => void }) {
+  const extract = useServerFn(extractBatchWithAI);
+  const [busy, setBusy] = useState(false);
+  const [confirmFirst, setConfirmFirst] = useState(false);
+  const [confirmOverwrite, setConfirmOverwrite] = useState(false);
+
+  const run = async (overwrite: boolean) => {
+    setBusy(true);
+    try {
+      const res: any = await extract({ data: { batchId, confirmOverwrite: overwrite } });
+      if (res?.needsConfirm) { setConfirmOverwrite(true); return; }
+      if (res?.ok === false) { toast.error(res.error || "AI extraction failed"); onDone(); return; }
+      const warn = (res?.warnings ?? []) as string[];
+      toast.success(
+        `AI extracted ${res.lineCount} line(s), ${res.chargeCount} charge(s)` +
+        (res.removedLines || res.removedCharges ? ` · replaced ${res.removedLines} AI line(s) / ${res.removedCharges} AI charge(s)` : "") +
+        (warn.length ? ` · ${warn.length} warning(s)` : "")
+      );
+      if (warn.length) warn.slice(0, 5).forEach((w) => toast.warning(w));
+      onDone();
+    } catch (e: any) {
+      toast.error(e?.message ?? "AI extraction failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disabled = !hasPdf || busy || extractionStatus === "ai_pending";
+  const label = extractionStatus === "ai_pending" ? "Extracting…" : busy ? "Working…" : "Extract with AI";
+
+  return (
+    <>
+      <Button variant="secondary" disabled={disabled} onClick={() => setConfirmFirst(true)} title={!hasPdf ? "Upload a PDF first" : undefined}>
+        <Sparkles className="w-4 h-4 mr-1" /> {label}
+      </Button>
+
+      <AlertDialog open={confirmFirst} onOpenChange={setConfirmFirst}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Extract invoice with AI?</AlertDialogTitle>
+            <AlertDialogDescription>
+              AI will create draft line items and charges only. It cannot approve pricing, mark items reviewed, or convert anything to inventory. Staff review is required before any item becomes inventory. Human-entered header fields are never overwritten.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setConfirmFirst(false); run(false); }}>Run AI extraction</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmOverwrite} onOpenChange={setConfirmOverwrite}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Re-run AI extraction?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This batch already has line items or charges. Re-extraction will only replace prior AI-created drafts. Human-created lines/charges and converted lines are preserved. Continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setConfirmOverwrite(false); run(true); }}>Replace AI drafts</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
 }
