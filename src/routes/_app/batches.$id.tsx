@@ -22,6 +22,7 @@ import {
   VENDOR_LINE_PRICING_LABELS,
   VENDOR_CHARGE_TYPES, VENDOR_CHARGE_LABELS,
   fmtMoney,
+  type VendorLineReview,
 } from "@/lib/ops";
 import { convertLineItemsToInventory, getSignedVendorInvoiceUrl } from "@/lib/ops.functions";
 
