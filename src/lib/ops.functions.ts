@@ -440,7 +440,7 @@ export const extractBatchWithAI = createServerFn({ method: "POST" })
         const conf = typeof l.extraction_confidence === "number" ? l.extraction_confidence : 0.5;
         const vsp = l.vendor_sell_price ?? null;
         const wholesale = l.wholesale_cost ?? vsp;
-        const review = l.extraction_warning && l.extraction_warning.trim() ? "needs_info" : "pending";
+        const review: "pending" | "needs_info" = l.extraction_warning && l.extraction_warning.trim() ? "needs_info" : "pending";
         return {
           vendor_batch_id: batchId,
           vendor_id: resolvedVendorId,
