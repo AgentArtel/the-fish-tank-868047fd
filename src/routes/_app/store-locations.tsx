@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus } from "lucide-react";
+import { Plus, Pencil } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { slugify, STORE_LOCATION_KINDS, STORE_LOCATION_KIND_LABELS, type StoreLocationKind } from "@/lib/ops";
@@ -29,7 +29,7 @@ function LocationsPage() {
       <div className="rounded-lg border bg-card overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-left">
-            <tr><th className="p-3">Name</th><th className="p-3">Kind</th><th className="p-3">Live sale</th><th className="p-3">Active</th></tr>
+            <tr><th className="p-3">Name</th><th className="p-3">Kind</th><th className="p-3">Live sale</th><th className="p-3">Active</th><th className="p-3 w-24">Actions</th></tr>
           </thead>
           <tbody>
             {(data ?? []).map((l: any) => (
@@ -38,9 +38,12 @@ function LocationsPage() {
                 <td className="p-3"><Badge variant="outline">{STORE_LOCATION_KIND_LABELS[l.kind as StoreLocationKind] ?? l.kind}</Badge></td>
                 <td className="p-3">{l.is_live_sale ? <Badge className="bg-blue-100 text-blue-800 border-0">Live-sale</Badge> : <span className="text-muted-foreground">—</span>}</td>
                 <td className="p-3">{l.is_active ? <Badge variant="secondary">Active</Badge> : <Badge variant="outline">Inactive</Badge>}</td>
+                <td className="p-3">
+                  <LocationDialog location={l} onDone={refetch} />
+                </td>
               </tr>
             ))}
-            {data?.length === 0 && <tr><td colSpan={4} className="p-6 text-center text-muted-foreground">No locations yet.</td></tr>}
+            {data?.length === 0 && <tr><td colSpan={5} className="p-6 text-center text-muted-foreground">No locations yet.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -48,21 +51,49 @@ function LocationsPage() {
   );
 }
 
-function LocationDialog({ onDone }: { onDone: () => void }) {
+function LocationDialog({ location, onDone }: { location?: any; onDone: () => void }) {
+  const isEdit = !!location;
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState<any>({ name: "", kind: "display_tank", is_active: true, is_live_sale: false });
+  const [f, setF] = useState<any>(
+    isEdit
+      ? { ...location }
+      : { name: "", kind: "display_tank", is_active: true, is_live_sale: false }
+  );
+
   const submit = async () => {
-    const payload = { ...f, slug: slugify(f.name) };
-    const { error } = await supabase.from("store_locations").insert(payload);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Location created"); setOpen(false);
-    setF({ name: "", kind: "display_tank", is_active: true, is_live_sale: false }); onDone();
+    const payload: any = { ...f, slug: slugify(f.name) };
+    delete payload.id;
+    delete payload.created_at;
+    delete payload.updated_at;
+
+    if (isEdit) {
+      const { error } = await supabase.from("store_locations").update(payload).eq("id", location.id);
+      if (error) { toast.error(error.message); return; }
+      toast.success("Location updated");
+    } else {
+      const { error } = await supabase.from("store_locations").insert(payload);
+      if (error) { toast.error(error.message); return; }
+      toast.success("Location created");
+    }
+
+    setOpen(false);
+    if (!isEdit) {
+      setF({ name: "", kind: "display_tank", is_active: true, is_live_sale: false });
+    }
+    onDone();
   };
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild><Button><Plus className="w-4 h-4 mr-1" /> New location</Button></DialogTrigger>
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v && !isEdit) setF({ name: "", kind: "display_tank", is_active: true, is_live_sale: false }); }}>
+      <DialogTrigger asChild>
+        {isEdit ? (
+          <Button variant="ghost" size="icon" className="h-8 w-8"><Pencil className="w-4 h-4" /></Button>
+        ) : (
+          <Button><Plus className="w-4 h-4 mr-1" /> New location</Button>
+        )}
+      </DialogTrigger>
       <DialogContent>
-        <DialogHeader><DialogTitle>New store location</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{isEdit ? "Edit store location" : "New store location"}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5"><Label>Name</Label><Input value={f.name ?? ""} onChange={e=>setF({...f, name:e.target.value})} placeholder="Tank 4A" /></div>
           <div className="space-y-1.5"><Label>Kind</Label>
@@ -79,7 +110,7 @@ function LocationDialog({ onDone }: { onDone: () => void }) {
           <label className="flex items-center gap-2 text-sm">
             <Checkbox checked={!!f.is_active} onCheckedChange={c=>setF({...f, is_active:!!c})} /> Active
           </label>
-          <Button onClick={submit} disabled={!f.name} className="w-full">Create</Button>
+          <Button onClick={submit} disabled={!f.name} className="w-full">{isEdit ? "Save changes" : "Create"}</Button>
         </div>
       </DialogContent>
     </Dialog>
