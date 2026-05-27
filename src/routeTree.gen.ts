@@ -26,7 +26,9 @@ import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppCampaignsRouteImport } from './routes/_app/campaigns'
 import { Route as AppCalendarRouteImport } from './routes/_app/calendar'
 import { Route as AppBatchesRouteImport } from './routes/_app/batches'
+import { Route as AppInventoryIndexRouteImport } from './routes/_app/inventory.index'
 import { Route as AppContentIndexRouteImport } from './routes/_app/content.index'
+import { Route as AppBatchesIndexRouteImport } from './routes/_app/batches.index'
 import { Route as AppSettingsUsersRouteImport } from './routes/_app/settings.users'
 import { Route as AppSettingsMetaRouteImport } from './routes/_app/settings.meta'
 import { Route as AppInventoryIdRouteImport } from './routes/_app/inventory.$id'
@@ -118,10 +120,20 @@ const AppBatchesRoute = AppBatchesRouteImport.update({
   path: '/batches',
   getParentRoute: () => AppRoute,
 } as any)
+const AppInventoryIndexRoute = AppInventoryIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppInventoryRoute,
+} as any)
 const AppContentIndexRoute = AppContentIndexRouteImport.update({
   id: '/content/',
   path: '/content/',
   getParentRoute: () => AppRoute,
+} as any)
+const AppBatchesIndexRoute = AppBatchesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppBatchesRoute,
 } as any)
 const AppSettingsUsersRoute = AppSettingsUsersRouteImport.update({
   id: '/settings/users',
@@ -177,18 +189,18 @@ export interface FileRoutesByFullPath {
   '/inventory/$id': typeof AppInventoryIdRoute
   '/settings/meta': typeof AppSettingsMetaRoute
   '/settings/users': typeof AppSettingsUsersRoute
+  '/batches/': typeof AppBatchesIndexRoute
   '/content/': typeof AppContentIndexRoute
+  '/inventory/': typeof AppInventoryIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/pending-approval': typeof PendingApprovalRoute
   '/signup': typeof SignupRoute
-  '/batches': typeof AppBatchesRouteWithChildren
   '/calendar': typeof AppCalendarRoute
   '/campaigns': typeof AppCampaignsRoute
   '/dashboard': typeof AppDashboardRoute
-  '/inventory': typeof AppInventoryRouteWithChildren
   '/media': typeof AppMediaRoute
   '/pricing-approval': typeof AppPricingApprovalRoute
   '/products': typeof AppProductsRoute
@@ -202,7 +214,9 @@ export interface FileRoutesByTo {
   '/inventory/$id': typeof AppInventoryIdRoute
   '/settings/meta': typeof AppSettingsMetaRoute
   '/settings/users': typeof AppSettingsUsersRoute
+  '/batches': typeof AppBatchesIndexRoute
   '/content': typeof AppContentIndexRoute
+  '/inventory': typeof AppInventoryIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -229,7 +243,9 @@ export interface FileRoutesById {
   '/_app/inventory/$id': typeof AppInventoryIdRoute
   '/_app/settings/meta': typeof AppSettingsMetaRoute
   '/_app/settings/users': typeof AppSettingsUsersRoute
+  '/_app/batches/': typeof AppBatchesIndexRoute
   '/_app/content/': typeof AppContentIndexRoute
+  '/_app/inventory/': typeof AppInventoryIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -256,18 +272,18 @@ export interface FileRouteTypes {
     | '/inventory/$id'
     | '/settings/meta'
     | '/settings/users'
+    | '/batches/'
     | '/content/'
+    | '/inventory/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/login'
     | '/pending-approval'
     | '/signup'
-    | '/batches'
     | '/calendar'
     | '/campaigns'
     | '/dashboard'
-    | '/inventory'
     | '/media'
     | '/pricing-approval'
     | '/products'
@@ -281,7 +297,9 @@ export interface FileRouteTypes {
     | '/inventory/$id'
     | '/settings/meta'
     | '/settings/users'
+    | '/batches'
     | '/content'
+    | '/inventory'
   id:
     | '__root__'
     | '/'
@@ -307,7 +325,9 @@ export interface FileRouteTypes {
     | '/_app/inventory/$id'
     | '/_app/settings/meta'
     | '/_app/settings/users'
+    | '/_app/batches/'
     | '/_app/content/'
+    | '/_app/inventory/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -439,12 +459,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppBatchesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/inventory/': {
+      id: '/_app/inventory/'
+      path: '/'
+      fullPath: '/inventory/'
+      preLoaderRoute: typeof AppInventoryIndexRouteImport
+      parentRoute: typeof AppInventoryRoute
+    }
     '/_app/content/': {
       id: '/_app/content/'
       path: '/content'
       fullPath: '/content/'
       preLoaderRoute: typeof AppContentIndexRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/_app/batches/': {
+      id: '/_app/batches/'
+      path: '/'
+      fullPath: '/batches/'
+      preLoaderRoute: typeof AppBatchesIndexRouteImport
+      parentRoute: typeof AppBatchesRoute
     }
     '/_app/settings/users': {
       id: '/_app/settings/users'
@@ -493,10 +527,12 @@ declare module '@tanstack/react-router' {
 
 interface AppBatchesRouteChildren {
   AppBatchesIdRoute: typeof AppBatchesIdRoute
+  AppBatchesIndexRoute: typeof AppBatchesIndexRoute
 }
 
 const AppBatchesRouteChildren: AppBatchesRouteChildren = {
   AppBatchesIdRoute: AppBatchesIdRoute,
+  AppBatchesIndexRoute: AppBatchesIndexRoute,
 }
 
 const AppBatchesRouteWithChildren = AppBatchesRoute._addFileChildren(
@@ -505,10 +541,12 @@ const AppBatchesRouteWithChildren = AppBatchesRoute._addFileChildren(
 
 interface AppInventoryRouteChildren {
   AppInventoryIdRoute: typeof AppInventoryIdRoute
+  AppInventoryIndexRoute: typeof AppInventoryIndexRoute
 }
 
 const AppInventoryRouteChildren: AppInventoryRouteChildren = {
   AppInventoryIdRoute: AppInventoryIdRoute,
+  AppInventoryIndexRoute: AppInventoryIndexRoute,
 }
 
 const AppInventoryRouteWithChildren = AppInventoryRoute._addFileChildren(
@@ -567,3 +605,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
