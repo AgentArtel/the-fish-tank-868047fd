@@ -65,8 +65,13 @@ function BatchDetail() {
       </button>
       <PageHeader
         title={`${batch.vendors?.name ?? "Vendor"} — ${batch.invoice_number ?? "no invoice #"}`}
-        description={`${VENDOR_BATCH_SOURCE_LABELS[batch.source_document_type as keyof typeof VENDOR_BATCH_SOURCE_LABELS]} · ${VENDOR_BATCH_INTAKE_LABELS[batch.intake_status as keyof typeof VENDOR_BATCH_INTAKE_LABELS]}`}
-        action={<ConvertButton batchId={id} lines={lines ?? []} onDone={refreshAll} />}
+        description={`${VENDOR_BATCH_SOURCE_LABELS[batch.source_document_type as keyof typeof VENDOR_BATCH_SOURCE_LABELS]} · ${VENDOR_BATCH_INTAKE_LABELS[batch.intake_status as keyof typeof VENDOR_BATCH_INTAKE_LABELS]} · AI: ${VENDOR_BATCH_EXTRACTION_LABELS[batch.extraction_status as keyof typeof VENDOR_BATCH_EXTRACTION_LABELS]}`}
+        action={
+          <div className="flex gap-2">
+            <ExtractAiButton batchId={id} hasPdf={!!batch.pdf_storage_path} extractionStatus={batch.extraction_status} onDone={refreshAll} />
+            <ConvertButton batchId={id} lines={lines ?? []} onDone={refreshAll} />
+          </div>
+        }
       />
 
       <BatchHeaderForm batch={batch} onDone={refreshAll} />
