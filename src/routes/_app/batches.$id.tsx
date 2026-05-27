@@ -203,11 +203,21 @@ function LineItemsSection({ batchId, vendorId, lines, onDone }:
 
 function LineRow({ line, onDone }: { line: any; onDone: () => void }) {
   const [editing, setEditing] = useState(false);
+  const [marking, setMarking] = useState(false);
   const updateReview = async (review_status: string) => {
     const { error } = await supabase.from("vendor_line_items")
       .update({ review_status: review_status as VendorLineReview }).eq("id", line.id);
-    if (error) toast.error(error.message); else onDone();
+    if (error) toast.error(error.message); else { toast.success("Review updated"); onDone(); }
   };
+  const markReviewed = async () => {
+    setMarking(true);
+    const { error } = await supabase.from("vendor_line_items")
+      .update({ review_status: "approved" satisfies VendorLineReview }).eq("id", line.id);
+    setMarking(false);
+    if (error) toast.error(error.message);
+    else { toast.success("Marked reviewed"); onDone(); }
+  };
+  const canMarkReviewed = line.review_status !== "approved" && line.review_status !== "rejected";
   return (
     <>
       <tr className="border-t hover:bg-muted/30">
@@ -222,10 +232,17 @@ function LineRow({ line, onDone }: { line: any; onDone: () => void }) {
         <td className="p-2">{fmtMoney(line.suggested_retail_price)}</td>
         <td className="p-2 font-medium">{fmtMoney(line.approved_retail_price)}</td>
         <td className="p-2">
-          <Select value={line.review_status} onValueChange={updateReview}>
-            <SelectTrigger className="h-7 text-xs w-[110px]"><SelectValue /></SelectTrigger>
-            <SelectContent>{VENDOR_LINE_REVIEW.map(s => <SelectItem key={s} value={s}>{VENDOR_LINE_REVIEW_LABELS[s]}</SelectItem>)}</SelectContent>
-          </Select>
+          <div className="flex items-center gap-1.5">
+            <Select value={line.review_status} onValueChange={updateReview}>
+              <SelectTrigger className="h-7 text-xs w-[110px]"><SelectValue /></SelectTrigger>
+              <SelectContent>{VENDOR_LINE_REVIEW.map(s => <SelectItem key={s} value={s}>{VENDOR_LINE_REVIEW_LABELS[s]}</SelectItem>)}</SelectContent>
+            </Select>
+            {canMarkReviewed && (
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={markReviewed} disabled={marking}>
+                {marking ? "…" : "Mark reviewed"}
+              </Button>
+            )}
+          </div>
         </td>
         <td className="p-2"><OpsBadge label={VENDOR_LINE_PRICING_LABELS[line.pricing_status as keyof typeof VENDOR_LINE_PRICING_LABELS]} tone={pricingTone(line.pricing_status)} /></td>
         <td className="p-2"><Button variant="ghost" size="sm" onClick={()=>setEditing(true)}>Edit</Button></td>
