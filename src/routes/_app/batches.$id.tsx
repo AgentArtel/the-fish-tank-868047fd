@@ -22,6 +22,7 @@ import {
   VENDOR_LINE_PRICING_LABELS,
   VENDOR_CHARGE_TYPES, VENDOR_CHARGE_LABELS,
   fmtMoney,
+  type VendorLineReview,
 } from "@/lib/ops";
 import { convertLineItemsToInventory, getSignedVendorInvoiceUrl } from "@/lib/ops.functions";
 
@@ -203,7 +204,8 @@ function LineItemsSection({ batchId, vendorId, lines, onDone }:
 function LineRow({ line, onDone }: { line: any; onDone: () => void }) {
   const [editing, setEditing] = useState(false);
   const updateReview = async (review_status: string) => {
-    const { error } = await supabase.from("vendor_line_items").update({ review_status }).eq("id", line.id);
+    const { error } = await supabase.from("vendor_line_items")
+      .update({ review_status: review_status as VendorLineReview }).eq("id", line.id);
     if (error) toast.error(error.message); else onDone();
   };
   return (

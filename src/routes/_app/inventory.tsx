@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -96,7 +96,7 @@ function InventoryRow({ item, onDone }: { item: any; onDone: () => void }) {
   return (
     <tr className="border-t hover:bg-muted/30">
       <td className="p-3">
-        <div className="font-medium">{item.item_name}</div>
+        <Link to="/inventory/$id" params={{ id: item.id }} className="font-medium hover:underline">{item.item_name}</Link>
         {item.scientific_name && <div className="text-xs italic text-muted-foreground">{item.scientific_name}</div>}
         {item.size && <div className="text-xs text-muted-foreground">{item.size}</div>}
       </td>
