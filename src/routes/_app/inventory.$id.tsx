@@ -130,6 +130,8 @@ function ControlsCard({ item, locations, onDone }: { item: any; locations: any[]
     catch (e: any) { toast.error(e.message); }
   };
 
+  const liveSaleLocations = locations.filter(l => l.is_live_sale);
+
   return (
     <div className="rounded-lg border bg-card p-5 space-y-4">
       <h2 className="font-semibold">Status &amp; placement</h2>
@@ -142,6 +144,16 @@ function ControlsCard({ item, locations, onDone }: { item: any; locations: any[]
             {locations.map(l => <SelectItem key={l.id} value={l.id}>{l.name}{l.is_live_sale ? " ★ live-sale" : ""}</SelectItem>)}
           </SelectContent>
         </Select>
+        {liveSaleLocations.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {liveSaleLocations.map(l => (
+              <Button key={l.id} size="sm" variant="outline" className="h-7 text-xs"
+                onClick={() => changeLocation(l.id)}>
+                Assign {l.name}
+              </Button>
+            ))}
+          </div>
+        )}
         <p className="text-xs text-muted-foreground">Live-sale staged/live requires a live-sale location.</p>
       </div>
       <div className="space-y-1.5">
@@ -150,6 +162,11 @@ function ControlsCard({ item, locations, onDone }: { item: any; locations: any[]
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>{INVENTORY_AVAILABILITY.map(s => <SelectItem key={s} value={s}>{INVENTORY_AVAILABILITY_LABELS[s]}</SelectItem>)}</SelectContent>
         </Select>
+        <div className="flex flex-wrap gap-1.5 pt-1">
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => changeAvail("available")}>Mark available</Button>
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => changeAvail("on_hold")}>Set on hold</Button>
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => changeAvail("incoming")}>Set incoming</Button>
+        </div>
         <div><OpsBadge label={INVENTORY_AVAILABILITY_LABELS[item.availability_status as keyof typeof INVENTORY_AVAILABILITY_LABELS]} tone={availabilityTone(item.availability_status)} /></div>
         <p className="text-xs text-muted-foreground">Available requires approved price, location, and quantity &gt; 0.</p>
       </div>
@@ -159,11 +176,17 @@ function ControlsCard({ item, locations, onDone }: { item: any; locations: any[]
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>{INVENTORY_LIVE_SALE.map(s => <SelectItem key={s} value={s}>{INVENTORY_LIVE_SALE_LABELS[s]}</SelectItem>)}</SelectContent>
         </Select>
+        <div className="flex flex-wrap gap-1.5 pt-1">
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => changeLive("eligible")}>Mark eligible</Button>
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => changeLive("staged")}>Stage for live sale</Button>
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => changeLive("live")}>Go live</Button>
+        </div>
         <div><OpsBadge label={INVENTORY_LIVE_SALE_LABELS[item.live_sale_status as keyof typeof INVENTORY_LIVE_SALE_LABELS]} tone={liveSaleTone(item.live_sale_status)} /></div>
       </div>
     </div>
   );
 }
+
 
 function QuantitiesCard({ item, onDone }: { item: any; onDone: () => void }) {
   const adjust = useServerFn(adjustInventoryQuantities);
