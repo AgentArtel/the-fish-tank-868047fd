@@ -416,3 +416,73 @@ function ConvertButton({ batchId: _b, lines, onDone }: { batchId: string; lines:
   };
   return <Button onClick={run} disabled={busy}>{busy ? "Converting…" : `Convert ${eligible.length} to inventory`}</Button>;
 }
+
+function ExtractAiButton({ batchId, hasPdf, extractionStatus, onDone }:
+  { batchId: string; hasPdf: boolean; extractionStatus: string; onDone: () => void }) {
+  const extract = useServerFn(extractBatchWithAI);
+  const [busy, setBusy] = useState(false);
+  const [confirmFirst, setConfirmFirst] = useState(false);
+  const [confirmOverwrite, setConfirmOverwrite] = useState(false);
+
+  const run = async (overwrite: boolean) => {
+    setBusy(true);
+    try {
+      const res: any = await extract({ data: { batchId, confirmOverwrite: overwrite } });
+      if (res?.needsConfirm) { setConfirmOverwrite(true); return; }
+      if (res?.ok === false) { toast.error(res.error || "AI extraction failed"); onDone(); return; }
+      const warn = (res?.warnings ?? []) as string[];
+      toast.success(
+        `AI extracted ${res.lineCount} line(s), ${res.chargeCount} charge(s)` +
+        (res.removedLines || res.removedCharges ? ` · replaced ${res.removedLines} AI line(s) / ${res.removedCharges} AI charge(s)` : "") +
+        (warn.length ? ` · ${warn.length} warning(s)` : "")
+      );
+      if (warn.length) warn.slice(0, 5).forEach((w) => toast.warning(w));
+      onDone();
+    } catch (e: any) {
+      toast.error(e?.message ?? "AI extraction failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disabled = !hasPdf || busy || extractionStatus === "ai_pending";
+  const label = extractionStatus === "ai_pending" ? "Extracting…" : busy ? "Working…" : "Extract with AI";
+
+  return (
+    <>
+      <Button variant="secondary" disabled={disabled} onClick={() => setConfirmFirst(true)} title={!hasPdf ? "Upload a PDF first" : undefined}>
+        <Sparkles className="w-4 h-4 mr-1" /> {label}
+      </Button>
+
+      <AlertDialog open={confirmFirst} onOpenChange={setConfirmFirst}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Extract invoice with AI?</AlertDialogTitle>
+            <AlertDialogDescription>
+              AI will create draft line items and charges only. It cannot approve pricing, mark items reviewed, or convert anything to inventory. Staff review is required before any item becomes inventory. Human-entered header fields are never overwritten.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setConfirmFirst(false); run(false); }}>Run AI extraction</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmOverwrite} onOpenChange={setConfirmOverwrite}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Re-run AI extraction?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This batch already has line items or charges. Re-extraction will only replace prior AI-created drafts. Human-created lines/charges and converted lines are preserved. Continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setConfirmOverwrite(false); run(true); }}>Replace AI drafts</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
