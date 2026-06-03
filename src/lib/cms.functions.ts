@@ -90,3 +90,31 @@ export const setUserActive = createServerFn({ method: "POST" })
     await context.supabase.from("profiles").update({ is_active: data.active }).eq("id", data.userId);
     return { ok: true };
   });
+
+export const inviteUser = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({
+    email: z.string().trim().email().max(255),
+    role: z.enum(["admin","creator","reviewer"]),
+    display_name: z.string().trim().min(1).max(120).optional(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+    if (!(roles ?? []).some((r: any) => r.role === "admin")) throw new Error("Admins only");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: invited, error: invErr } = await supabaseAdmin.auth.admin.inviteUserByEmail(data.email, {
+      data: data.display_name ? { display_name: data.display_name } : undefined,
+    });
+    if (invErr) throw new Error(invErr.message);
+    const newUserId = invited.user?.id;
+    if (!newUserId) throw new Error("Invite created but no user id returned");
+    // handle_new_user trigger created the profile row (is_active=false). Activate + assign role.
+    await supabaseAdmin.from("profiles").update({
+      is_active: true, approved_at: new Date().toISOString(), approved_by: userId,
+      ...(data.display_name ? { display_name: data.display_name } : {}),
+    }).eq("id", newUserId);
+    await supabaseAdmin.from("user_roles").upsert({ user_id: newUserId, role: data.role }, { onConflict: "user_id,role" });
+    return { ok: true, userId: newUserId };
+  });
+
