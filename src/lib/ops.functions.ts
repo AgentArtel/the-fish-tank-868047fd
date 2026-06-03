@@ -130,6 +130,7 @@ export const setInventoryAvailability = createServerFn({ method: "POST" })
     status: z.enum(["incoming","quarantine","needs_id","available","on_hold","sold_out","not_for_sale","dead_lost"]),
   }).parse(d))
   .handler(async ({ data, context }) => {
+    await requireEditor(context.supabase, context.userId);
     const { error } = await context.supabase.from("inventory_items")
       .update({ availability_status: data.status }).eq("id", data.id);
     if (error) throw new Error(error.message);
@@ -143,6 +144,7 @@ export const setInventoryLiveSale = createServerFn({ method: "POST" })
     status: z.enum(["not_eligible","eligible","staged","live","ended"]),
   }).parse(d))
   .handler(async ({ data, context }) => {
+    await requireEditor(context.supabase, context.userId);
     const { error } = await context.supabase.from("inventory_items")
       .update({ live_sale_status: data.status }).eq("id", data.id);
     if (error) throw new Error(error.message);
@@ -160,6 +162,7 @@ export const adjustInventoryQuantities = createServerFn({ method: "POST" })
     quantity_lost: z.number().nonnegative().optional(),
   }).parse(d))
   .handler(async ({ data, context }) => {
+    await requireEditor(context.supabase, context.userId);
     const { id, ...patch } = data;
     const { error } = await context.supabase.from("inventory_items").update(patch).eq("id", id);
     if (error) throw new Error(error.message);
