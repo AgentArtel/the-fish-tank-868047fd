@@ -25,6 +25,7 @@ export const getSignedVendorInvoiceUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ path: z.string().min(1) }).parse(d))
   .handler(async ({ data, context }) => {
+    await requireEditor(context.supabase, context.userId);
     const { data: signed, error } = await context.supabase.storage
       .from("vendor-invoices").createSignedUrl(data.path, 3600);
     if (error) throw new Error(error.message);
@@ -35,6 +36,7 @@ export const getSignedInventoryMediaUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ path: z.string().min(1) }).parse(d))
   .handler(async ({ data, context }) => {
+    await requireEditor(context.supabase, context.userId);
     const { data: signed, error } = await context.supabase.storage
       .from("inventory-media").createSignedUrl(data.path, 3600);
     if (error) throw new Error(error.message);
