@@ -85,25 +85,32 @@ export const convertLineItemsToInventory = createServerFn({ method: "POST" })
       if (line.review_status !== "approved") { skipped.push({ id: line.id, reason: "not review-approved" }); continue; }
       if (line.pricing_status !== "approved") { skipped.push({ id: line.id, reason: "pricing not approved" }); continue; }
 
-      const qty = Number(line.quantity ?? 0);
+      const receivedQty = line.received_quantity != null ? Number(line.received_quantity) : Number(line.quantity ?? 0);
+      const lostQty = Number(line.lost_quantity ?? 0);
+      const availableQty = Math.max(0, receivedQty - lostQty);
       const { data: inv, error: insErr } = await supabase.from("inventory_items").insert({
         source_vendor_line_item_id: line.id,
         source_vendor_batch_id: line.vendor_batch_id,
         vendor_id: line.vendor_id,
         item_name: line.clean_item_name || line.raw_description || "Untitled item",
         scientific_name: line.scientific_name,
+        item_type: line.item_type,
         category: line.category,
         subcategory: line.subcategory,
         origin_region: line.origin_region,
         size: line.size,
-        quantity_received: qty,
-        quantity_available: qty,
+        quantity_received: receivedQty,
+        quantity_available: availableQty,
+        quantity_lost: lostQty,
         wholesale_cost: line.wholesale_cost,
         retail_price: line.approved_retail_price,
         pricing_status: "approved",
+        location_id: line.assigned_location_id,
         availability_status: "incoming",
         live_sale_status: "not_eligible",
         needs_photo: true,
+        received_at: line.received_at,
+        received_by: line.received_by,
         created_by: userId,
       }).select("id").single();
       if (insErr) { skipped.push({ id: line.id, reason: insErr.message }); continue; }
