@@ -96,3 +96,48 @@ function UserRow({ user, onApprove, onToggleActive }: { user: any; onApprove: (r
     </tr>
   );
 }
+
+function InviteUserDialog({ onDone }: { onDone: () => void }) {
+  const invite = useServerFn(inviteUser);
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [role, setRole] = useState<"admin"|"creator"|"reviewer">("creator");
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    if (!email) return;
+    setBusy(true);
+    try {
+      await invite({ data: { email, role, display_name: displayName || undefined } });
+      toast.success(`Invite sent to ${email}`);
+      setOpen(false); setEmail(""); setDisplayName(""); setRole("creator");
+      onDone();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild><Button><Plus className="w-4 h-4 mr-1" /> Invite user</Button></DialogTrigger>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Invite a user</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="employee@example.com" /></div>
+          <div className="space-y-1.5"><Label>Display name (optional)</Label><Input value={displayName} onChange={e=>setDisplayName(e.target.value)} /></div>
+          <div className="space-y-1.5"><Label>Role</Label>
+            <Select value={role} onValueChange={(v)=>setRole(v as any)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="creator">Creator</SelectItem>
+                <SelectItem value="reviewer">Reviewer</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button onClick={submit} disabled={!email || busy} className="w-full">{busy ? "Sending…" : "Send invite"}</Button>
+          <p className="text-xs text-muted-foreground">An email will be sent with a sign-in link. The user is activated immediately and assigned the selected role.</p>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
