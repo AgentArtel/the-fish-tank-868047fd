@@ -22,10 +22,12 @@ import {
   VENDOR_LINE_REVIEW, VENDOR_LINE_REVIEW_LABELS,
   VENDOR_LINE_PRICING_LABELS,
   VENDOR_CHARGE_TYPES, VENDOR_CHARGE_LABELS,
+  ITEM_TYPES, ITEM_TYPE_LABELS,
+  LOSS_REASONS, LOSS_REASON_LABELS,
   fmtMoney,
   type VendorLineReview,
 } from "@/lib/ops";
-import { convertLineItemsToInventory, getSignedVendorInvoiceUrl, extractBatchWithAI } from "@/lib/ops.functions";
+import { convertLineItemsToInventory, getSignedVendorInvoiceUrl, extractBatchWithAI, receiveBatchLines } from "@/lib/ops.functions";
 
 export const Route = createFileRoute("/_app/batches/$id")({ component: BatchDetail });
 
