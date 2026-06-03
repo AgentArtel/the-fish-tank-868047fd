@@ -85,25 +85,32 @@ export const convertLineItemsToInventory = createServerFn({ method: "POST" })
       if (line.review_status !== "approved") { skipped.push({ id: line.id, reason: "not review-approved" }); continue; }
       if (line.pricing_status !== "approved") { skipped.push({ id: line.id, reason: "pricing not approved" }); continue; }
 
-      const qty = Number(line.quantity ?? 0);
+      const receivedQty = line.received_quantity != null ? Number(line.received_quantity) : Number(line.quantity ?? 0);
+      const lostQty = Number(line.lost_quantity ?? 0);
+      const availableQty = Math.max(0, receivedQty - lostQty);
       const { data: inv, error: insErr } = await supabase.from("inventory_items").insert({
         source_vendor_line_item_id: line.id,
         source_vendor_batch_id: line.vendor_batch_id,
         vendor_id: line.vendor_id,
         item_name: line.clean_item_name || line.raw_description || "Untitled item",
         scientific_name: line.scientific_name,
+        item_type: line.item_type,
         category: line.category,
         subcategory: line.subcategory,
         origin_region: line.origin_region,
         size: line.size,
-        quantity_received: qty,
-        quantity_available: qty,
+        quantity_received: receivedQty,
+        quantity_available: availableQty,
+        quantity_lost: lostQty,
         wholesale_cost: line.wholesale_cost,
         retail_price: line.approved_retail_price,
         pricing_status: "approved",
+        location_id: line.assigned_location_id,
         availability_status: "incoming",
         live_sale_status: "not_eligible",
         needs_photo: true,
+        received_at: line.received_at,
+        received_by: line.received_by,
         created_by: userId,
       }).select("id").single();
       if (insErr) { skipped.push({ id: line.id, reason: insErr.message }); continue; }
@@ -122,6 +129,44 @@ export const convertLineItemsToInventory = createServerFn({ method: "POST" })
 
     return { created, skipped };
   });
+
+export const receiveBatchLines = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({
+    batchId: z.string().uuid(),
+    lines: z.array(z.object({
+      lineItemId: z.string().uuid(),
+      received_quantity: z.number().nonnegative(),
+      lost_quantity: z.number().nonnegative().default(0),
+      loss_reason: z.string().max(64).nullable().optional(),
+      assigned_location_id: z.string().uuid().nullable().optional(),
+      item_type: z.enum(["fish","coral","invert","dry_good","live_rock","equipment","other"]).nullable().optional(),
+    })).min(1).max(500),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await requireEditor(supabase, userId);
+    const now = new Date().toISOString();
+    let updated = 0;
+    const errors: { lineItemId: string; error: string }[] = [];
+    for (const ln of data.lines) {
+      const { error } = await supabase.from("vendor_line_items").update({
+        received_quantity: ln.received_quantity,
+        lost_quantity: ln.lost_quantity,
+        loss_reason: ln.loss_reason ?? null,
+        assigned_location_id: ln.assigned_location_id ?? null,
+        item_type: ln.item_type ?? null,
+        received_at: now,
+        received_by: userId,
+      }).eq("id", ln.lineItemId).eq("vendor_batch_id", data.batchId);
+      if (error) errors.push({ lineItemId: ln.lineItemId, error: error.message });
+      else updated++;
+    }
+    // intake_status enum has no 'received'; rely on per-line received_at as the receipt signal.
+    return { updated, errors };
+  });
+
+
 
 export const setInventoryAvailability = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

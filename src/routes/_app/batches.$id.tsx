@@ -22,10 +22,12 @@ import {
   VENDOR_LINE_REVIEW, VENDOR_LINE_REVIEW_LABELS,
   VENDOR_LINE_PRICING_LABELS,
   VENDOR_CHARGE_TYPES, VENDOR_CHARGE_LABELS,
+  ITEM_TYPES, ITEM_TYPE_LABELS,
+  LOSS_REASONS, LOSS_REASON_LABELS,
   fmtMoney,
   type VendorLineReview,
 } from "@/lib/ops";
-import { convertLineItemsToInventory, getSignedVendorInvoiceUrl, extractBatchWithAI } from "@/lib/ops.functions";
+import { convertLineItemsToInventory, getSignedVendorInvoiceUrl, extractBatchWithAI, receiveBatchLines } from "@/lib/ops.functions";
 
 export const Route = createFileRoute("/_app/batches/$id")({ component: BatchDetail });
 
@@ -76,6 +78,7 @@ function BatchDetail() {
 
       <BatchHeaderForm batch={batch} onDone={refreshAll} />
       <LineItemsSection batchId={id} vendorId={batch.vendor_id} lines={lines ?? []} onDone={refreshAll} />
+      <ReceiveSection batchId={id} lines={lines ?? []} onDone={refreshAll} />
       <ChargesSection batchId={id} charges={charges ?? []} onDone={refreshAll} />
     </div>
   );
@@ -322,6 +325,15 @@ function LineFormFields({ f, setF }: { f: any; setF: (v: any) => void }) {
       <Field label="Clean item name"><Input value={f.clean_item_name ?? ""} onChange={e=>setF({...f, clean_item_name:e.target.value})} /></Field>
       <Field label="Raw description"><Textarea rows={2} value={f.raw_description ?? ""} onChange={e=>setF({...f, raw_description:e.target.value})} /></Field>
       <div className="grid grid-cols-2 gap-3">
+        <Field label="Item type">
+          <Select value={f.item_type ?? "_unset"} onValueChange={v=>setF({...f, item_type: v === "_unset" ? null : v})}>
+            <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_unset">—</SelectItem>
+              {ITEM_TYPES.map(t => <SelectItem key={t} value={t}>{ITEM_TYPE_LABELS[t]}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </Field>
         <Field label="Scientific name"><Input value={f.scientific_name ?? ""} onChange={e=>setF({...f, scientific_name:e.target.value})} /></Field>
         <Field label="Vendor item ID"><Input value={f.vendor_item_id ?? ""} onChange={e=>setF({...f, vendor_item_id:e.target.value})} /></Field>
         <Field label="Category"><Input value={f.category ?? ""} onChange={e=>setF({...f, category:e.target.value})} /></Field>
@@ -489,3 +501,140 @@ function ExtractAiButton({ batchId, hasPdf, extractionStatus, onDone }:
     </>
   );
 }
+
+function ReceiveSection({ batchId, lines, onDone }: { batchId: string; lines: any[]; onDone: () => void }) {
+  const receive = useServerFn(receiveBatchLines);
+  const { data: locs } = useQuery({
+    queryKey: ["store-locations-tree"],
+    queryFn: async () => (await supabase.from("store_locations").select("*").eq("is_active", true).order("name")).data ?? [],
+  });
+  const sellable = lines.filter(l => l.kind === "sellable" && !l.converted_inventory_item_id);
+  const [drafts, setDrafts] = useState<Record<string, any>>({});
+  const [busy, setBusy] = useState(false);
+
+  const getDraft = (l: any) => drafts[l.id] ?? {
+    received_quantity: l.received_quantity != null ? Number(l.received_quantity) : Number(l.quantity ?? 0),
+    lost_quantity: Number(l.lost_quantity ?? 0),
+    loss_reason: l.loss_reason ?? null,
+    assigned_location_id: l.assigned_location_id ?? null,
+    item_type: l.item_type ?? null,
+  };
+  const setDraft = (id: string, patch: any) => setDrafts(d => ({ ...d, [id]: { ...getDraft({ id, ...(d[id] ?? {}) }), ...patch } }));
+
+  const tanks = (locs ?? []).filter((l: any) => l.kind !== "zone");
+  const zoneOf = (parentId: string | null) => (locs ?? []).find((z: any) => z.id === parentId)?.name ?? "Unzoned";
+
+  const submit = async () => {
+    if (sellable.length === 0) { toast.info("No sellable lines to receive"); return; }
+    setBusy(true);
+    try {
+      const payload = sellable.map(l => {
+        const d = getDraft(l);
+        return {
+          lineItemId: l.id,
+          received_quantity: Number(d.received_quantity ?? 0),
+          lost_quantity: Number(d.lost_quantity ?? 0),
+          loss_reason: d.loss_reason ?? null,
+          assigned_location_id: d.assigned_location_id ?? null,
+          item_type: d.item_type ?? null,
+        };
+      });
+      const res = await receive({ data: { batchId, lines: payload } });
+      toast.success(`Recorded ${res.updated} line(s)` + (res.errors.length ? ` · ${res.errors.length} error(s)` : ""));
+      setDrafts({});
+      onDone();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="rounded-lg border bg-card p-5 space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="font-semibold">Receive shipment</h2>
+          <p className="text-xs text-muted-foreground">Record what physically arrived. Lines with 0 received stay flagged as "did not arrive". Pricing approval and conversion to inventory remain admin-only steps.</p>
+        </div>
+        <Button onClick={submit} disabled={busy || sellable.length === 0}>{busy ? "Saving…" : "Save received"}</Button>
+      </div>
+      {sellable.length === 0 && <p className="text-sm text-muted-foreground p-4 text-center">No unconverted sellable lines. Add a draft line or run AI extraction first.</p>}
+      <div className="overflow-x-auto">
+        {sellable.length > 0 && (
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 text-left">
+              <tr>
+                <th className="p-2">Item</th>
+                <th className="p-2">Type</th>
+                <th className="p-2">Ordered</th>
+                <th className="p-2">Received</th>
+                <th className="p-2">Lost</th>
+                <th className="p-2">Loss reason</th>
+                <th className="p-2">Cost</th>
+                <th className="p-2">Suggested 3×</th>
+                <th className="p-2">Location</th>
+                <th className="p-2">Receipt</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sellable.map(l => {
+                const d = getDraft(l);
+                const suggested = l.wholesale_cost != null ? Number(l.wholesale_cost) * 3 : null;
+                return (
+                  <tr key={l.id} className="border-t align-top">
+                    <td className="p-2">
+                      <div className="font-medium">{l.clean_item_name || l.raw_description || "(no name)"}</div>
+                      {l.scientific_name && <div className="text-xs italic text-muted-foreground">{l.scientific_name}</div>}
+                    </td>
+                    <td className="p-2">
+                      <Select value={d.item_type ?? "_unset"} onValueChange={(v) => setDraft(l.id, { item_type: v === "_unset" ? null : v })}>
+                        <SelectTrigger className="h-8 w-[110px] text-xs"><SelectValue placeholder="—" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="_unset">—</SelectItem>
+                          {ITEM_TYPES.map(t => <SelectItem key={t} value={t}>{ITEM_TYPE_LABELS[t]}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </td>
+                    <td className="p-2 text-muted-foreground">{l.quantity ?? "—"} {l.size && <span className="text-xs">{l.size}</span>}</td>
+                    <td className="p-2"><Input className="h-8 w-20" type="number" step="0.01" value={d.received_quantity ?? ""} onChange={e=>setDraft(l.id, { received_quantity: e.target.value === "" ? 0 : Number(e.target.value) })} /></td>
+                    <td className="p-2"><Input className="h-8 w-20" type="number" step="0.01" value={d.lost_quantity ?? 0} onChange={e=>setDraft(l.id, { lost_quantity: e.target.value === "" ? 0 : Number(e.target.value) })} /></td>
+                    <td className="p-2">
+                      <Select value={d.loss_reason ?? "_none"} onValueChange={(v)=>setDraft(l.id, { loss_reason: v === "_none" ? null : v })}>
+                        <SelectTrigger className="h-8 w-[120px] text-xs"><SelectValue placeholder="—" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="_none">—</SelectItem>
+                          {LOSS_REASONS.map(r => <SelectItem key={r} value={r}>{LOSS_REASON_LABELS[r]}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </td>
+                    <td className="p-2">{fmtMoney(l.wholesale_cost)}</td>
+                    <td className="p-2">
+                      <div className="font-medium text-emerald-700">{fmtMoney(suggested)}</div>
+                      {l.approved_retail_price != null && (
+                        <div className="text-[10px] text-muted-foreground">Approved: {fmtMoney(l.approved_retail_price)}</div>
+                      )}
+                    </td>
+                    <td className="p-2">
+                      <Select value={d.assigned_location_id ?? "_none"} onValueChange={(v)=>setDraft(l.id, { assigned_location_id: v === "_none" ? null : v })}>
+                        <SelectTrigger className="h-8 w-[180px] text-xs"><SelectValue placeholder="—" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="_none">—</SelectItem>
+                          {tanks.map((t: any) => (
+                            <SelectItem key={t.id} value={t.id}>{zoneOf(t.parent_location_id)} · {t.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </td>
+                    <td className="p-2 text-xs text-muted-foreground">
+                      {l.received_at ? new Date(l.received_at).toLocaleDateString() : <span className="italic">pending</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">Suggested retail = 3 × wholesale cost. Admin still needs to approve pricing on each line (in Pricing Approval) before Convert to inventory.</p>
+    </div>
+  );
+}
+

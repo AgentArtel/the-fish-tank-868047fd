@@ -65,12 +65,26 @@ export const INVENTORY_LIVE_SALE_LABELS: Record<InventoryLiveSale,string> = {
   live:"Live", ended:"Ended",
 };
 
-export const STORE_LOCATION_KINDS = ["display_tank","coral_flat","live_sale_tank","quarantine","holding","dry_goods","back_of_house","other"] as const;
+export const STORE_LOCATION_KINDS = ["zone","display_tank","coral_flat","live_sale_tank","quarantine","holding","dry_goods","back_of_house","other"] as const;
 export type StoreLocationKind = typeof STORE_LOCATION_KINDS[number];
 export const STORE_LOCATION_KIND_LABELS: Record<StoreLocationKind,string> = {
-  display_tank:"Display tank", coral_flat:"Coral flat", live_sale_tank:"Live-sale tank",
+  zone:"Zone (group)", display_tank:"Display tank", coral_flat:"Coral flat", live_sale_tank:"Live-sale tank",
   quarantine:"Quarantine", holding:"Holding", dry_goods:"Dry goods",
   back_of_house:"Back of house", other:"Other",
+};
+
+export const ITEM_TYPES = ["fish","coral","invert","dry_good","live_rock","equipment","other"] as const;
+export type ItemType = typeof ITEM_TYPES[number];
+export const ITEM_TYPE_LABELS: Record<ItemType,string> = {
+  fish:"Fish", coral:"Coral", invert:"Invertebrate", dry_good:"Dry good",
+  live_rock:"Live rock", equipment:"Equipment", other:"Other",
+};
+
+export const LOSS_REASONS = ["dead_on_arrival","escaped","damaged","missing","substituted","other"] as const;
+export type LossReason = typeof LOSS_REASONS[number];
+export const LOSS_REASON_LABELS: Record<LossReason,string> = {
+  dead_on_arrival:"DOA", escaped:"Escaped", damaged:"Damaged",
+  missing:"Missing", substituted:"Substituted", other:"Other",
 };
 
 export const INVENTORY_MEDIA_TAGS = ["internal","social","website","live_sale"] as const;

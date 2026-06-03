@@ -5,10 +5,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { approveUser, setUserActive } from "@/lib/cms.functions";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { approveUser, setUserActive, inviteUser } from "@/lib/cms.functions";
+import { Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+
 
 export const Route = createFileRoute("/_app/settings/users")({ component: UsersPage });
 
@@ -33,7 +38,8 @@ function UsersPage() {
 
   return (
     <div className="p-8">
-      <PageHeader title="Users" description="Approve new signups, assign roles, deactivate access." />
+      <PageHeader title="Users" description="Approve new signups, assign roles, deactivate access." action={<InviteUserDialog onDone={() => qc.invalidateQueries({ queryKey: ["users-admin"] })} />} />
+
       <div className="rounded-lg border bg-card overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-left">
@@ -90,3 +96,48 @@ function UserRow({ user, onApprove, onToggleActive }: { user: any; onApprove: (r
     </tr>
   );
 }
+
+function InviteUserDialog({ onDone }: { onDone: () => void }) {
+  const invite = useServerFn(inviteUser);
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [role, setRole] = useState<"admin"|"creator"|"reviewer">("creator");
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    if (!email) return;
+    setBusy(true);
+    try {
+      await invite({ data: { email, role, display_name: displayName || undefined } });
+      toast.success(`Invite sent to ${email}`);
+      setOpen(false); setEmail(""); setDisplayName(""); setRole("creator");
+      onDone();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild><Button><Plus className="w-4 h-4 mr-1" /> Invite user</Button></DialogTrigger>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Invite a user</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="employee@example.com" /></div>
+          <div className="space-y-1.5"><Label>Display name (optional)</Label><Input value={displayName} onChange={e=>setDisplayName(e.target.value)} /></div>
+          <div className="space-y-1.5"><Label>Role</Label>
+            <Select value={role} onValueChange={(v)=>setRole(v as any)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="creator">Creator</SelectItem>
+                <SelectItem value="reviewer">Reviewer</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button onClick={submit} disabled={!email || busy} className="w-full">{busy ? "Sending…" : "Send invite"}</Button>
+          <p className="text-xs text-muted-foreground">An email will be sent with a sign-in link. The user is activated immediately and assigned the selected role.</p>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
