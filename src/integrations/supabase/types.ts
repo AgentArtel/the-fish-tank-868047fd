@@ -271,6 +271,7 @@ export type Database = {
           created_by: string | null
           id: string
           item_name: string
+          item_type: Database["public"]["Enums"]["item_type"] | null
           live_sale_status: Database["public"]["Enums"]["inventory_live_sale_status"]
           location_id: string | null
           needs_photo: boolean
@@ -282,6 +283,8 @@ export type Database = {
           quantity_on_hold: number
           quantity_received: number
           quantity_sold: number
+          received_at: string | null
+          received_by: string | null
           retail_price: number | null
           scientific_name: string | null
           size: string | null
@@ -300,6 +303,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           item_name: string
+          item_type?: Database["public"]["Enums"]["item_type"] | null
           live_sale_status?: Database["public"]["Enums"]["inventory_live_sale_status"]
           location_id?: string | null
           needs_photo?: boolean
@@ -311,6 +315,8 @@ export type Database = {
           quantity_on_hold?: number
           quantity_received?: number
           quantity_sold?: number
+          received_at?: string | null
+          received_by?: string | null
           retail_price?: number | null
           scientific_name?: string | null
           size?: string | null
@@ -329,6 +335,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           item_name?: string
+          item_type?: Database["public"]["Enums"]["item_type"] | null
           live_sale_status?: Database["public"]["Enums"]["inventory_live_sale_status"]
           location_id?: string | null
           needs_photo?: boolean
@@ -340,6 +347,8 @@ export type Database = {
           quantity_on_hold?: number
           quantity_received?: number
           quantity_sold?: number
+          received_at?: string | null
+          received_by?: string | null
           retail_price?: number | null
           scientific_name?: string | null
           size?: string | null
@@ -692,6 +701,7 @@ export type Database = {
           kind: Database["public"]["Enums"]["store_location_kind"]
           name: string
           notes: string | null
+          parent_location_id: string | null
           slug: string
           updated_at: string
         }
@@ -704,6 +714,7 @@ export type Database = {
           kind?: Database["public"]["Enums"]["store_location_kind"]
           name: string
           notes?: string | null
+          parent_location_id?: string | null
           slug: string
           updated_at?: string
         }
@@ -716,10 +727,19 @@ export type Database = {
           kind?: Database["public"]["Enums"]["store_location_kind"]
           name?: string
           notes?: string | null
+          parent_location_id?: string | null
           slug?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "store_locations_parent_location_id_fkey"
+            columns: ["parent_location_id"]
+            isOneToOne: false
+            referencedRelation: "store_locations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
@@ -895,6 +915,7 @@ export type Database = {
           approved_at: string | null
           approved_by: string | null
           approved_retail_price: number | null
+          assigned_location_id: string | null
           category: string | null
           clean_item_name: string | null
           converted_inventory_item_id: string | null
@@ -903,19 +924,26 @@ export type Database = {
           extraction_warning: string | null
           has_discount: boolean
           id: string
+          item_type: Database["public"]["Enums"]["item_type"] | null
           kind: Database["public"]["Enums"]["vendor_line_kind"]
           line_number: number | null
           line_total: number | null
+          loss_reason: string | null
+          lost_quantity: number
           notes: string | null
           origin_region: string | null
           pricing_status: Database["public"]["Enums"]["vendor_line_pricing_status"]
           quantity: number
           raw_description: string | null
+          received_at: string | null
+          received_by: string | null
+          received_quantity: number | null
           regular_price: number | null
           review_status: Database["public"]["Enums"]["vendor_line_review_status"]
           scientific_name: string | null
           size: string | null
           subcategory: string | null
+          suggested_retail_3x: number | null
           suggested_retail_price: number | null
           updated_at: string
           vendor_batch_id: string
@@ -928,6 +956,7 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           approved_retail_price?: number | null
+          assigned_location_id?: string | null
           category?: string | null
           clean_item_name?: string | null
           converted_inventory_item_id?: string | null
@@ -936,19 +965,26 @@ export type Database = {
           extraction_warning?: string | null
           has_discount?: boolean
           id?: string
+          item_type?: Database["public"]["Enums"]["item_type"] | null
           kind?: Database["public"]["Enums"]["vendor_line_kind"]
           line_number?: number | null
           line_total?: number | null
+          loss_reason?: string | null
+          lost_quantity?: number
           notes?: string | null
           origin_region?: string | null
           pricing_status?: Database["public"]["Enums"]["vendor_line_pricing_status"]
           quantity?: number
           raw_description?: string | null
+          received_at?: string | null
+          received_by?: string | null
+          received_quantity?: number | null
           regular_price?: number | null
           review_status?: Database["public"]["Enums"]["vendor_line_review_status"]
           scientific_name?: string | null
           size?: string | null
           subcategory?: string | null
+          suggested_retail_3x?: number | null
           suggested_retail_price?: number | null
           updated_at?: string
           vendor_batch_id: string
@@ -961,6 +997,7 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           approved_retail_price?: number | null
+          assigned_location_id?: string | null
           category?: string | null
           clean_item_name?: string | null
           converted_inventory_item_id?: string | null
@@ -969,19 +1006,26 @@ export type Database = {
           extraction_warning?: string | null
           has_discount?: boolean
           id?: string
+          item_type?: Database["public"]["Enums"]["item_type"] | null
           kind?: Database["public"]["Enums"]["vendor_line_kind"]
           line_number?: number | null
           line_total?: number | null
+          loss_reason?: string | null
+          lost_quantity?: number
           notes?: string | null
           origin_region?: string | null
           pricing_status?: Database["public"]["Enums"]["vendor_line_pricing_status"]
           quantity?: number
           raw_description?: string | null
+          received_at?: string | null
+          received_by?: string | null
+          received_quantity?: number | null
           regular_price?: number | null
           review_status?: Database["public"]["Enums"]["vendor_line_review_status"]
           scientific_name?: string | null
           size?: string | null
           subcategory?: string | null
+          suggested_retail_3x?: number | null
           suggested_retail_price?: number | null
           updated_at?: string
           vendor_batch_id?: string
@@ -991,6 +1035,13 @@ export type Database = {
           wholesale_cost?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "vendor_line_items_assigned_location_id_fkey"
+            columns: ["assigned_location_id"]
+            isOneToOne: false
+            referencedRelation: "store_locations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "vendor_line_items_vendor_batch_id_fkey"
             columns: ["vendor_batch_id"]
@@ -1137,6 +1188,14 @@ export type Database = {
         | "ended"
       inventory_media_tag: "internal" | "social" | "website" | "live_sale"
       inventory_pricing_status: "not_priced" | "approved"
+      item_type:
+        | "fish"
+        | "coral"
+        | "invert"
+        | "dry_good"
+        | "live_rock"
+        | "equipment"
+        | "other"
       media_type: "image" | "video"
       platform:
         | "facebook"
@@ -1167,6 +1226,7 @@ export type Database = {
         | "dry_goods"
         | "back_of_house"
         | "other"
+        | "zone"
       usage_rights: "owned" | "vendor_allowed" | "needs_permission" | "unknown"
       usage_status: "unused" | "in_use" | "archived"
       vendor_batch_charge_type:
@@ -1395,6 +1455,15 @@ export const Constants = {
       ],
       inventory_media_tag: ["internal", "social", "website", "live_sale"],
       inventory_pricing_status: ["not_priced", "approved"],
+      item_type: [
+        "fish",
+        "coral",
+        "invert",
+        "dry_good",
+        "live_rock",
+        "equipment",
+        "other",
+      ],
       media_type: ["image", "video"],
       platform: [
         "facebook",
@@ -1428,6 +1497,7 @@ export const Constants = {
         "dry_goods",
         "back_of_house",
         "other",
+        "zone",
       ],
       usage_rights: ["owned", "vendor_allowed", "needs_permission", "unknown"],
       usage_status: ["unused", "in_use", "archived"],
