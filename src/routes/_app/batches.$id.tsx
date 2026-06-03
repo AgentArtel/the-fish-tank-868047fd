@@ -325,6 +325,15 @@ function LineFormFields({ f, setF }: { f: any; setF: (v: any) => void }) {
       <Field label="Clean item name"><Input value={f.clean_item_name ?? ""} onChange={e=>setF({...f, clean_item_name:e.target.value})} /></Field>
       <Field label="Raw description"><Textarea rows={2} value={f.raw_description ?? ""} onChange={e=>setF({...f, raw_description:e.target.value})} /></Field>
       <div className="grid grid-cols-2 gap-3">
+        <Field label="Item type">
+          <Select value={f.item_type ?? "_unset"} onValueChange={v=>setF({...f, item_type: v === "_unset" ? null : v})}>
+            <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_unset">—</SelectItem>
+              {ITEM_TYPES.map(t => <SelectItem key={t} value={t}>{ITEM_TYPE_LABELS[t]}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </Field>
         <Field label="Scientific name"><Input value={f.scientific_name ?? ""} onChange={e=>setF({...f, scientific_name:e.target.value})} /></Field>
         <Field label="Vendor item ID"><Input value={f.vendor_item_id ?? ""} onChange={e=>setF({...f, vendor_item_id:e.target.value})} /></Field>
         <Field label="Category"><Input value={f.category ?? ""} onChange={e=>setF({...f, category:e.target.value})} /></Field>
