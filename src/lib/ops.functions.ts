@@ -162,7 +162,7 @@ export const receiveBatchLines = createServerFn({ method: "POST" })
       if (error) errors.push({ lineItemId: ln.lineItemId, error: error.message });
       else updated++;
     }
-    await supabase.from("vendor_batches").update({ intake_status: "received" }).eq("id", data.batchId);
+    // intake_status enum has no 'received'; rely on per-line received_at as the receipt signal.
     return { updated, errors };
   });
 
