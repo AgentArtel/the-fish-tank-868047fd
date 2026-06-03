@@ -316,6 +316,7 @@ export const extractBatchWithAI = createServerFn({ method: "POST" })
   }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = context;
+    await requireEditor(supabase, context.userId);
     const { batchId, confirmOverwrite } = data;
 
     // 1. Load batch
