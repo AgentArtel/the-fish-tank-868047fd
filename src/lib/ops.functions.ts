@@ -7,6 +7,20 @@ async function isAdmin(supabase: any, userId: string) {
   return (data ?? []).some((r: any) => r.role === "admin");
 }
 
+async function requireActive(supabase: any, userId: string) {
+  const { data } = await supabase.from("profiles").select("is_active").eq("id", userId).maybeSingle();
+  if (!data?.is_active) throw new Error("Forbidden: account pending approval");
+}
+
+async function requireEditor(supabase: any, userId: string) {
+  await requireActive(supabase, userId);
+  const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+  const ok = (data ?? []).some((r: any) =>
+    r.role === "admin" || r.role === "creator" || r.role === "reviewer"
+  );
+  if (!ok) throw new Error("Forbidden: editor role required");
+}
+
 export const getSignedVendorInvoiceUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ path: z.string().min(1) }).parse(d))
