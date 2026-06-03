@@ -27,6 +27,8 @@ export const updateContentStatus = createServerFn({ method: "POST" })
   }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    const { data: prof } = await supabase.from("profiles").select("is_active").eq("id", userId).maybeSingle();
+    if (!prof?.is_active) throw new Error("Forbidden: account pending approval");
     const { data: row, error } = await supabase
       .from("content_items").select("status").eq("id", data.id).single();
     if (error) throw new Error(error.message);
