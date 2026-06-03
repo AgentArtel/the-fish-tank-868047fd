@@ -54,6 +54,9 @@ export const getSignedUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ path: z.string().min(1) }).parse(d))
   .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: prof } = await supabase.from("profiles").select("is_active").eq("id", userId).maybeSingle();
+    if (!prof?.is_active) throw new Error("Forbidden: account pending approval");
     const { data: signed, error } = await context.supabase.storage
       .from("media").createSignedUrl(data.path, 3600);
     if (error) throw new Error(error.message);
