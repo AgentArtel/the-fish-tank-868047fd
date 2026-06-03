@@ -52,6 +52,7 @@ export const approveLinePricing = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     if (!(await isAdmin(supabase, userId))) throw new Error("Only admins can approve pricing");
+    await requireActive(supabase, userId);
     const { error } = await supabase.from("vendor_line_items").update({
       approved_retail_price: data.approvedRetailPrice,
       pricing_status: "approved",
