@@ -70,6 +70,8 @@ export const convertLineItemsToInventory = createServerFn({ method: "POST" })
   }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    if (!(await isAdmin(supabase, userId))) throw new Error("Only admins can convert line items to inventory");
+    await requireActive(supabase, userId);
     const { data: lines, error } = await supabase.from("vendor_line_items")
       .select("*").in("id", data.lineItemIds);
     if (error) throw new Error(error.message);
