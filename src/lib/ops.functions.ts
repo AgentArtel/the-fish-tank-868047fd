@@ -130,6 +130,44 @@ export const convertLineItemsToInventory = createServerFn({ method: "POST" })
     return { created, skipped };
   });
 
+export const receiveBatchLines = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({
+    batchId: z.string().uuid(),
+    lines: z.array(z.object({
+      lineItemId: z.string().uuid(),
+      received_quantity: z.number().nonnegative(),
+      lost_quantity: z.number().nonnegative().default(0),
+      loss_reason: z.string().max(64).nullable().optional(),
+      assigned_location_id: z.string().uuid().nullable().optional(),
+      item_type: z.enum(["fish","coral","invert","dry_good","live_rock","equipment","other"]).nullable().optional(),
+    })).min(1).max(500),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await requireEditor(supabase, userId);
+    const now = new Date().toISOString();
+    let updated = 0;
+    const errors: { lineItemId: string; error: string }[] = [];
+    for (const ln of data.lines) {
+      const { error } = await supabase.from("vendor_line_items").update({
+        received_quantity: ln.received_quantity,
+        lost_quantity: ln.lost_quantity,
+        loss_reason: ln.loss_reason ?? null,
+        assigned_location_id: ln.assigned_location_id ?? null,
+        item_type: ln.item_type ?? null,
+        received_at: now,
+        received_by: userId,
+      }).eq("id", ln.lineItemId).eq("vendor_batch_id", data.batchId);
+      if (error) errors.push({ lineItemId: ln.lineItemId, error: error.message });
+      else updated++;
+    }
+    await supabase.from("vendor_batches").update({ intake_status: "received" }).eq("id", data.batchId);
+    return { updated, errors };
+  });
+
+
+
 export const setInventoryAvailability = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({
