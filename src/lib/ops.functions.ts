@@ -7,10 +7,25 @@ async function isAdmin(supabase: any, userId: string) {
   return (data ?? []).some((r: any) => r.role === "admin");
 }
 
+async function requireActive(supabase: any, userId: string) {
+  const { data } = await supabase.from("profiles").select("is_active").eq("id", userId).maybeSingle();
+  if (!data?.is_active) throw new Error("Forbidden: account pending approval");
+}
+
+async function requireEditor(supabase: any, userId: string) {
+  await requireActive(supabase, userId);
+  const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+  const ok = (data ?? []).some((r: any) =>
+    r.role === "admin" || r.role === "creator" || r.role === "reviewer"
+  );
+  if (!ok) throw new Error("Forbidden: editor role required");
+}
+
 export const getSignedVendorInvoiceUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ path: z.string().min(1) }).parse(d))
   .handler(async ({ data, context }) => {
+    await requireEditor(context.supabase, context.userId);
     const { data: signed, error } = await context.supabase.storage
       .from("vendor-invoices").createSignedUrl(data.path, 3600);
     if (error) throw new Error(error.message);
@@ -21,6 +36,7 @@ export const getSignedInventoryMediaUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ path: z.string().min(1) }).parse(d))
   .handler(async ({ data, context }) => {
+    await requireEditor(context.supabase, context.userId);
     const { data: signed, error } = await context.supabase.storage
       .from("inventory-media").createSignedUrl(data.path, 3600);
     if (error) throw new Error(error.message);
@@ -36,6 +52,7 @@ export const approveLinePricing = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     if (!(await isAdmin(supabase, userId))) throw new Error("Only admins can approve pricing");
+    await requireActive(supabase, userId);
     const { error } = await supabase.from("vendor_line_items").update({
       approved_retail_price: data.approvedRetailPrice,
       pricing_status: "approved",
@@ -53,6 +70,8 @@ export const convertLineItemsToInventory = createServerFn({ method: "POST" })
   }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    if (!(await isAdmin(supabase, userId))) throw new Error("Only admins can convert line items to inventory");
+    await requireActive(supabase, userId);
     const { data: lines, error } = await supabase.from("vendor_line_items")
       .select("*").in("id", data.lineItemIds);
     if (error) throw new Error(error.message);
@@ -111,6 +130,7 @@ export const setInventoryAvailability = createServerFn({ method: "POST" })
     status: z.enum(["incoming","quarantine","needs_id","available","on_hold","sold_out","not_for_sale","dead_lost"]),
   }).parse(d))
   .handler(async ({ data, context }) => {
+    await requireEditor(context.supabase, context.userId);
     const { error } = await context.supabase.from("inventory_items")
       .update({ availability_status: data.status }).eq("id", data.id);
     if (error) throw new Error(error.message);
@@ -124,6 +144,7 @@ export const setInventoryLiveSale = createServerFn({ method: "POST" })
     status: z.enum(["not_eligible","eligible","staged","live","ended"]),
   }).parse(d))
   .handler(async ({ data, context }) => {
+    await requireEditor(context.supabase, context.userId);
     const { error } = await context.supabase.from("inventory_items")
       .update({ live_sale_status: data.status }).eq("id", data.id);
     if (error) throw new Error(error.message);
@@ -141,6 +162,7 @@ export const adjustInventoryQuantities = createServerFn({ method: "POST" })
     quantity_lost: z.number().nonnegative().optional(),
   }).parse(d))
   .handler(async ({ data, context }) => {
+    await requireEditor(context.supabase, context.userId);
     const { id, ...patch } = data;
     const { error } = await context.supabase.from("inventory_items").update(patch).eq("id", id);
     if (error) throw new Error(error.message);
@@ -294,6 +316,7 @@ export const extractBatchWithAI = createServerFn({ method: "POST" })
   }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = context;
+    await requireEditor(supabase, context.userId);
     const { batchId, confirmOverwrite } = data;
 
     // 1. Load batch
