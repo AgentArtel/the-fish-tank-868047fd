@@ -38,7 +38,8 @@ function UsersPage() {
 
   return (
     <div className="p-8">
-      <PageHeader title="Users" description="Approve new signups, assign roles, deactivate access." />
+      <PageHeader title="Users" description="Approve new signups, assign roles, deactivate access." action={<InviteUserDialog onDone={() => qc.invalidateQueries({ queryKey: ["users-admin"] })} />} />
+
       <div className="rounded-lg border bg-card overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-left">
