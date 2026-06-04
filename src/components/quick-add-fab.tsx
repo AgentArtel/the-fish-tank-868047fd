@@ -415,6 +415,7 @@ function MarkdownBulk({
             retail_price: Number(r.retail_price ?? 0),
             wholesale_cost: r.wholesale_cost != null ? Number(r.wholesale_cost) : null,
             location_id: locationId || null,
+            source_vendor_id: vendorId || null,
             notes: r.notes ?? null,
             primary_photo_path: photo.path,
             primary_photo_file_name: photo.fileName,
