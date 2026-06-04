@@ -275,6 +275,7 @@ function MissingPhotoBanner({ inventoryItemId, availability }: { inventoryItemId
 function MediaSection({ inventoryItemId }: { inventoryItemId: string }) {
   const qc = useQueryClient();
   const [tag, setTag] = useState<InventoryMediaTag>("internal");
+  const [hasPriceTag, setHasPriceTag] = useState(false);
   const [busy, setBusy] = useState(false);
   const getUrl = useServerFn(getSignedInventoryMediaUrl);
 
