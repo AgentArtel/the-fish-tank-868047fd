@@ -792,9 +792,22 @@ function ReceiveHistoryDialog({ line, onClose }: { line: any; onClose: () => voi
   const { data: logs } = useQuery({
     queryKey: ["receive-logs", line.id],
     queryFn: async () => (await supabase.from("vendor_line_receive_logs")
-      .select("*, profiles:actor_id(display_name,email), store_locations:assigned_location_id(name)")
-      .eq("vendor_line_item_id", line.id).order("created_at", { ascending: false })).data ?? [],
+      .select("*").eq("vendor_line_item_id", line.id).order("created_at", { ascending: false })).data ?? [],
   });
+  const actorIds = Array.from(new Set((logs ?? []).map((l: any) => l.actor_id).filter(Boolean)));
+  const locIds = Array.from(new Set((logs ?? []).map((l: any) => l.assigned_location_id).filter(Boolean)));
+  const { data: profiles } = useQuery({
+    queryKey: ["receive-log-profiles", actorIds.join(",")],
+    enabled: actorIds.length > 0,
+    queryFn: async () => (await supabase.from("profiles").select("id,display_name,email").in("id", actorIds)).data ?? [],
+  });
+  const { data: locsMeta } = useQuery({
+    queryKey: ["receive-log-locs", locIds.join(",")],
+    enabled: locIds.length > 0,
+    queryFn: async () => (await supabase.from("store_locations").select("id,name").in("id", locIds)).data ?? [],
+  });
+  const profMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+  const locMap = new Map((locsMeta ?? []).map((l: any) => [l.id, l]));
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-auto">
