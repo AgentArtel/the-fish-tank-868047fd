@@ -28,12 +28,6 @@ No schema migration — used existing `vendors` + `inventory_items.vendor_id` co
 
 ---
 
-# Development Log
-
-Living record of what's been built, what was extra/unplanned, and what's still ahead. Append-only — newest day on top.
-
----
-
 ## 2026-06-04 — Sprint 1: OCR / image tagging on photo upload
 
 ### Planned
