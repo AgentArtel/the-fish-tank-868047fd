@@ -304,6 +304,7 @@ function MediaSection({ inventoryItemId }: { inventoryItemId: string }) {
         inventory_item_id: inventoryItemId,
         storage_path: path, file_name: file.name,
         media_type: mediaType, tag, uploader_id: uploaderId,
+        has_price_tag: mediaType === "image" ? hasPriceTag : false,
       });
       if (insErr) throw insErr;
       // Clear needs_photo on first upload of any image
