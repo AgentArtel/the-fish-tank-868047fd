@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Upload, Trash2 } from "lucide-react";
+import { ArrowLeft, Upload, Trash2, AlertTriangle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { OpsBadge, availabilityTone, liveSaleTone, pricingTone } from "@/components/ops-badge";
@@ -67,6 +67,9 @@ function InventoryDetail() {
         title={item.item_name}
         description={[item.scientific_name, item.category, item.size].filter(Boolean).join(" · ") || "Inventory item"}
       />
+
+      <MissingPhotoBanner inventoryItemId={id} availability={item.availability_status} />
+
 
       <div className="grid md:grid-cols-2 gap-6">
         <DetailsCard item={item} />
@@ -243,9 +246,36 @@ function NotesCard({ item, onDone }: { item: any; onDone: () => void }) {
   );
 }
 
+function MissingPhotoBanner({ inventoryItemId, availability }: { inventoryItemId: string; availability: string }) {
+  const { data: media } = useQuery({
+    queryKey: ["inventory-media", inventoryItemId],
+    queryFn: async () => (await supabase.from("inventory_media")
+      .select("id,media_type").eq("inventory_item_id", inventoryItemId)).data ?? [],
+  });
+  const hasImage = (media ?? []).some((m: any) => m.media_type === "image");
+  if (hasImage) return null;
+  const blocking = availability === "available";
+  return (
+    <div className={`rounded-md border p-3 flex items-start gap-3 text-sm ${
+      blocking ? "border-destructive/40 bg-destructive/10 text-destructive" : "border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200"
+    }`}>
+      <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+      <div>
+        <div className="font-medium">Photo required</div>
+        <div className="text-xs opacity-90">
+          {blocking
+            ? "This item is marked Available but has no photo on file. Add one below — the database will block future availability changes without it."
+            : "Upload at least one photo so this item can be marked Available and shown to customers."}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MediaSection({ inventoryItemId }: { inventoryItemId: string }) {
   const qc = useQueryClient();
   const [tag, setTag] = useState<InventoryMediaTag>("internal");
+  const [hasPriceTag, setHasPriceTag] = useState(false);
   const [busy, setBusy] = useState(false);
   const getUrl = useServerFn(getSignedInventoryMediaUrl);
 
@@ -274,6 +304,7 @@ function MediaSection({ inventoryItemId }: { inventoryItemId: string }) {
         inventory_item_id: inventoryItemId,
         storage_path: path, file_name: file.name,
         media_type: mediaType, tag, uploader_id: uploaderId,
+        has_price_tag: mediaType === "image" ? hasPriceTag : false,
       });
       if (insErr) throw insErr;
       // Clear needs_photo on first upload of any image
@@ -306,6 +337,10 @@ function MediaSection({ inventoryItemId }: { inventoryItemId: string }) {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="font-semibold">Media</h2>
         <div className="flex items-center gap-2">
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Checkbox checked={hasPriceTag} onCheckedChange={(v) => setHasPriceTag(!!v)} />
+            Includes price tag
+          </label>
           <Select value={tag} onValueChange={v=>setTag(v as InventoryMediaTag)}>
             <SelectTrigger className="w-[140px] h-9 text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>{INVENTORY_MEDIA_TAGS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
