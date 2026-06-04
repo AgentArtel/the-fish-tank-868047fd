@@ -214,6 +214,7 @@ function ManualForm({
         retail_price: price,
         wholesale_cost: wholesale ? Number(wholesale) : null,
         location_id: locationId || null,
+        source_vendor_id: vendorId || null,
         notes: notes.trim() || null,
         primary_photo_path: primary.path,
         primary_photo_file_name: primary.fileName,
