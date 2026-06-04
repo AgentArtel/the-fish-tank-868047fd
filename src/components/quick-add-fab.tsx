@@ -1,10 +1,10 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Plus, Camera, Sparkles, Loader2, Trash2, FileText } from "lucide-react";
+import { Plus, Camera, Sparkles, Loader2, Trash2, FileText, Check, ChevronsUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
+import { Button, type ButtonProps } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,8 +12,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 import { ITEM_TYPES, ITEM_TYPE_LABELS, type ItemType } from "@/lib/ops";
-import { quickAddInventoryItem, parseTagPhoto, parseInventoryMarkdown } from "@/lib/ops.functions";
+import { quickAddInventoryItem, parseTagPhoto, parseInventoryMarkdown, quickCreateVendor } from "@/lib/ops.functions";
 
 type Mode = "livestock" | "dry_good";
 
@@ -29,6 +32,29 @@ export function QuickAddFab() {
       >
         <Plus className="w-6 h-6" />
       </button>
+      {open && <QuickAddDialog onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+export function QuickAddButton({
+  children = "Quick Add",
+  variant = "default",
+  size = "default",
+  className,
+}: {
+  children?: React.ReactNode;
+  variant?: ButtonProps["variant"];
+  size?: ButtonProps["size"];
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button variant={variant} size={size} className={className} onClick={() => setOpen(true)}>
+        <Plus className="w-4 h-4 mr-1.5" />
+        {children}
+      </Button>
       {open && <QuickAddDialog onClose={() => setOpen(false)} />}
     </>
   );
@@ -121,6 +147,7 @@ function ManualForm({
   const [retailPrice, setRetailPrice] = useState<string>("");
   const [wholesale, setWholesale] = useState<string>("");
   const [locationId, setLocationId] = useState<string>("");
+  const [vendorId, setVendorId] = useState<string>("");
   const [notes, setNotes] = useState("");
 
   const [primaryFile, setPrimaryFile] = useState<File | null>(null);
@@ -187,6 +214,7 @@ function ManualForm({
         retail_price: price,
         wholesale_cost: wholesale ? Number(wholesale) : null,
         location_id: locationId || null,
+        source_vendor_id: vendorId || null,
         notes: notes.trim() || null,
         primary_photo_path: primary.path,
         primary_photo_file_name: primary.fileName,
@@ -227,6 +255,12 @@ function ManualForm({
           {parsing ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />}
           AI fill from photo
         </Button>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-xs">Vendor / source (where you bought it)</Label>
+        <VendorPickerCombo value={vendorId} onChange={setVendorId} />
+        <p className="text-[10px] text-muted-foreground">Optional — pick existing or quick-create. Leave blank if unknown.</p>
       </div>
 
       <div className="grid sm:grid-cols-2 gap-3">
@@ -339,6 +373,7 @@ function MarkdownBulk({
   const [parsing, setParsing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [locationId, setLocationId] = useState<string>("");
+  const [vendorId, setVendorId] = useState<string>("");
   const [bulkPhoto, setBulkPhoto] = useState<File | null>(null);
   const [bulkPreview, setBulkPreview] = useState<string>("");
 
@@ -380,6 +415,7 @@ function MarkdownBulk({
             retail_price: Number(r.retail_price ?? 0),
             wholesale_cost: r.wholesale_cost != null ? Number(r.wholesale_cost) : null,
             location_id: locationId || null,
+            source_vendor_id: vendorId || null,
             notes: r.notes ?? null,
             primary_photo_path: photo.path,
             primary_photo_file_name: photo.fileName,
@@ -448,6 +484,11 @@ function MarkdownBulk({
             </div>
           </div>
 
+          <div className="space-y-1.5">
+            <Label className="text-xs">Vendor / source for all (optional)</Label>
+            <VendorPickerCombo value={vendorId} onChange={setVendorId} />
+          </div>
+
           <DialogFooter>
             <Button onClick={saveAll} disabled={saving}>
               {saving ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
@@ -457,5 +498,137 @@ function MarkdownBulk({
         </>
       )}
     </div>
+  );
+}
+
+// ---- Vendor combobox with quick-create ----
+function VendorPickerCombo({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newContact, setNewContact] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+  const [newNotes, setNewNotes] = useState("");
+
+  const createVendor = useServerFn(quickCreateVendor);
+
+  const { data: vendors } = useQuery({
+    queryKey: ["vendors-active"],
+    queryFn: async () =>
+      (await supabase.from("vendors").select("id,name").eq("is_active", true).order("name")).data ?? [],
+    staleTime: 30_000,
+  });
+
+  const selected = vendors?.find((v: any) => v.id === value);
+
+  useEffect(() => { if (showCreate) setNewName(search); }, [showCreate]); // eslint-disable-line
+
+  const submitCreate = async () => {
+    if (!newName.trim()) { toast.error("Vendor name required"); return; }
+    setCreating(true);
+    try {
+      const r = await createVendor({ data: {
+        name: newName.trim(),
+        contact_name: newContact.trim() || null,
+        contact_email: newEmail.trim() || null,
+        contact_phone: newPhone.trim() || null,
+        notes: newNotes.trim() || null,
+      } });
+      await qc.invalidateQueries({ queryKey: ["vendors-active"] });
+      onChange(r.id);
+      toast.success(r.deduped ? `Matched existing: ${r.name}` : `Created ${r.name}`);
+      setShowCreate(false);
+      setOpen(false);
+      setNewName(""); setNewContact(""); setNewEmail(""); setNewPhone(""); setNewNotes("");
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed");
+    } finally { setCreating(false); }
+  };
+
+  return (
+    <>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button type="button" variant="outline" role="combobox" className="w-full justify-between font-normal">
+            <span className={cn("truncate", !selected && "text-muted-foreground")}>
+              {selected ? selected.name : "Pick or add vendor…"}
+            </span>
+            <ChevronsUpDown className="w-3.5 h-3.5 opacity-50 ml-2 shrink-0" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+          <Command>
+            <CommandInput placeholder="Search vendors…" value={search} onValueChange={setSearch} />
+            <CommandList>
+              <CommandEmpty>No match.</CommandEmpty>
+              <CommandGroup>
+                {value && (
+                  <CommandItem value="__clear__" onSelect={() => { onChange(""); setOpen(false); }}>
+                    <span className="text-muted-foreground">Clear selection</span>
+                  </CommandItem>
+                )}
+                {(vendors ?? []).map((v: any) => (
+                  <CommandItem key={v.id} value={v.name} onSelect={() => { onChange(v.id); setOpen(false); }}>
+                    <Check className={cn("w-3.5 h-3.5 mr-2", value === v.id ? "opacity-100" : "opacity-0")} />
+                    {v.name}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+              <CommandSeparator />
+              <CommandGroup>
+                <CommandItem value="__create__" onSelect={() => { setShowCreate(true); setOpen(false); }}>
+                  <Plus className="w-3.5 h-3.5 mr-2" />
+                  Add new vendor{search ? `: "${search}"` : "…"}
+                </CommandItem>
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>New vendor</DialogTitle>
+            <DialogDescription>Quick-create a vendor so this item records its source.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Name *</Label>
+              <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Acme Aquatics" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Contact name</Label>
+                <Input value={newContact} onChange={e => setNewContact(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Phone</Label>
+                <Input value={newPhone} onChange={e => setNewPhone(e.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Email</Label>
+              <Input value={newEmail} onChange={e => setNewEmail(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Notes</Label>
+              <Textarea value={newNotes} onChange={e => setNewNotes(e.target.value)} rows={2} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+            <Button onClick={submitCreate} disabled={creating}>
+              {creating ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
+              Create vendor
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
