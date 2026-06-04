@@ -24,7 +24,9 @@ import {
 import {
   setInventoryAvailability, setInventoryLiveSale,
   adjustInventoryQuantities, getSignedInventoryMediaUrl,
+  parseTagPhoto,
 } from "@/lib/ops.functions";
+import { Sparkles, Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/_app/inventory/$id")({ component: InventoryDetail });
 
