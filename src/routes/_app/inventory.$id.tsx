@@ -397,13 +397,27 @@ function MediaSection({ inventoryItemId }: { inventoryItemId: string }) {
           {media.map(m => (
             <div key={m.id} className="rounded-md border p-3 space-y-2">
               <div className="text-sm font-medium truncate">{m.file_name}</div>
-              <div className="text-xs text-muted-foreground">{m.media_type} · {new Date(m.created_at).toLocaleDateString()}</div>
+              <div className="text-xs text-muted-foreground">
+                {m.media_type} · {new Date(m.created_at).toLocaleDateString()}
+                {m.has_price_tag && <span className="ml-1 text-emerald-600">· tag ✓</span>}
+                {m.ocr_extracted_at && <span className="ml-1">· OCR'd</span>}
+              </div>
+              {m.ocr_text && (
+                <div className="text-[10px] text-muted-foreground line-clamp-2" title={m.ocr_text}>
+                  {m.ocr_text}
+                </div>
+              )}
               <Select value={m.tag} onValueChange={v => updateTag(m, v)}>
                 <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>{INVENTORY_MEDIA_TAGS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
               </Select>
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" className="flex-1" onClick={()=>open(m)}>Open</Button>
+                {m.media_type === "image" && (
+                  <Button size="sm" variant="outline" onClick={()=>rerunOcr(m)} disabled={extractingId===m.id} title="Re-run AI extraction">
+                    {extractingId===m.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                  </Button>
+                )}
                 <Button size="sm" variant="ghost" onClick={()=>remove(m)}><Trash2 className="w-3 h-3" /></Button>
               </div>
             </div>
