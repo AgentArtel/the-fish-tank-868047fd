@@ -910,6 +910,51 @@ export type Database = {
           },
         ]
       }
+      vendor_line_doa_photos: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          storage_path: string
+          uploaded_by: string | null
+          vendor_batch_id: string
+          vendor_line_item_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind: string
+          storage_path: string
+          uploaded_by?: string | null
+          vendor_batch_id: string
+          vendor_line_item_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          storage_path?: string
+          uploaded_by?: string | null
+          vendor_batch_id?: string
+          vendor_line_item_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_line_doa_photos_vendor_batch_id_fkey"
+            columns: ["vendor_batch_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_line_doa_photos_vendor_line_item_id_fkey"
+            columns: ["vendor_line_item_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_line_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vendor_line_items: {
         Row: {
           approved_at: string | null
@@ -932,6 +977,7 @@ export type Database = {
           lost_quantity: number
           notes: string | null
           origin_region: string | null
+          override_retail_price: number | null
           pricing_status: Database["public"]["Enums"]["vendor_line_pricing_status"]
           quantity: number
           raw_description: string | null
@@ -973,6 +1019,7 @@ export type Database = {
           lost_quantity?: number
           notes?: string | null
           origin_region?: string | null
+          override_retail_price?: number | null
           pricing_status?: Database["public"]["Enums"]["vendor_line_pricing_status"]
           quantity?: number
           raw_description?: string | null
@@ -1014,6 +1061,7 @@ export type Database = {
           lost_quantity?: number
           notes?: string | null
           origin_region?: string | null
+          override_retail_price?: number | null
           pricing_status?: Database["public"]["Enums"]["vendor_line_pricing_status"]
           quantity?: number
           raw_description?: string | null
@@ -1061,6 +1109,85 @@ export type Database = {
             columns: ["converted_inventory_item_id"]
             isOneToOne: false
             referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vendor_line_receive_logs: {
+        Row: {
+          actor_id: string | null
+          assigned_location_id: string | null
+          created_at: string
+          id: string
+          loss_reason: string | null
+          lost_quantity: number | null
+          note: string | null
+          override_retail_price: number | null
+          prev_assigned_location_id: string | null
+          prev_loss_reason: string | null
+          prev_lost_quantity: number | null
+          prev_override_retail_price: number | null
+          prev_received_quantity: number | null
+          received_quantity: number | null
+          vendor_batch_id: string
+          vendor_line_item_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          assigned_location_id?: string | null
+          created_at?: string
+          id?: string
+          loss_reason?: string | null
+          lost_quantity?: number | null
+          note?: string | null
+          override_retail_price?: number | null
+          prev_assigned_location_id?: string | null
+          prev_loss_reason?: string | null
+          prev_lost_quantity?: number | null
+          prev_override_retail_price?: number | null
+          prev_received_quantity?: number | null
+          received_quantity?: number | null
+          vendor_batch_id: string
+          vendor_line_item_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          assigned_location_id?: string | null
+          created_at?: string
+          id?: string
+          loss_reason?: string | null
+          lost_quantity?: number | null
+          note?: string | null
+          override_retail_price?: number | null
+          prev_assigned_location_id?: string | null
+          prev_loss_reason?: string | null
+          prev_lost_quantity?: number | null
+          prev_override_retail_price?: number | null
+          prev_received_quantity?: number | null
+          received_quantity?: number | null
+          vendor_batch_id?: string
+          vendor_line_item_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_line_receive_logs_assigned_location_id_fkey"
+            columns: ["assigned_location_id"]
+            isOneToOne: false
+            referencedRelation: "store_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_line_receive_logs_vendor_batch_id_fkey"
+            columns: ["vendor_batch_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_line_receive_logs_vendor_line_item_id_fkey"
+            columns: ["vendor_line_item_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_line_items"
             referencedColumns: ["id"]
           },
         ]
