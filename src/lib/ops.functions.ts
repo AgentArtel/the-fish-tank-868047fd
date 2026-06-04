@@ -151,7 +151,6 @@ export const receiveBatchLines = createServerFn({ method: "POST" })
     const now = new Date().toISOString();
     let updated = 0;
     const errors: { lineItemId: string; error: string }[] = [];
-    const doaBlocked: { lineItemId: string; error: string }[] = [];
 
     const ids = data.lines.map(l => l.lineItemId);
     const { data: existing } = await supabase.from("vendor_line_items")
@@ -168,16 +167,31 @@ export const receiveBatchLines = createServerFn({ method: "POST" })
       photoMap.set(p.vendor_line_item_id, s);
     }
 
+    // Pre-flight: reject the entire save if any DOA line is missing required photos.
+    // The vendor_line_items trigger guard_vli_doa_photos enforces this at the DB layer too,
+    // but checking up-front lets us return a clear, structured error before any writes happen.
+    const doaBlocked: { lineItemId: string; error: string }[] = [];
+    for (const ln of data.lines) {
+      const isDoa = ln.loss_reason === "dead_on_arrival" && Number(ln.lost_quantity ?? 0) > 0;
+      if (!isDoa) continue;
+      const have = photoMap.get(ln.lineItemId) ?? new Set();
+      const missing = ["in_bag","on_lid"].filter(k => !have.has(k));
+      if (missing.length > 0) {
+        doaBlocked.push({
+          lineItemId: ln.lineItemId,
+          error: `DOA requires photos: missing ${missing.join(" and ")}`,
+        });
+      }
+    }
+    if (doaBlocked.length > 0) {
+      throw new Error(
+        `DOA enforcement: ${doaBlocked.length} line(s) cannot be saved without in-bag and on-lid photos. ` +
+        `Upload both photos for each DOA line and retry.`
+      );
+    }
+
     for (const ln of data.lines) {
       const prev = prevById.get(ln.lineItemId) ?? {};
-      const isDoa = ln.loss_reason === "dead_on_arrival" && Number(ln.lost_quantity ?? 0) > 0;
-      if (isDoa) {
-        const have = photoMap.get(ln.lineItemId) ?? new Set();
-        if (!have.has("in_bag") || !have.has("on_lid")) {
-          doaBlocked.push({ lineItemId: ln.lineItemId, error: "DOA requires both in-bag and on-lid photos" });
-          continue;
-        }
-      }
 
       const { error } = await supabase.from("vendor_line_items").update({
         received_quantity: ln.received_quantity,
