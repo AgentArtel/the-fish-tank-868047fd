@@ -396,6 +396,7 @@ export type Database = {
           alt_text: string | null
           created_at: string
           file_name: string
+          has_price_tag: boolean
           id: string
           inventory_item_id: string
           media_type: string
@@ -409,6 +410,7 @@ export type Database = {
           alt_text?: string | null
           created_at?: string
           file_name: string
+          has_price_tag?: boolean
           id?: string
           inventory_item_id: string
           media_type?: string
@@ -422,6 +424,7 @@ export type Database = {
           alt_text?: string | null
           created_at?: string
           file_name?: string
+          has_price_tag?: boolean
           id?: string
           inventory_item_id?: string
           media_type?: string
