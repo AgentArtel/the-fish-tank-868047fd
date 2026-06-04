@@ -1,78 +1,59 @@
-## Sprint plan
+# Make Quick Add discoverable + add vendor on the fly
 
-Each sprint ends with: (1) append a new dated section to `.lovable/devlog.md` (newest on top, planned-vs-shipped table, migrations referenced, "what's next" mirrored from `mem://features/intake-roadmap`), and (2) update the roadmap memory to reflect what shipped.
+## What you're seeing
 
----
+Inventory is empty because nothing has been converted from a vendor batch yet, and the Quick Add entry point isn't obvious. The floating `+` button (bottom-right of every app page) opens the Quick Add dialog, but:
 
-### Sprint 1 — OCR / image tagging on photo upload
+- The `/inventory` empty state says "Approve and convert vendor line items to populate" and never mentions Quick Add.
+- There's no inline Add button in the page header, so the FAB is easy to miss.
+- Quick Add doesn't let you pick (or create) the vendor the item came from — so existing/restock stock can't capture where it was bought.
 
-**Goal:** when a photo is uploaded for a livestock or dry-goods item, the system extracts visible label/tag text and proposes `item_type`, `item_name`, and `retail_price`.
+## The fix
 
-- Extend the existing `parseTagPhoto` server fn (Gemini 2.5 Flash vision) into a reusable `extractFromPhoto` that returns: `{ item_type, item_name, scientific_name, retail_price, raw_text, confidence, has_price_tag }`.
-- Wire it into the Quick Add FAB photo path AND the inventory detail "primary photo" upload path — on upload, run extraction, show a "Proposed" panel the user accepts/edits before save.
-- Auto-flag `inventory_media.has_price_tag` when the model detects a price.
-- Soft-prompt if no price tag is detected on a primary livestock/dry-goods photo (banner, not a block).
-- Surface a "Re-run extraction" button on the media row.
+### 1. Make Quick Add reachable from the page
+- Refactor `src/components/quick-add-fab.tsx`: keep `QuickAddFab` (floating), and export a new `QuickAddButton` (normal button that opens the same dialog, accepts `variant`/`size`/optional `defaultMode`).
+- `src/routes/_app/inventory.index.tsx`: add `<QuickAddButton>Quick Add</QuickAddButton>` to the right of the search/filter row.
+- Replace the one-line empty state with a real empty state inside the table area:
+  - "No inventory yet"
+  - Sub: "Add items as you restock with Quick Add, or convert a vendor batch for a full intake run."
+  - Buttons: `Quick add an item` + outline `Open vendor batches` (Link to `/batches`).
 
-No new tables. No migration unless we decide to cache raw OCR text (`inventory_media.ocr_text`, `ocr_extracted_at`) — included as a small optional migration in this sprint.
+### 2. Vendor picker inside Quick Add (Manual + Markdown)
+Add a vendor selector to the Quick Add forms so each item records where it was bought.
 
----
+- New small combobox `VendorPickerCombo` inside `quick-add-fab.tsx`:
+  - Searchable list of existing active vendors (queried client-side from `vendors`).
+  - Footer action: "+ Add new vendor…" — opens a tiny inline form (name required, optional contact name/email/phone, notes) that creates the vendor via a new server fn `quickCreateVendor` and immediately selects it.
+  - Vendor is optional (you can leave it blank for legacy stock with unknown source).
 
-### Sprint 2 — Bulk import from pasted markdown
+- Wire `vendor_id` through:
+  - `quickAddInventoryItem` server fn — add `vendor_id?: string | null` to the input validator, write to `inventory_items.vendor_id` (column already exists per current schema).
+  - The Manual and Markdown bulk submit paths both pass the selected vendor.
 
-**Goal:** paste a markdown list (tags/labels copy-paste, or AI-generated list) and create many items at once with dedupe.
+- New server fn `quickCreateVendor` in `src/lib/ops.functions.ts`:
+  - Editor-gated (`requireEditor`).
+  - Input: `{ name: string; contact_name?: string|null; contact_email?: string|null; contact_phone?: string|null; notes?: string|null }`.
+  - Inserts into `vendors` with `is_active=true`, returns the new id+name.
+  - Trims and rejects empty name; case-insensitive dedupe against existing vendor names (return existing id if match).
 
-- Extend `parseInventoryMarkdown` to return normalized rows + a `duplicate_of` field by matching against existing `inventory_items` on (case-insensitive) `item_name` OR a future `tag` field.
-- New server fn `bulkCreateInventoryItems` — atomic, editor-gated, creates rows into today's Quick Add batch, skips/merges duplicates per user choice (skip / update qty / create anyway).
-- UI: a "Bulk paste" tab in the Quick Add dialog with a reviewable grid (editable cells, dedupe badge, per-row skip toggle, per-row item_type override).
-- Result toast with counts: created / skipped / merged.
+### 3. Tiny polish in the Manual form
+- Move the field order to mirror your restock flow: Vendor → Item name → Type → Qty → Retail → Wholesale → Location → Notes.
+- Quantity input keeps "current on-hand" semantics (it already maps to `quantity_received`/`quantity_available` in the existing fn).
 
-No schema change required unless we add a `tag` column to `inventory_items` for cleaner dedupe — proposed as a small migration in this sprint.
+## Out of scope (still queued)
 
----
+- Sprint 2 dedupe-aware bulk import.
+- Sprint 3 one-time photo-on-file wizard.
+- Sprint 4 missing-price-tag export.
+- No PO upload path is being added — you confirmed you don't have one for this stock.
 
-### Sprint 3 — One-time "photo on file" wizard
+## Files touched
 
-**Goal:** the first time an item moves to `availability_status='available'` without a photo, open a modal wizard that walks the user through taking/uploading the required photo. After completion, never prompt again for that item.
+- `src/lib/ops.functions.ts` — add `quickCreateVendor`; extend `quickAddInventoryItem` input with `vendor_id`.
+- `src/components/quick-add-fab.tsx` — extract `QuickAddButton`, add `VendorPickerCombo`, thread `vendor_id` through both submit paths, reorder fields.
+- `src/routes/_app/inventory.index.tsx` — header button + new empty state.
+- `.lovable/devlog.md` — append a Sprint-1.5 note for the vendor-on-quick-add addition.
 
-- Add `inventory_items.photo_wizard_completed_at timestamptz` (migration).
-- Keep the existing `guard_inventory_photo_required` trigger as the hard block.
-- Client-side: intercept the availability change to `available`; if no photo exists, open the wizard instead of firing the server call. Wizard handles capture/upload → primary photo save → re-attempt availability change.
-- After success, set `photo_wizard_completed_at = now()` so the wizard never reopens for that item even if photos are later deleted (banner still warns, but no forced wizard).
-- Missing-photo banner stays for visibility; the wizard is the action.
+No schema migration needed — `inventory_items.vendor_id` and the `vendors` table already exist.
 
----
-
-### Sprint 4 — "Missing price-tag photo" export
-
-**Goal:** a one-click export of all items lacking a price-tag photo, for a restock photo run.
-
-- Server fn `listItemsMissingPriceTagPhoto` — returns items where no `inventory_media` row has `has_price_tag=true`, scoped by optional `item_type` and `location_id` filters.
-- New page `/_app/missing-photos` (or section under Inventory) with filter chips, a table, and two export buttons:
-  - **CSV** — id, item_name, item_type, location, last_seen, retail_price.
-  - **Printable sheet** — print-styled HTML (`window.print`) with checkboxes, location grouping, and item barcode placeholders, designed for a clipboard walk.
-- Link from the Missing-photo banner: "Add to restock list".
-
----
-
-### Sprint 5 — Audit pass
-
-After sprints 1–4 ship:
-
-- Use browser automation to walk through: login → Quick Add (manual + photo OCR + bulk paste) → Receive flow (with DOA) → Convert to inventory → Availability change (wizard trigger) → Missing-photo export → Admin pricing approval.
-- Capture screenshots and console/network errors at each step.
-- Write results to `.lovable/audit-2026-06-04.md`: per-flow pass/fail, defects found, follow-up tasks.
-- File any regressions back into `mem://features/intake-roadmap` and the devlog "what's next" list.
-
----
-
-### Standing rules (carry through every sprint)
-
-- AI can propose, never approve pricing/review/inventory conversion.
-- All mutating server fns gated by `requireEditor` (or admin where applicable).
-- Devlog updated at end of every sprint; roadmap memory kept in sync.
-- No new public-schema tables without GRANTs + RLS in the same migration.
-
-### Order of execution
-
-Sprint 1 → 2 → 3 → 4 → 5. Each sprint is independently shippable; I'll pause for your approval between sprints so you can test.
+Approve and I'll implement.
