@@ -68,6 +68,9 @@ function InventoryDetail() {
         description={[item.scientific_name, item.category, item.size].filter(Boolean).join(" · ") || "Inventory item"}
       />
 
+      <MissingPhotoBanner inventoryItemId={id} availability={item.availability_status} />
+
+
       <div className="grid md:grid-cols-2 gap-6">
         <DetailsCard item={item} />
         <ControlsCard item={item} locations={locations ?? []} onDone={refresh} />
