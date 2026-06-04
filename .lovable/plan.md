@@ -1,101 +1,78 @@
+## Sprint plan
 
-# Intake Foundation — Today's Build
+Each sprint ends with: (1) append a new dated section to `.lovable/devlog.md` (newest on top, planned-vs-shipped table, migrations referenced, "what's next" mirrored from `mem://features/intake-roadmap`), and (2) update the roadmap memory to reflect what shipped.
 
-Goal: by the time the shipment arrives, you can open a vendor batch, walk through each AI-extracted line, record received/lost quantities, assign a tank, accept or adjust a 3× suggested retail, and convert to live inventory — with role gates intact. Everything else (barcodes, sticker OCR, PO reconciliation, customer-facing search) is deferred to tomorrow with notes so nothing slips.
+---
 
-## Today's scope (in build order)
+### Sprint 1 — OCR / image tagging on photo upload
 
-### 1. Schema: `item_type` + zones-and-tanks + pricing suggestion
+**Goal:** when a photo is uploaded for a livestock or dry-goods item, the system extracts visible label/tag text and proposes `item_type`, `item_name`, and `retail_price`.
 
-One migration. Touches three tables.
+- Extend the existing `parseTagPhoto` server fn (Gemini 2.5 Flash vision) into a reusable `extractFromPhoto` that returns: `{ item_type, item_name, scientific_name, retail_price, raw_text, confidence, has_price_tag }`.
+- Wire it into the Quick Add FAB photo path AND the inventory detail "primary photo" upload path — on upload, run extraction, show a "Proposed" panel the user accepts/edits before save.
+- Auto-flag `inventory_media.has_price_tag` when the model detects a price.
+- Soft-prompt if no price tag is detected on a primary livestock/dry-goods photo (banner, not a block).
+- Surface a "Re-run extraction" button on the media row.
 
-**New enum:** `item_type` = `fish | coral | invert | dry_good | live_rock | equipment | other`
+No new tables. No migration unless we decide to cache raw OCR text (`inventory_media.ocr_text`, `ocr_extracted_at`) — included as a small optional migration in this sprint.
 
-**vendor_line_items** — add:
-- `item_type item_type` (nullable; AI fills it, human can override)
-- `suggested_retail_3x` numeric(12,2) generated: `wholesale_cost * 3` (stored generated column for sortability)
+---
 
-**inventory_items** — add:
-- `item_type item_type` (copied from line on convert)
-- `received_at timestamptz` (set when receiving step runs)
-- `received_by uuid` (actor)
+### Sprint 2 — Bulk import from pasted markdown
 
-**store_locations** — extend, do NOT replace:
-- Add `parent_location_id uuid REFERENCES store_locations(id)` — lets a `zone`-kind row contain tank-kind rows
-- Add `zone` to the `store_location_kind` enum
-- Existing rows stay valid; new "zone" rows are parents, tanks point to them via `parent_location_id`
-- This avoids breaking the existing `inventory_items.location_id` FK or any current code
+**Goal:** paste a markdown list (tags/labels copy-paste, or AI-generated list) and create many items at once with dedupe.
 
-### 2. Server functions (in `src/lib/ops.functions.ts`)
+- Extend `parseInventoryMarkdown` to return normalized rows + a `duplicate_of` field by matching against existing `inventory_items` on (case-insensitive) `item_name` OR a future `tag` field.
+- New server fn `bulkCreateInventoryItems` — atomic, editor-gated, creates rows into today's Quick Add batch, skips/merges duplicates per user choice (skip / update qty / create anyway).
+- UI: a "Bulk paste" tab in the Quick Add dialog with a reviewable grid (editable cells, dedupe badge, per-row skip toggle, per-row item_type override).
+- Result toast with counts: created / skipped / merged.
 
-All require `requireEditor` (admin/creator/reviewer) unless noted.
+No schema change required unless we add a `tag` column to `inventory_items` for cleaner dedupe — proposed as a small migration in this sprint.
 
-- `listLocationsTree()` — returns zones with nested tanks, for picker dropdowns
-- `upsertLocation({ id?, name, kind, parent_location_id?, is_live_sale, capacity_notes, notes })` — create/edit zones and tanks
-- `receiveBatchLines({ batchId, lines: [{ lineItemId, received_qty, lost_qty, lost_reason?, location_id?, notes?, override_retail? }] })` — atomic per-row update on `vendor_line_items` (writes received/lost into new columns on the line, stores chosen location + retail override). Does NOT create inventory yet — keeps the "receive then admin-approve pricing then convert" gate intact.
-- Extend `convertLineItemsToInventory` (admin-only, unchanged) so it copies `item_type`, `location_id`, `received_at`, and uses received_qty as `quantity_received` (lost_qty written to `quantity_lost`)
-- `inviteUser({ email, role, display_name? })` — admin only. Uses `supabaseAdmin.auth.admin.inviteUserByEmail` and inserts into `user_roles` + marks `profiles.is_active=true` on first sign-in via existing trigger (or we pre-create the profile row marked active)
+---
 
-To support per-line receiving without yet another table, also add to `vendor_line_items`:
-- `received_quantity numeric(12,2)`
-- `lost_quantity numeric(12,2) default 0`
-- `loss_reason text`
-- `assigned_location_id uuid REFERENCES store_locations(id)`
+### Sprint 3 — One-time "photo on file" wizard
 
-### 3. UI
+**Goal:** the first time an item moves to `availability_status='available'` without a photo, open a modal wizard that walks the user through taking/uploading the required photo. After completion, never prompt again for that item.
 
-**a. Settings → Locations** (new page `/_app/settings/locations`)
-- Tree view: zones with their tanks
-- "Add zone" / "Add tank" buttons
-- Edit name, kind, live-sale flag, capacity, notes
-- Required before receiving can assign a location, but receive screen will allow blank-location rows and warn
+- Add `inventory_items.photo_wizard_completed_at timestamptz` (migration).
+- Keep the existing `guard_inventory_photo_required` trigger as the hard block.
+- Client-side: intercept the availability change to `available`; if no photo exists, open the wizard instead of firing the server call. Wizard handles capture/upload → primary photo save → re-attempt availability change.
+- After success, set `photo_wizard_completed_at = now()` so the wizard never reopens for that item even if photos are later deleted (banner still warns, but no forced wizard).
+- Missing-photo banner stays for visibility; the wizard is the action.
 
-**b. Settings → Users** (extend existing approval queue)
-- New "Invite user" button → modal: email + role select → calls `inviteUser`
-- Existing pending-approval queue stays as-is
+---
 
-**c. Batch detail (`/_app/batches/$id`) — new "Receive" mode**
-- Toggle/tab "Receive shipment" alongside existing line table
-- Per row: ordered qty, received qty input (defaults to ordered), lost qty, loss reason dropdown, location picker (zone → tank cascade), wholesale, **suggested retail = 3× wholesale** shown prominently, override input next to it
-- "Save received" button → calls `receiveBatchLines`
-- After saving, lines move into pricing-approval state; admin clicks existing "Approve pricing" then existing "Convert to inventory" (now copies location + item_type)
-- Lines with `received_qty=0` stay flagged on the batch as "did not arrive"
+### Sprint 4 — "Missing price-tag photo" export
 
-### 4. Safety rules preserved (no changes)
+**Goal:** a one-click export of all items lacking a price-tag photo, for a restock photo run.
 
-- AI cannot approve pricing
-- AI cannot mark review approved
-- AI cannot convert to inventory
-- AI cannot create inventory_items
-- AI cannot delete human-created or converted rows
-- All new mutating server fns gated by `requireEditor` or `requireAdmin`
-- `inviteUser` admin-only; new users land inactive until they sign in (existing handle_new_user trigger logic)
+- Server fn `listItemsMissingPriceTagPhoto` — returns items where no `inventory_media` row has `has_price_tag=true`, scoped by optional `item_type` and `location_id` filters.
+- New page `/_app/missing-photos` (or section under Inventory) with filter chips, a table, and two export buttons:
+  - **CSV** — id, item_name, item_type, location, last_seen, retail_price.
+  - **Printable sheet** — print-styled HTML (`window.print`) with checkboxes, location grouping, and item barcode placeholders, designed for a clipboard walk.
+- Link from the Missing-photo banner: "Add to restock list".
 
-## Tomorrow (explicitly deferred — captured in `mem://features/intake-roadmap`)
+---
 
-Will write a memory file so this doesn't get lost:
+### Sprint 5 — Audit pass
 
-1. **Barcode scanning on receive** — camera input via `getUserMedia` + a JS barcode lib (ZXing/quagga); maps barcode → vendor_item_id lookup on the batch
-2. **Sticker photo OCR** — reuse Lovable AI Gateway with image input; parses species + sci name from a photo, prefills a new line
-3. **Purchase order upload + reconciliation** — new `purchase_orders` + `purchase_order_lines` tables; matches PO line ↔ invoice line ↔ received qty; produces "missing", "substituted", "extra" report
-4. **Customer-facing inventory search** — public/read-only page with search by name/sci name/category/price range; filters to `availability_status='available'`
-5. **Per-type field differences** — coral fragging metadata, dry-goods SKU/UPC, fish size+sex
-6. **Clover sync** — out of scope until inventory flow is stable
-7. **Public website pages** — out of scope today
+After sprints 1–4 ship:
 
-## Open questions before I start (none blocking)
+- Use browser automation to walk through: login → Quick Add (manual + photo OCR + bulk paste) → Receive flow (with DOA) → Convert to inventory → Availability change (wizard trigger) → Missing-photo export → Admin pricing approval.
+- Capture screenshots and console/network errors at each step.
+- Write results to `.lovable/audit-2026-06-04.md`: per-flow pass/fail, defects found, follow-up tasks.
+- File any regressions back into `mem://features/intake-roadmap` and the devlog "what's next" list.
 
-- Tank vs zone naming: I'll use `zone` (parent, kind=`zone`) and `tank` (child, existing kinds like `display_tank`, `quarantine`, etc.). Acceptable?
-- Invite emails go through Supabase Auth's default email; custom branding can come later.
+---
 
-## Files I'll touch
+### Standing rules (carry through every sprint)
 
-- `supabase/migrations/<new>.sql` — schema additions above
-- `src/lib/ops.functions.ts` — add `listLocationsTree`, `upsertLocation`, `receiveBatchLines`, `inviteUser`; extend `convertLineItemsToInventory`
-- `src/routes/_app/settings.locations.tsx` — new
-- `src/routes/_app/settings.users.tsx` — extend with invite modal (or create if missing)
-- `src/routes/_app/batches.$id.tsx` — add Receive tab
-- `mem://features/intake-roadmap` — deferred list
-- `mem://index.md` — link the roadmap
+- AI can propose, never approve pricing/review/inventory conversion.
+- All mutating server fns gated by `requireEditor` (or admin where applicable).
+- Devlog updated at end of every sprint; roadmap memory kept in sync.
+- No new public-schema tables without GRANTs + RLS in the same migration.
 
-Approve and I'll execute in order: migration first (you'll get a separate approval prompt for that), then server fns, then UI.
+### Order of execution
+
+Sprint 1 → 2 → 3 → 4 → 5. Each sprint is independently shippable; I'll pause for your approval between sprints so you can test.
