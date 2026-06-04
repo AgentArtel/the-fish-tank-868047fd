@@ -868,6 +868,8 @@ export const parseTagPhoto = createServerFn({ method: "POST" })
             scientific_name: { type: "string" },
             item_type: { type: "string", enum: ["fish","coral","invert","dry_good","live_rock","equipment","other"] },
             retail_price: { type: "number" },
+            has_price_tag: { type: "boolean", description: "True if a price label/tag is clearly visible." },
+            raw_text: { type: "string", description: "All readable text from the label, verbatim." },
             confidence: { type: "string", enum: ["high","medium","low"] },
           },
           required: ["item_name"],
@@ -882,7 +884,7 @@ export const parseTagPhoto = createServerFn({ method: "POST" })
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
         messages: [
-          { role: "system", content: "You parse aquarium store price tags / livestock bag labels. Extract trade/common name, scientific name if shown, item type (fish/coral/invert/dry_good/live_rock/equipment/other), and retail price (USD number, no symbols). If a field isn't visible, omit it." },
+          { role: "system", content: "You parse aquarium store price tags / livestock bag labels. Extract trade/common name, scientific name if shown, item type (fish/coral/invert/dry_good/live_rock/equipment/other), retail price (USD number, no symbols), all raw readable text, and whether a price tag is clearly visible. If a field isn't visible, omit it." },
           { role: "user", content: [
             { type: "text", text: "Parse this label." },
             { type: "image_url", image_url: { url: dataUrl } },
@@ -901,8 +903,21 @@ export const parseTagPhoto = createServerFn({ method: "POST" })
     const json = await aiResp.json();
     const call = json?.choices?.[0]?.message?.tool_calls?.[0];
     if (!call?.function?.arguments) throw new Error("AI returned no structured output");
-    const parsed = JSON.parse(call.function.arguments);
-    return parsed as { item_name: string; scientific_name?: string; item_type?: string; retail_price?: number; confidence?: string };
+    const parsed = JSON.parse(call.function.arguments) as {
+      item_name: string; scientific_name?: string; item_type?: string;
+      retail_price?: number; has_price_tag?: boolean; raw_text?: string; confidence?: string;
+    };
+
+    // Cache OCR result on the media row if this path matches a registered media item
+    await supabase.from("inventory_media")
+      .update({
+        ocr_text: parsed.raw_text ?? null,
+        ocr_extracted_at: new Date().toISOString(),
+        ...(parsed.has_price_tag !== undefined ? { has_price_tag: parsed.has_price_tag } : {}),
+      })
+      .eq("storage_path", data.storage_path);
+
+    return parsed;
   });
 
 // AI: parse a markdown / pasted list of items into a structured array
