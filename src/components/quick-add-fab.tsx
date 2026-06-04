@@ -257,6 +257,12 @@ function ManualForm({
         </Button>
       </div>
 
+      <div className="space-y-1.5">
+        <Label className="text-xs">Vendor / source (where you bought it)</Label>
+        <VendorPickerCombo value={vendorId} onChange={setVendorId} />
+        <p className="text-[10px] text-muted-foreground">Optional — pick existing or quick-create. Leave blank if unknown.</p>
+      </div>
+
       <div className="grid sm:grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label className="text-xs">Item name *</Label>
