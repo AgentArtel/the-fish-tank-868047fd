@@ -43,7 +43,7 @@ function InventoryPage() {
   return (
     <div className="p-8">
       <PageHeader title="Inventory" description="Store inventory created from approved vendor line items." />
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-4 items-center">
         <Input placeholder="Search item name…" value={q} onChange={e=>setQ(e.target.value)} className="max-w-xs" />
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="max-w-[200px]"><SelectValue /></SelectTrigger>
@@ -52,6 +52,9 @@ function InventoryPage() {
             {INVENTORY_AVAILABILITY.map(s => <SelectItem key={s} value={s}>{INVENTORY_AVAILABILITY_LABELS[s]}</SelectItem>)}
           </SelectContent>
         </Select>
+        <div className="ml-auto">
+          <QuickAddButton size="sm">Quick Add</QuickAddButton>
+        </div>
       </div>
       <div className="rounded-lg border bg-card overflow-x-auto">
         <table className="w-full text-sm">
@@ -65,7 +68,27 @@ function InventoryPage() {
           </thead>
           <tbody>
             {(data ?? []).map((i: any) => <InventoryRow key={i.id} item={i} onDone={refresh} />)}
-            {data?.length === 0 && <tr><td colSpan={8} className="p-6 text-center text-muted-foreground">No inventory yet. Approve and convert vendor line items to populate.</td></tr>}
+            {data?.length === 0 && (
+              <tr>
+                <td colSpan={8} className="p-10">
+                  <div className="flex flex-col items-center text-center gap-3">
+                    <PackagePlus className="w-8 h-8 text-muted-foreground" />
+                    <div>
+                      <div className="font-medium">No inventory yet</div>
+                      <div className="text-sm text-muted-foreground max-w-md">
+                        Add items as you restock with Quick Add, or convert a vendor batch for a full intake run.
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <QuickAddButton size="sm">Quick add an item</QuickAddButton>
+                      <Button asChild size="sm" variant="outline">
+                        <Link to="/batches">Open vendor batches</Link>
+                      </Button>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
