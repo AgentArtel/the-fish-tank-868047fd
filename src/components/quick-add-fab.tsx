@@ -373,6 +373,7 @@ function MarkdownBulk({
   const [parsing, setParsing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [locationId, setLocationId] = useState<string>("");
+  const [vendorId, setVendorId] = useState<string>("");
   const [bulkPhoto, setBulkPhoto] = useState<File | null>(null);
   const [bulkPreview, setBulkPreview] = useState<string>("");
 
