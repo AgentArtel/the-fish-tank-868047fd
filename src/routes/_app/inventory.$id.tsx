@@ -246,6 +246,32 @@ function NotesCard({ item, onDone }: { item: any; onDone: () => void }) {
   );
 }
 
+function MissingPhotoBanner({ inventoryItemId, availability }: { inventoryItemId: string; availability: string }) {
+  const { data: media } = useQuery({
+    queryKey: ["inventory-media", inventoryItemId],
+    queryFn: async () => (await supabase.from("inventory_media")
+      .select("id,media_type").eq("inventory_item_id", inventoryItemId)).data ?? [],
+  });
+  const hasImage = (media ?? []).some((m: any) => m.media_type === "image");
+  if (hasImage) return null;
+  const blocking = availability === "available";
+  return (
+    <div className={`rounded-md border p-3 flex items-start gap-3 text-sm ${
+      blocking ? "border-destructive/40 bg-destructive/10 text-destructive" : "border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200"
+    }`}>
+      <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+      <div>
+        <div className="font-medium">Photo required</div>
+        <div className="text-xs opacity-90">
+          {blocking
+            ? "This item is marked Available but has no photo on file. Add one below — the database will block future availability changes without it."
+            : "Upload at least one photo so this item can be marked Available and shown to customers."}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MediaSection({ inventoryItemId }: { inventoryItemId: string }) {
   const qc = useQueryClient();
   const [tag, setTag] = useState<InventoryMediaTag>("internal");
