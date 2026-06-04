@@ -678,3 +678,299 @@ export const extractBatchWithAI = createServerFn({ method: "POST" })
       return await failWith(e?.message ?? "Unknown error during AI extraction");
     }
   });
+
+// ============================================================
+// Quick Add (in-store restock / walk-around logging)
+// ============================================================
+
+export const getOrCreateQuickAddBatch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    await requireEditor(supabase, userId);
+
+    const { data: vendor, error: vErr } = await supabase
+      .from("vendors").select("id").eq("slug", "quick-add").maybeSingle();
+    if (vErr) throw new Error(vErr.message);
+    if (!vendor) throw new Error("Quick Add vendor not found");
+
+    // One batch per user per day
+    const today = new Date(); today.setHours(0,0,0,0);
+    const todayIso = today.toISOString();
+    const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate()+1);
+
+    const { data: existing } = await supabase
+      .from("vendor_batches")
+      .select("id")
+      .eq("vendor_id", vendor.id)
+      .eq("created_by", userId)
+      .gte("created_at", todayIso)
+      .lt("created_at", tomorrow.toISOString())
+      .maybeSingle();
+
+    if (existing) return { batchId: existing.id, vendorId: vendor.id };
+
+    const { data: created, error: cErr } = await supabase
+      .from("vendor_batches").insert({
+        vendor_id: vendor.id,
+        source_document_type: "manual_entry",
+        intake_status: "converted",
+        extraction_status: "manual",
+        invoice_date: today.toISOString().slice(0,10),
+        notes: "Auto-created Quick Add batch (in-store restock).",
+        created_by: userId,
+      }).select("id").single();
+    if (cErr) throw new Error(cErr.message);
+    return { batchId: created.id, vendorId: vendor.id };
+  });
+
+export const quickAddInventoryItem = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({
+    item_name: z.string().min(1).max(200),
+    scientific_name: z.string().max(200).nullable().optional(),
+    item_type: z.enum(["fish","coral","invert","dry_good","live_rock","equipment","other"]),
+    quantity: z.number().int().positive().max(10000).default(1),
+    retail_price: z.number().nonnegative().max(1000000),
+    wholesale_cost: z.number().nonnegative().max(1000000).nullable().optional(),
+    location_id: z.string().uuid().nullable().optional(),
+    notes: z.string().max(1000).nullable().optional(),
+    primary_photo_path: z.string().min(1).max(500),
+    primary_photo_file_name: z.string().max(200).default("primary.jpg"),
+    has_price_tag: z.boolean().default(true),
+    tag_photo_path: z.string().max(500).nullable().optional(),
+    set_available: z.boolean().default(true),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await requireEditor(supabase, userId);
+
+    // Get/create today's quick-add batch
+    const { data: vendor } = await supabase
+      .from("vendors").select("id").eq("slug", "quick-add").maybeSingle();
+    if (!vendor) throw new Error("Quick Add vendor not found");
+
+    const today = new Date(); today.setHours(0,0,0,0);
+    const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate()+1);
+    let batchId: string;
+    const { data: existing } = await supabase
+      .from("vendor_batches").select("id")
+      .eq("vendor_id", vendor.id).eq("created_by", userId)
+      .gte("created_at", today.toISOString()).lt("created_at", tomorrow.toISOString())
+      .maybeSingle();
+    if (existing) batchId = existing.id;
+    else {
+      const { data: created, error: cErr } = await supabase
+        .from("vendor_batches").insert({
+          vendor_id: vendor.id,
+          source_document_type: "manual_entry",
+          intake_status: "converted",
+          extraction_status: "manual",
+          invoice_date: today.toISOString().slice(0,10),
+          notes: "Auto-created Quick Add batch (in-store restock).",
+          created_by: userId,
+        }).select("id").single();
+      if (cErr) throw new Error(cErr.message);
+      batchId = created.id;
+    }
+
+    // Create inventory item (start as 'incoming', flip to available after photo registered)
+    const nowIso = new Date().toISOString();
+    const { data: inv, error: insErr } = await supabase.from("inventory_items").insert({
+      source_vendor_batch_id: batchId,
+      vendor_id: vendor.id,
+      item_name: data.item_name,
+      scientific_name: data.scientific_name ?? null,
+      item_type: data.item_type,
+      quantity_received: data.quantity,
+      quantity_available: data.quantity,
+      wholesale_cost: data.wholesale_cost ?? null,
+      retail_price: data.retail_price,
+      pricing_status: "approved",
+      location_id: data.location_id ?? null,
+      availability_status: "incoming",
+      live_sale_status: "not_eligible",
+      needs_photo: false,
+      notes: data.notes ?? null,
+      received_at: nowIso,
+      received_by: userId,
+      created_by: userId,
+    }).select("id").single();
+    if (insErr) throw new Error(insErr.message);
+
+    // Register primary photo (required)
+    const { error: mErr } = await supabase.from("inventory_media").insert({
+      inventory_item_id: inv.id,
+      storage_path: data.primary_photo_path,
+      file_name: data.primary_photo_file_name,
+      media_type: "image",
+      tag: "internal",
+      uploader_id: userId,
+      has_price_tag: data.has_price_tag,
+    });
+    if (mErr) throw new Error(`Primary photo: ${mErr.message}`);
+
+    if (data.tag_photo_path) {
+      await supabase.from("inventory_media").insert({
+        inventory_item_id: inv.id,
+        storage_path: data.tag_photo_path,
+        file_name: "tag.jpg",
+        media_type: "image",
+        tag: "internal",
+        uploader_id: userId,
+        has_price_tag: true,
+        notes: "Price tag photo",
+      });
+    }
+
+    // Flip to available now that the photo is in place (gate satisfied)
+    if (data.set_available && data.location_id) {
+      await supabase.from("inventory_items")
+        .update({ availability_status: "available" }).eq("id", inv.id);
+    }
+
+    return { inventoryItemId: inv.id, batchId };
+  });
+
+// AI: parse a livestock/dry-good price tag photo → { name, scientific_name?, price?, type? }
+export const parseTagPhoto = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({
+    storage_path: z.string().min(1).max(500),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await requireEditor(supabase, userId);
+
+    const apiKey = process.env.LOVABLE_API_KEY;
+    if (!apiKey) throw new Error("AI not configured (missing LOVABLE_API_KEY)");
+
+    const { data: signed, error: sErr } = await supabase.storage
+      .from("inventory-media").createSignedUrl(data.storage_path, 600);
+    if (sErr) throw new Error(sErr.message);
+
+    const imgResp = await fetch(signed.signedUrl);
+    if (!imgResp.ok) throw new Error("Failed to load image for parsing");
+    const buf = new Uint8Array(await imgResp.arrayBuffer());
+    let bin = ""; for (let i=0;i<buf.length;i++) bin += String.fromCharCode(buf[i]);
+    const b64 = btoa(bin);
+    const dataUrl = `data:image/jpeg;base64,${b64}`;
+
+    const tool = {
+      type: "function",
+      function: {
+        name: "submit_tag",
+        description: "Return the parsed price tag fields.",
+        parameters: {
+          type: "object",
+          properties: {
+            item_name: { type: "string", description: "Common/trade name" },
+            scientific_name: { type: "string" },
+            item_type: { type: "string", enum: ["fish","coral","invert","dry_good","live_rock","equipment","other"] },
+            retail_price: { type: "number" },
+            confidence: { type: "string", enum: ["high","medium","low"] },
+          },
+          required: ["item_name"],
+          additionalProperties: false,
+        },
+      },
+    };
+
+    const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          { role: "system", content: "You parse aquarium store price tags / livestock bag labels. Extract trade/common name, scientific name if shown, item type (fish/coral/invert/dry_good/live_rock/equipment/other), and retail price (USD number, no symbols). If a field isn't visible, omit it." },
+          { role: "user", content: [
+            { type: "text", text: "Parse this label." },
+            { type: "image_url", image_url: { url: dataUrl } },
+          ]},
+        ],
+        tools: [tool],
+        tool_choice: { type: "function", function: { name: "submit_tag" } },
+      }),
+    });
+    if (!aiResp.ok) {
+      const t = await aiResp.text().catch(()=> "");
+      if (aiResp.status === 429) throw new Error("AI rate limit. Try again shortly.");
+      if (aiResp.status === 402) throw new Error("AI credits exhausted. Add credits in Workspace settings.");
+      throw new Error(`AI error ${aiResp.status}: ${t.slice(0,200)}`);
+    }
+    const json = await aiResp.json();
+    const call = json?.choices?.[0]?.message?.tool_calls?.[0];
+    if (!call?.function?.arguments) throw new Error("AI returned no structured output");
+    const parsed = JSON.parse(call.function.arguments);
+    return parsed as { item_name: string; scientific_name?: string; item_type?: string; retail_price?: number; confidence?: string };
+  });
+
+// AI: parse a markdown / pasted list of items into a structured array
+export const parseInventoryMarkdown = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({
+    markdown: z.string().min(1).max(20000),
+    default_type: z.enum(["fish","coral","invert","dry_good","live_rock","equipment","other"]).default("dry_good"),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    await requireEditor(context.supabase, context.userId);
+    const apiKey = process.env.LOVABLE_API_KEY;
+    if (!apiKey) throw new Error("AI not configured");
+
+    const tool = {
+      type: "function",
+      function: {
+        name: "submit_items",
+        description: "Return parsed items.",
+        parameters: {
+          type: "object",
+          properties: {
+            items: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  item_name: { type: "string" },
+                  scientific_name: { type: "string" },
+                  item_type: { type: "string", enum: ["fish","coral","invert","dry_good","live_rock","equipment","other"] },
+                  quantity: { type: "number" },
+                  retail_price: { type: "number" },
+                  wholesale_cost: { type: "number" },
+                  notes: { type: "string" },
+                },
+                required: ["item_name"],
+                additionalProperties: false,
+              },
+            },
+          },
+          required: ["items"],
+          additionalProperties: false,
+        },
+      },
+    };
+
+    const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          { role: "system", content: `You convert pasted markdown/text lists of aquarium store items into structured rows. Default item_type='${data.default_type}'. Quantities default to 1 if missing. Retail price is USD number only.` },
+          { role: "user", content: data.markdown },
+        ],
+        tools: [tool],
+        tool_choice: { type: "function", function: { name: "submit_items" } },
+      }),
+    });
+    if (!resp.ok) {
+      const t = await resp.text().catch(()=> "");
+      if (resp.status === 429) throw new Error("AI rate limit. Try again shortly.");
+      if (resp.status === 402) throw new Error("AI credits exhausted.");
+      throw new Error(`AI error ${resp.status}: ${t.slice(0,200)}`);
+    }
+    const j = await resp.json();
+    const call = j?.choices?.[0]?.message?.tool_calls?.[0];
+    if (!call?.function?.arguments) throw new Error("AI returned no items");
+    const parsed = JSON.parse(call.function.arguments);
+    return parsed as { items: Array<{ item_name: string; scientific_name?: string; item_type?: string; quantity?: number; retail_price?: number; wholesale_cost?: number; notes?: string }> };
+  });
