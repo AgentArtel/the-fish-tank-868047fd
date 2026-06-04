@@ -15,6 +15,9 @@ import {
   fmtMoney,
 } from "@/lib/ops";
 import { setInventoryAvailability, setInventoryLiveSale } from "@/lib/ops.functions";
+import { QuickAddButton } from "@/components/quick-add-fab";
+import { Button } from "@/components/ui/button";
+import { PackagePlus } from "lucide-react";
 
 export const Route = createFileRoute("/_app/inventory/")({ component: InventoryPage });
 
