@@ -4,6 +4,36 @@ Living record of what's been built, what was extra/unplanned, and what's still a
 
 ---
 
+## 2026-06-04 (late) — Sprint 1.5: Quick Add discoverability + vendor on the fly
+
+Unblocking restock-as-you-go: empty inventory page hid the FAB, and Quick Add couldn't capture vendor.
+
+### Shipped
+
+| Area | Change |
+|---|---|
+| Quick Add FAB | Exported new `QuickAddButton` (inline-friendly variant), kept floating `QuickAddFab` unchanged. |
+| Quick Add forms | Added `VendorPickerCombo` (searchable, quick-create) to Manual and Markdown bulk paths. |
+| Server fn | New `quickCreateVendor` (editor-gated, slug auto-gen, case-insensitive dedupe). |
+| Server fn | Extended `quickAddInventoryItem` input with optional `source_vendor_id`; writes to `inventory_items.vendor_id` so restocked items record actual source instead of the "quick-add" batching vendor. |
+| Inventory list | Header-right `Quick Add` button + real empty state with `Quick add an item` and `Open vendor batches` actions. |
+
+### Files
+
+- `src/lib/ops.functions.ts` — added `quickCreateVendor`, extended `quickAddInventoryItem`.
+- `src/components/quick-add-fab.tsx` — `QuickAddButton`, `VendorPickerCombo`, vendor state threading.
+- `src/routes/_app/inventory.index.tsx` — header button + empty state.
+
+No schema migration — used existing `vendors` + `inventory_items.vendor_id` columns.
+
+---
+
+# Development Log
+
+Living record of what's been built, what was extra/unplanned, and what's still ahead. Append-only — newest day on top.
+
+---
+
 ## 2026-06-04 — Sprint 1: OCR / image tagging on photo upload
 
 ### Planned
