@@ -28,7 +28,6 @@ import {
   type VendorLineReview,
 } from "@/lib/ops";
 import { convertLineItemsToInventory, getSignedVendorInvoiceUrl, extractBatchWithAI, receiveBatchLines, uploadDoaPhoto, getSignedInventoryMediaUrl } from "@/lib/ops.functions";
-import { Camera, History, AlertTriangle } from "lucide-react";
 
 export const Route = createFileRoute("/_app/batches/$id")({ component: BatchDetail });
 
