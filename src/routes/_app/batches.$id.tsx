@@ -817,12 +817,16 @@ function ReceiveHistoryDialog({ line, onClose }: { line: any; onClose: () => voi
         {(!logs || logs.length === 0) && <p className="text-sm text-muted-foreground">No receive actions yet.</p>}
         <div className="space-y-2">
           {(logs ?? []).map((g: any) => {
-            const actor = g.profiles?.display_name || g.profiles?.email || "unknown user";
+            const prof: any = profMap.get(g.actor_id);
+            const actor = prof?.display_name || prof?.email || "unknown user";
             const changes: string[] = [];
             if (g.received_quantity !== g.prev_received_quantity) changes.push(`received ${g.prev_received_quantity ?? "—"} → ${g.received_quantity ?? "—"}`);
             if (g.lost_quantity !== g.prev_lost_quantity) changes.push(`lost ${g.prev_lost_quantity ?? "—"} → ${g.lost_quantity ?? "—"}`);
             if ((g.loss_reason ?? null) !== (g.prev_loss_reason ?? null)) changes.push(`reason ${g.prev_loss_reason ?? "—"} → ${g.loss_reason ?? "—"}`);
-            if ((g.assigned_location_id ?? null) !== (g.prev_assigned_location_id ?? null)) changes.push(`location → ${g.store_locations?.name ?? "—"}`);
+            if ((g.assigned_location_id ?? null) !== (g.prev_assigned_location_id ?? null)) {
+              const locName = (locMap.get(g.assigned_location_id) as any)?.name ?? "—";
+              changes.push(`location → ${locName}`);
+            }
             if (Number(g.override_retail_price ?? 0) !== Number(g.prev_override_retail_price ?? 0)) changes.push(`override retail ${fmtMoney(g.prev_override_retail_price)} → ${fmtMoney(g.override_retail_price)}`);
             return (
               <div key={g.id} className="rounded border p-2 text-xs">
