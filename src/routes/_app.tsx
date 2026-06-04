@@ -135,6 +135,7 @@ function AppLayout() {
         </div>
       </aside>
       <main className="flex-1 overflow-auto"><Outlet /></main>
+      <QuickAddFab />
     </div>
   );
 }
