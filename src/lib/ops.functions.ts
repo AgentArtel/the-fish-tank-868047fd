@@ -141,6 +141,8 @@ export const receiveBatchLines = createServerFn({ method: "POST" })
       loss_reason: z.string().max(64).nullable().optional(),
       assigned_location_id: z.string().uuid().nullable().optional(),
       item_type: z.enum(["fish","coral","invert","dry_good","live_rock","equipment","other"]).nullable().optional(),
+      override_retail_price: z.number().nonnegative().nullable().optional(),
+      note: z.string().max(500).nullable().optional(),
     })).min(1).max(500),
   }).parse(d))
   .handler(async ({ data, context }) => {
@@ -149,21 +151,87 @@ export const receiveBatchLines = createServerFn({ method: "POST" })
     const now = new Date().toISOString();
     let updated = 0;
     const errors: { lineItemId: string; error: string }[] = [];
+    const doaBlocked: { lineItemId: string; error: string }[] = [];
+
+    const ids = data.lines.map(l => l.lineItemId);
+    const { data: existing } = await supabase.from("vendor_line_items")
+      .select("id, received_quantity, lost_quantity, loss_reason, assigned_location_id, override_retail_price, item_type")
+      .in("id", ids);
+    const prevById = new Map<string, any>((existing ?? []).map((r: any) => [r.id, r]));
+
+    const { data: photos } = await supabase.from("vendor_line_doa_photos")
+      .select("vendor_line_item_id, kind").in("vendor_line_item_id", ids);
+    const photoMap = new Map<string, Set<string>>();
+    for (const p of (photos ?? []) as any[]) {
+      const s = photoMap.get(p.vendor_line_item_id) ?? new Set<string>();
+      s.add(p.kind);
+      photoMap.set(p.vendor_line_item_id, s);
+    }
+
     for (const ln of data.lines) {
+      const prev = prevById.get(ln.lineItemId) ?? {};
+      const isDoa = ln.loss_reason === "dead_on_arrival" && Number(ln.lost_quantity ?? 0) > 0;
+      if (isDoa) {
+        const have = photoMap.get(ln.lineItemId) ?? new Set();
+        if (!have.has("in_bag") || !have.has("on_lid")) {
+          doaBlocked.push({ lineItemId: ln.lineItemId, error: "DOA requires both in-bag and on-lid photos" });
+          continue;
+        }
+      }
+
       const { error } = await supabase.from("vendor_line_items").update({
         received_quantity: ln.received_quantity,
         lost_quantity: ln.lost_quantity,
         loss_reason: ln.loss_reason ?? null,
         assigned_location_id: ln.assigned_location_id ?? null,
         item_type: ln.item_type ?? null,
+        override_retail_price: ln.override_retail_price ?? null,
         received_at: now,
         received_by: userId,
       }).eq("id", ln.lineItemId).eq("vendor_batch_id", data.batchId);
-      if (error) errors.push({ lineItemId: ln.lineItemId, error: error.message });
-      else updated++;
+      if (error) { errors.push({ lineItemId: ln.lineItemId, error: error.message }); continue; }
+
+      await supabase.from("vendor_line_receive_logs").insert({
+        vendor_line_item_id: ln.lineItemId,
+        vendor_batch_id: data.batchId,
+        actor_id: userId,
+        received_quantity: ln.received_quantity,
+        lost_quantity: ln.lost_quantity,
+        loss_reason: ln.loss_reason ?? null,
+        assigned_location_id: ln.assigned_location_id ?? null,
+        override_retail_price: ln.override_retail_price ?? null,
+        prev_received_quantity: prev.received_quantity ?? null,
+        prev_lost_quantity: prev.lost_quantity ?? null,
+        prev_loss_reason: prev.loss_reason ?? null,
+        prev_assigned_location_id: prev.assigned_location_id ?? null,
+        prev_override_retail_price: prev.override_retail_price ?? null,
+        note: ln.note ?? null,
+      });
+      updated++;
     }
-    // intake_status enum has no 'received'; rely on per-line received_at as the receipt signal.
-    return { updated, errors };
+    return { updated, errors, doaBlocked };
+  });
+
+export const uploadDoaPhoto = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({
+    lineItemId: z.string().uuid(),
+    batchId: z.string().uuid(),
+    kind: z.enum(["in_bag","on_lid"]),
+    storage_path: z.string().min(1).max(500),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await requireEditor(supabase, userId);
+    const { error } = await supabase.from("vendor_line_doa_photos").upsert({
+      vendor_line_item_id: data.lineItemId,
+      vendor_batch_id: data.batchId,
+      kind: data.kind,
+      storage_path: data.storage_path,
+      uploaded_by: userId,
+    }, { onConflict: "vendor_line_item_id,kind" });
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });
 
 

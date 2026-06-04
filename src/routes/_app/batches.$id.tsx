@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, Upload, ArrowLeft, Sparkles } from "lucide-react";
+import { Plus, Upload, ArrowLeft, Sparkles, Camera, History, AlertTriangle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useMe } from "@/hooks/use-me";
@@ -27,7 +27,7 @@ import {
   fmtMoney,
   type VendorLineReview,
 } from "@/lib/ops";
-import { convertLineItemsToInventory, getSignedVendorInvoiceUrl, extractBatchWithAI, receiveBatchLines } from "@/lib/ops.functions";
+import { convertLineItemsToInventory, getSignedVendorInvoiceUrl, extractBatchWithAI, receiveBatchLines, uploadDoaPhoto, getSignedInventoryMediaUrl } from "@/lib/ops.functions";
 
 export const Route = createFileRoute("/_app/batches/$id")({ component: BatchDetail });
 
@@ -504,13 +504,30 @@ function ExtractAiButton({ batchId, hasPdf, extractionStatus, onDone }:
 
 function ReceiveSection({ batchId, lines, onDone }: { batchId: string; lines: any[]; onDone: () => void }) {
   const receive = useServerFn(receiveBatchLines);
+  const qc = useQueryClient();
   const { data: locs } = useQuery({
     queryKey: ["store-locations-tree"],
     queryFn: async () => (await supabase.from("store_locations").select("*").eq("is_active", true).order("name")).data ?? [],
   });
+  const { data: doaPhotos } = useQuery({
+    queryKey: ["batch-doa-photos", batchId],
+    queryFn: async () => (await supabase.from("vendor_line_doa_photos")
+      .select("*").eq("vendor_batch_id", batchId)).data ?? [],
+  });
   const sellable = lines.filter(l => l.kind === "sellable" && !l.converted_inventory_item_id);
   const [drafts, setDrafts] = useState<Record<string, any>>({});
   const [busy, setBusy] = useState(false);
+  const [doaTarget, setDoaTarget] = useState<any | null>(null);
+  const [historyTarget, setHistoryTarget] = useState<any | null>(null);
+
+  const photoCountsByLine = (() => {
+    const m: Record<string, Set<string>> = {};
+    for (const p of (doaPhotos ?? []) as any[]) {
+      m[p.vendor_line_item_id] ??= new Set();
+      m[p.vendor_line_item_id].add(p.kind);
+    }
+    return m;
+  })();
 
   const getDraft = (l: any) => drafts[l.id] ?? {
     received_quantity: l.received_quantity != null ? Number(l.received_quantity) : Number(l.quantity ?? 0),
@@ -518,14 +535,47 @@ function ReceiveSection({ batchId, lines, onDone }: { batchId: string; lines: an
     loss_reason: l.loss_reason ?? null,
     assigned_location_id: l.assigned_location_id ?? null,
     item_type: l.item_type ?? null,
+    override_retail_price: l.override_retail_price ?? null,
   };
   const setDraft = (id: string, patch: any) => setDrafts(d => ({ ...d, [id]: { ...getDraft({ id, ...(d[id] ?? {}) }), ...patch } }));
 
   const tanks = (locs ?? []).filter((l: any) => l.kind !== "zone");
   const zoneOf = (parentId: string | null) => (locs ?? []).find((z: any) => z.id === parentId)?.name ?? "Unzoned";
 
+  // Toast on DOA flagging
+  const onLossReasonChange = (l: any, v: string | null) => {
+    setDraft(l.id, { loss_reason: v });
+    if (v === "dead_on_arrival") {
+      const have = photoCountsByLine[l.id] ?? new Set();
+      const missing = ["in_bag","on_lid"].filter(k => !have.has(k));
+      if (missing.length > 0) {
+        toast.warning("DOA requires 2 photos", {
+          description: "Upload one photo of the animal still in the bag, and one laying on the Styrofoam lid. Required by the wholesaler.",
+          action: { label: "Add photos", onClick: () => setDoaTarget(l) },
+          duration: 8000,
+        });
+      }
+    }
+  };
+
   const submit = async () => {
     if (sellable.length === 0) { toast.info("No sellable lines to receive"); return; }
+    // Pre-flight: block if any DOA line is missing photos
+    const blocked: any[] = [];
+    for (const l of sellable) {
+      const d = getDraft(l);
+      if (d.loss_reason === "dead_on_arrival" && Number(d.lost_quantity ?? 0) > 0) {
+        const have = photoCountsByLine[l.id] ?? new Set();
+        if (!have.has("in_bag") || !have.has("on_lid")) blocked.push(l);
+      }
+    }
+    if (blocked.length > 0) {
+      toast.error(`${blocked.length} DOA line(s) missing required photos`, {
+        description: "Upload in-bag and on-lid photos for each DOA before saving.",
+        action: { label: "Open first", onClick: () => setDoaTarget(blocked[0]) },
+      });
+      return;
+    }
     setBusy(true);
     try {
       const payload = sellable.map(l => {
@@ -537,10 +587,12 @@ function ReceiveSection({ batchId, lines, onDone }: { batchId: string; lines: an
           loss_reason: d.loss_reason ?? null,
           assigned_location_id: d.assigned_location_id ?? null,
           item_type: d.item_type ?? null,
+          override_retail_price: d.override_retail_price == null || d.override_retail_price === "" ? null : Number(d.override_retail_price),
         };
       });
       const res = await receive({ data: { batchId, lines: payload } });
-      toast.success(`Recorded ${res.updated} line(s)` + (res.errors.length ? ` · ${res.errors.length} error(s)` : ""));
+      const blockedMsg = res.doaBlocked?.length ? ` · ${res.doaBlocked.length} blocked (missing DOA photos)` : "";
+      toast.success(`Recorded ${res.updated} line(s)` + (res.errors.length ? ` · ${res.errors.length} error(s)` : "") + blockedMsg);
       setDrafts({});
       onDone();
     } catch (e: any) { toast.error(e.message); }
@@ -552,7 +604,7 @@ function ReceiveSection({ batchId, lines, onDone }: { batchId: string; lines: an
       <div className="flex items-center justify-between">
         <div>
           <h2 className="font-semibold">Receive shipment</h2>
-          <p className="text-xs text-muted-foreground">Record what physically arrived. Lines with 0 received stay flagged as "did not arrive". Pricing approval and conversion to inventory remain admin-only steps.</p>
+          <p className="text-xs text-muted-foreground">Every save is recorded in the receive audit trail with timestamp + user. DOA lines require an in-bag and on-lid photo per wholesaler policy.</p>
         </div>
         <Button onClick={submit} disabled={busy || sellable.length === 0}>{busy ? "Saving…" : "Save received"}</Button>
       </div>
@@ -569,20 +621,29 @@ function ReceiveSection({ batchId, lines, onDone }: { batchId: string; lines: an
                 <th className="p-2">Lost</th>
                 <th className="p-2">Loss reason</th>
                 <th className="p-2">Cost</th>
-                <th className="p-2">Suggested 3×</th>
+                <th className="p-2">Retail (3× / override)</th>
                 <th className="p-2">Location</th>
-                <th className="p-2">Receipt</th>
+                <th className="p-2">Audit</th>
               </tr>
             </thead>
             <tbody>
               {sellable.map(l => {
                 const d = getDraft(l);
                 const suggested = l.wholesale_cost != null ? Number(l.wholesale_cost) * 3 : null;
+                const have = photoCountsByLine[l.id] ?? new Set();
+                const doaActive = d.loss_reason === "dead_on_arrival" && Number(d.lost_quantity ?? 0) > 0;
+                const doaComplete = have.has("in_bag") && have.has("on_lid");
                 return (
                   <tr key={l.id} className="border-t align-top">
                     <td className="p-2">
                       <div className="font-medium">{l.clean_item_name || l.raw_description || "(no name)"}</div>
                       {l.scientific_name && <div className="text-xs italic text-muted-foreground">{l.scientific_name}</div>}
+                      {doaActive && (
+                        <button onClick={() => setDoaTarget(l)} className={`mt-1 inline-flex items-center gap-1 text-[11px] rounded px-1.5 py-0.5 ${doaComplete ? "bg-emerald-100 text-emerald-800" : "bg-destructive/15 text-destructive"}`}>
+                          {doaComplete ? <Camera className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+                          DOA photos {have.size}/2
+                        </button>
+                      )}
                     </td>
                     <td className="p-2">
                       <Select value={d.item_type ?? "_unset"} onValueChange={(v) => setDraft(l.id, { item_type: v === "_unset" ? null : v })}>
@@ -597,7 +658,7 @@ function ReceiveSection({ batchId, lines, onDone }: { batchId: string; lines: an
                     <td className="p-2"><Input className="h-8 w-20" type="number" step="0.01" value={d.received_quantity ?? ""} onChange={e=>setDraft(l.id, { received_quantity: e.target.value === "" ? 0 : Number(e.target.value) })} /></td>
                     <td className="p-2"><Input className="h-8 w-20" type="number" step="0.01" value={d.lost_quantity ?? 0} onChange={e=>setDraft(l.id, { lost_quantity: e.target.value === "" ? 0 : Number(e.target.value) })} /></td>
                     <td className="p-2">
-                      <Select value={d.loss_reason ?? "_none"} onValueChange={(v)=>setDraft(l.id, { loss_reason: v === "_none" ? null : v })}>
+                      <Select value={d.loss_reason ?? "_none"} onValueChange={(v)=>onLossReasonChange(l, v === "_none" ? null : v)}>
                         <SelectTrigger className="h-8 w-[120px] text-xs"><SelectValue placeholder="—" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="_none">—</SelectItem>
@@ -607,9 +668,12 @@ function ReceiveSection({ batchId, lines, onDone }: { batchId: string; lines: an
                     </td>
                     <td className="p-2">{fmtMoney(l.wholesale_cost)}</td>
                     <td className="p-2">
-                      <div className="font-medium text-emerald-700">{fmtMoney(suggested)}</div>
+                      <div className="text-[11px] text-muted-foreground">3×: {fmtMoney(suggested)}</div>
+                      <Input className="h-8 w-24 mt-1" type="number" step="0.01" placeholder="override"
+                        value={d.override_retail_price ?? ""}
+                        onChange={e=>setDraft(l.id, { override_retail_price: e.target.value === "" ? null : Number(e.target.value) })} />
                       {l.approved_retail_price != null && (
-                        <div className="text-[10px] text-muted-foreground">Approved: {fmtMoney(l.approved_retail_price)}</div>
+                        <div className="text-[10px] text-muted-foreground mt-0.5">Approved: {fmtMoney(l.approved_retail_price)}</div>
                       )}
                     </td>
                     <td className="p-2">
@@ -623,8 +687,11 @@ function ReceiveSection({ batchId, lines, onDone }: { batchId: string; lines: an
                         </SelectContent>
                       </Select>
                     </td>
-                    <td className="p-2 text-xs text-muted-foreground">
-                      {l.received_at ? new Date(l.received_at).toLocaleDateString() : <span className="italic">pending</span>}
+                    <td className="p-2">
+                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setHistoryTarget(l)}>
+                        <History className="w-3 h-3 mr-1" /> History
+                      </Button>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">{l.received_at ? new Date(l.received_at).toLocaleString() : <span className="italic">pending</span>}</div>
                     </td>
                   </tr>
                 );
@@ -633,8 +700,148 @@ function ReceiveSection({ batchId, lines, onDone }: { batchId: string; lines: an
           </table>
         )}
       </div>
-      <p className="text-xs text-muted-foreground">Suggested retail = 3 × wholesale cost. Admin still needs to approve pricing on each line (in Pricing Approval) before Convert to inventory.</p>
+      <p className="text-xs text-muted-foreground">Suggested retail = 3 × wholesale cost. Override is captured per line; admin still approves final retail in Pricing Approval before conversion.</p>
+
+      {doaTarget && (
+        <DoaPhotoDialog
+          line={doaTarget}
+          batchId={batchId}
+          existing={(doaPhotos ?? []).filter((p: any) => p.vendor_line_item_id === doaTarget.id)}
+          onClose={() => { setDoaTarget(null); qc.invalidateQueries({ queryKey: ["batch-doa-photos", batchId] }); }}
+        />
+      )}
+      {historyTarget && (
+        <ReceiveHistoryDialog line={historyTarget} onClose={() => setHistoryTarget(null)} />
+      )}
     </div>
+  );
+}
+
+function DoaPhotoDialog({ line, batchId, existing, onClose }:
+  { line: any; batchId: string; existing: any[]; onClose: () => void }) {
+  const upload = useServerFn(uploadDoaPhoto);
+  const getUrl = useServerFn(getSignedInventoryMediaUrl);
+  const [busyKind, setBusyKind] = useState<string | null>(null);
+  const [urls, setUrls] = useState<Record<string, string>>({});
+
+  const byKind = (k: string) => existing.find(p => p.kind === k);
+
+  const loadPreview = async (k: string) => {
+    const p = byKind(k);
+    if (!p || urls[k]) return;
+    try { const { url } = await getUrl({ data: { path: p.storage_path } }); setUrls(u => ({ ...u, [k]: url })); } catch {}
+  };
+
+  const handle = async (kind: "in_bag" | "on_lid", file: File) => {
+    setBusyKind(kind);
+    try {
+      const path = `doa/${batchId}/${line.id}/${kind}-${Date.now()}-${file.name}`;
+      const { error } = await supabase.storage.from("inventory-media").upload(path, file, { upsert: true });
+      if (error) throw error;
+      await upload({ data: { lineItemId: line.id, batchId, kind, storage_path: path } });
+      toast.success(`${kind === "in_bag" ? "In-bag" : "On-lid"} photo saved`);
+      setUrls(u => { const n = { ...u }; delete n[kind]; return n; });
+      // Refresh existing list via parent invalidation on close; show preview via reload
+      const { url } = await getUrl({ data: { path } });
+      setUrls(u => ({ ...u, [kind]: url }));
+    } catch (e: any) { toast.error(e.message); }
+    finally { setBusyKind(null); }
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>DOA photos required</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          Wholesaler policy: every DOA must have two photos — still in the sealed bag, and laying on the Styrofoam lid. Both are required before this line can be saved.
+        </p>
+        <div className="grid grid-cols-2 gap-3 pt-2">
+          {(["in_bag","on_lid"] as const).map(k => {
+            const p = byKind(k);
+            const label = k === "in_bag" ? "In sealed bag" : "On Styrofoam lid";
+            if (p && !urls[k]) loadPreview(k);
+            return (
+              <div key={k} className="border rounded-md p-3 space-y-2">
+                <div className="text-xs font-medium">{label}</div>
+                <div className="aspect-square bg-muted/40 rounded flex items-center justify-center overflow-hidden">
+                  {urls[k] ? <img src={urls[k]} alt={label} className="w-full h-full object-cover" />
+                    : <Camera className="w-8 h-8 text-muted-foreground" />}
+                </div>
+                <label className="block">
+                  <input type="file" accept="image/*" capture="environment" className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handle(k, f); }} />
+                  <Button asChild size="sm" variant={p ? "outline" : "default"} disabled={busyKind === k} className="w-full">
+                    <span>{busyKind === k ? "Uploading…" : p ? "Replace" : "Capture / upload"}</span>
+                  </Button>
+                </label>
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex justify-end pt-2">
+          <Button onClick={onClose}>Done</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ReceiveHistoryDialog({ line, onClose }: { line: any; onClose: () => void }) {
+  const { data: logs } = useQuery({
+    queryKey: ["receive-logs", line.id],
+    queryFn: async () => (await supabase.from("vendor_line_receive_logs")
+      .select("*").eq("vendor_line_item_id", line.id).order("created_at", { ascending: false })).data ?? [],
+  });
+  const actorIds = Array.from(new Set((logs ?? []).map((l: any) => l.actor_id).filter(Boolean)));
+  const locIds = Array.from(new Set((logs ?? []).map((l: any) => l.assigned_location_id).filter(Boolean)));
+  const { data: profiles } = useQuery({
+    queryKey: ["receive-log-profiles", actorIds.join(",")],
+    enabled: actorIds.length > 0,
+    queryFn: async () => (await supabase.from("profiles").select("id,display_name,email").in("id", actorIds)).data ?? [],
+  });
+  const { data: locsMeta } = useQuery({
+    queryKey: ["receive-log-locs", locIds.join(",")],
+    enabled: locIds.length > 0,
+    queryFn: async () => (await supabase.from("store_locations").select("id,name").in("id", locIds)).data ?? [],
+  });
+  const profMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+  const locMap = new Map((locsMeta ?? []).map((l: any) => [l.id, l]));
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-auto">
+        <DialogHeader>
+          <DialogTitle>Receive history — {line.clean_item_name || line.raw_description || "line"}</DialogTitle>
+        </DialogHeader>
+        {(!logs || logs.length === 0) && <p className="text-sm text-muted-foreground">No receive actions yet.</p>}
+        <div className="space-y-2">
+          {(logs ?? []).map((g: any) => {
+            const prof: any = profMap.get(g.actor_id);
+            const actor = prof?.display_name || prof?.email || "unknown user";
+            const changes: string[] = [];
+            if (g.received_quantity !== g.prev_received_quantity) changes.push(`received ${g.prev_received_quantity ?? "—"} → ${g.received_quantity ?? "—"}`);
+            if (g.lost_quantity !== g.prev_lost_quantity) changes.push(`lost ${g.prev_lost_quantity ?? "—"} → ${g.lost_quantity ?? "—"}`);
+            if ((g.loss_reason ?? null) !== (g.prev_loss_reason ?? null)) changes.push(`reason ${g.prev_loss_reason ?? "—"} → ${g.loss_reason ?? "—"}`);
+            if ((g.assigned_location_id ?? null) !== (g.prev_assigned_location_id ?? null)) {
+              const locName = (locMap.get(g.assigned_location_id) as any)?.name ?? "—";
+              changes.push(`location → ${locName}`);
+            }
+            if (Number(g.override_retail_price ?? 0) !== Number(g.prev_override_retail_price ?? 0)) changes.push(`override retail ${fmtMoney(g.prev_override_retail_price)} → ${fmtMoney(g.override_retail_price)}`);
+            return (
+              <div key={g.id} className="rounded border p-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">{actor}</span>
+                  <span className="text-muted-foreground">{new Date(g.created_at).toLocaleString()}</span>
+                </div>
+                <div className="mt-1 text-muted-foreground">{changes.length ? changes.join(" · ") : "no field changes (re-save)"}</div>
+                {g.note && <div className="mt-1 italic">"{g.note}"</div>}
+              </div>
+            );
+          })}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
