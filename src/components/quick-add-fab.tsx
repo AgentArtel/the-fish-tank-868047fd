@@ -484,6 +484,11 @@ function MarkdownBulk({
             </div>
           </div>
 
+          <div className="space-y-1.5">
+            <Label className="text-xs">Vendor / source for all (optional)</Label>
+            <VendorPickerCombo value={vendorId} onChange={setVendorId} />
+          </div>
+
           <DialogFooter>
             <Button onClick={saveAll} disabled={saving}>
               {saving ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
@@ -493,5 +498,137 @@ function MarkdownBulk({
         </>
       )}
     </div>
+  );
+}
+
+// ---- Vendor combobox with quick-create ----
+function VendorPickerCombo({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newContact, setNewContact] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+  const [newNotes, setNewNotes] = useState("");
+
+  const createVendor = useServerFn(quickCreateVendor);
+
+  const { data: vendors } = useQuery({
+    queryKey: ["vendors-active"],
+    queryFn: async () =>
+      (await supabase.from("vendors").select("id,name").eq("is_active", true).order("name")).data ?? [],
+    staleTime: 30_000,
+  });
+
+  const selected = vendors?.find((v: any) => v.id === value);
+
+  useEffect(() => { if (showCreate) setNewName(search); }, [showCreate]); // eslint-disable-line
+
+  const submitCreate = async () => {
+    if (!newName.trim()) { toast.error("Vendor name required"); return; }
+    setCreating(true);
+    try {
+      const r = await createVendor({ data: {
+        name: newName.trim(),
+        contact_name: newContact.trim() || null,
+        contact_email: newEmail.trim() || null,
+        contact_phone: newPhone.trim() || null,
+        notes: newNotes.trim() || null,
+      } });
+      await qc.invalidateQueries({ queryKey: ["vendors-active"] });
+      onChange(r.id);
+      toast.success(r.deduped ? `Matched existing: ${r.name}` : `Created ${r.name}`);
+      setShowCreate(false);
+      setOpen(false);
+      setNewName(""); setNewContact(""); setNewEmail(""); setNewPhone(""); setNewNotes("");
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed");
+    } finally { setCreating(false); }
+  };
+
+  return (
+    <>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button type="button" variant="outline" role="combobox" className="w-full justify-between font-normal">
+            <span className={cn("truncate", !selected && "text-muted-foreground")}>
+              {selected ? selected.name : "Pick or add vendor…"}
+            </span>
+            <ChevronsUpDown className="w-3.5 h-3.5 opacity-50 ml-2 shrink-0" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+          <Command>
+            <CommandInput placeholder="Search vendors…" value={search} onValueChange={setSearch} />
+            <CommandList>
+              <CommandEmpty>No match.</CommandEmpty>
+              <CommandGroup>
+                {value && (
+                  <CommandItem value="__clear__" onSelect={() => { onChange(""); setOpen(false); }}>
+                    <span className="text-muted-foreground">Clear selection</span>
+                  </CommandItem>
+                )}
+                {(vendors ?? []).map((v: any) => (
+                  <CommandItem key={v.id} value={v.name} onSelect={() => { onChange(v.id); setOpen(false); }}>
+                    <Check className={cn("w-3.5 h-3.5 mr-2", value === v.id ? "opacity-100" : "opacity-0")} />
+                    {v.name}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+              <CommandSeparator />
+              <CommandGroup>
+                <CommandItem value="__create__" onSelect={() => { setShowCreate(true); setOpen(false); }}>
+                  <Plus className="w-3.5 h-3.5 mr-2" />
+                  Add new vendor{search ? `: "${search}"` : "…"}
+                </CommandItem>
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>New vendor</DialogTitle>
+            <DialogDescription>Quick-create a vendor so this item records its source.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Name *</Label>
+              <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Acme Aquatics" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Contact name</Label>
+                <Input value={newContact} onChange={e => setNewContact(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Phone</Label>
+                <Input value={newPhone} onChange={e => setNewPhone(e.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Email</Label>
+              <Input value={newEmail} onChange={e => setNewEmail(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Notes</Label>
+              <Textarea value={newNotes} onChange={e => setNewNotes(e.target.value)} rows={2} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+            <Button onClick={submitCreate} disabled={creating}>
+              {creating ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
+              Create vendor
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
