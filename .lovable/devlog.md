@@ -4,6 +4,28 @@ Living record of what's been built, what was extra/unplanned, and what's still a
 
 ---
 
+## 2026-06-04 — Sprint 1: OCR / image tagging on photo upload
+
+### Planned
+| Item | Status |
+|---|---|
+| Extend `parseTagPhoto` to return raw label text + auto-detected `has_price_tag` | Done |
+| Cache OCR results on `inventory_media` (`ocr_text`, `ocr_extracted_at`) | Done |
+| Auto-run OCR on each new photo uploaded in inventory detail Media section | Done |
+| "Re-run AI extraction" button per image tile | Done |
+| Surface OCR'd text + `tag ✓` badge in media tiles | Done |
+| Quick Add FAB already wired to `parseTagPhoto` (no change needed) | Verified |
+
+### Migrations
+- `*_inventory_media_ocr_cache` — add `ocr_text`, `ocr_extracted_at` to `inventory_media`
+
+### Notes
+- OCR runs best-effort on upload (failures don't block the upload, just skip).
+- `has_price_tag` is auto-set from AI detection — overrides the upload-form checkbox when AI is confident.
+
+---
+
+
 ## 2026-06-04 — DOA enforcement, audit trail, Quick Add
 
 ### Planned (from earlier asks today)
