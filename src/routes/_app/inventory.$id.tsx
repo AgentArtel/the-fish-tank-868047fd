@@ -279,7 +279,9 @@ function MediaSection({ inventoryItemId }: { inventoryItemId: string }) {
   const [tag, setTag] = useState<InventoryMediaTag>("internal");
   const [hasPriceTag, setHasPriceTag] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [extractingId, setExtractingId] = useState<string | null>(null);
   const getUrl = useServerFn(getSignedInventoryMediaUrl);
+  const runOcr = useServerFn(parseTagPhoto);
 
   const { data: media } = useQuery({
     queryKey: ["inventory-media", inventoryItemId],
@@ -302,20 +304,51 @@ function MediaSection({ inventoryItemId }: { inventoryItemId: string }) {
       });
       if (upErr) throw upErr;
       const mediaType = file.type.startsWith("video/") ? "video" : "image";
-      const { error: insErr } = await supabase.from("inventory_media").insert({
+      const { data: inserted, error: insErr } = await supabase.from("inventory_media").insert({
         inventory_item_id: inventoryItemId,
         storage_path: path, file_name: file.name,
         media_type: mediaType, tag, uploader_id: uploaderId,
         has_price_tag: mediaType === "image" ? hasPriceTag : false,
-      });
+      }).select("id").single();
       if (insErr) throw insErr;
-      // Clear needs_photo on first upload of any image
       if (mediaType === "image") {
         await supabase.from("inventory_items").update({ needs_photo: false }).eq("id", inventoryItemId);
       }
       toast.success("Uploaded"); refresh();
+
+      // Auto-run OCR on newly uploaded images (best-effort, ignore errors)
+      if (mediaType === "image" && inserted?.id) {
+        setExtractingId(inserted.id);
+        try {
+          const parsed = await runOcr({ data: { storage_path: path } });
+          const bits: string[] = [];
+          if (parsed.item_name) bits.push(parsed.item_name);
+          if (parsed.retail_price) bits.push(`$${parsed.retail_price}`);
+          if (parsed.has_price_tag === false) bits.push("no price tag detected");
+          toast.message("AI extracted", { description: bits.join(" · ") || "label saved" });
+          refresh();
+        } catch (e) {
+          // OCR is opportunistic; surface only as info
+          console.warn("OCR skipped", e);
+        } finally {
+          setExtractingId(null);
+        }
+      }
     } catch (e: any) { toast.error(e.message); }
     finally { setBusy(false); }
+  };
+
+  const rerunOcr = async (m: any) => {
+    setExtractingId(m.id);
+    try {
+      const parsed = await runOcr({ data: { storage_path: m.storage_path } });
+      const bits: string[] = [];
+      if (parsed.item_name) bits.push(parsed.item_name);
+      if (parsed.retail_price) bits.push(`$${parsed.retail_price}`);
+      toast.success(`Re-extracted: ${bits.join(" · ") || "ok"}`);
+      refresh();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setExtractingId(null); }
   };
 
   const open = async (m: any) => {
