@@ -817,7 +817,7 @@ export const quickAddInventoryItem = createServerFn({ method: "POST" })
     const nowIso = new Date().toISOString();
     const { data: inv, error: insErr } = await supabase.from("inventory_items").insert({
       source_vendor_batch_id: batchId,
-      vendor_id: vendor.id,
+      vendor_id: data.source_vendor_id ?? vendor.id,
       item_name: data.item_name,
       scientific_name: data.scientific_name ?? null,
       item_type: data.item_type,
