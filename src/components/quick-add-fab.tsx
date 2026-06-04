@@ -147,6 +147,7 @@ function ManualForm({
   const [retailPrice, setRetailPrice] = useState<string>("");
   const [wholesale, setWholesale] = useState<string>("");
   const [locationId, setLocationId] = useState<string>("");
+  const [vendorId, setVendorId] = useState<string>("");
   const [notes, setNotes] = useState("");
 
   const [primaryFile, setPrimaryFile] = useState<File | null>(null);
