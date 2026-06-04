@@ -223,7 +223,7 @@ export const receiveBatchLines = createServerFn({ method: "POST" })
       });
       updated++;
     }
-    return { updated, errors, doaBlocked };
+    return { updated, errors, doaBlocked: [] as { lineItemId: string; error: string }[] };
   });
 
 export const uploadDoaPhoto = createServerFn({ method: "POST" })
