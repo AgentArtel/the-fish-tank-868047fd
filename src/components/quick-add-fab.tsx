@@ -37,6 +37,29 @@ export function QuickAddFab() {
   );
 }
 
+export function QuickAddButton({
+  children = "Quick Add",
+  variant = "default",
+  size = "default",
+  className,
+}: {
+  children?: React.ReactNode;
+  variant?: ButtonProps["variant"];
+  size?: ButtonProps["size"];
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button variant={variant} size={size} className={className} onClick={() => setOpen(true)}>
+        <Plus className="w-4 h-4 mr-1.5" />
+        {children}
+      </Button>
+      {open && <QuickAddDialog onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
 function QuickAddDialog({ onClose }: { onClose: () => void }) {
   const [mode, setMode] = useState<Mode>("livestock");
   return (
