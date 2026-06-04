@@ -2,6 +2,7 @@ import { createFileRoute, Outlet, redirect, Link, useNavigate, useRouterState } 
 import { supabase } from "@/integrations/supabase/client";
 import { useMe } from "@/hooks/use-me";
 import { Button } from "@/components/ui/button";
+import { QuickAddFab } from "@/components/quick-add-fab";
 import {
   LayoutDashboard, Calendar, FileText, Image, Package,
   Megaphone, CheckSquare, Settings, Users, LogOut,
