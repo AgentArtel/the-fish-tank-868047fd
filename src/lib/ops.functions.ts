@@ -724,6 +724,44 @@ export const getOrCreateQuickAddBatch = createServerFn({ method: "POST" })
     return { batchId: created.id, vendorId: vendor.id };
   });
 
+export const quickCreateVendor = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({
+    name: z.string().trim().min(1).max(200),
+    contact_name: z.string().trim().max(200).nullable().optional(),
+    contact_email: z.string().trim().max(200).nullable().optional(),
+    contact_phone: z.string().trim().max(50).nullable().optional(),
+    notes: z.string().trim().max(1000).nullable().optional(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await requireEditor(supabase, userId);
+
+    const { data: existing } = await supabase
+      .from("vendors").select("id,name").ilike("name", data.name).maybeSingle();
+    if (existing) return { id: existing.id, name: existing.name, deduped: true };
+
+    const slugBase = data.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "vendor";
+    let slug = slugBase;
+    for (let i = 0; i < 5; i++) {
+      const { data: clash } = await supabase.from("vendors").select("id").eq("slug", slug).maybeSingle();
+      if (!clash) break;
+      slug = `${slugBase}-${Math.random().toString(36).slice(2, 6)}`;
+    }
+
+    const { data: created, error } = await supabase.from("vendors").insert({
+      name: data.name,
+      slug,
+      is_active: true,
+      contact_name: data.contact_name ?? null,
+      contact_email: data.contact_email ?? null,
+      contact_phone: data.contact_phone ?? null,
+      notes: data.notes ?? null,
+    }).select("id,name").single();
+    if (error) throw new Error(error.message);
+    return { id: created.id, name: created.name, deduped: false };
+  });
+
 export const quickAddInventoryItem = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({
@@ -734,6 +772,7 @@ export const quickAddInventoryItem = createServerFn({ method: "POST" })
     retail_price: z.number().nonnegative().max(1000000),
     wholesale_cost: z.number().nonnegative().max(1000000).nullable().optional(),
     location_id: z.string().uuid().nullable().optional(),
+    source_vendor_id: z.string().uuid().nullable().optional(),
     notes: z.string().max(1000).nullable().optional(),
     primary_photo_path: z.string().min(1).max(500),
     primary_photo_file_name: z.string().max(200).default("primary.jpg"),
