@@ -401,6 +401,8 @@ export type Database = {
           inventory_item_id: string
           media_type: string
           notes: string | null
+          ocr_extracted_at: string | null
+          ocr_text: string | null
           storage_path: string
           tag: Database["public"]["Enums"]["inventory_media_tag"]
           updated_at: string
@@ -415,6 +417,8 @@ export type Database = {
           inventory_item_id: string
           media_type?: string
           notes?: string | null
+          ocr_extracted_at?: string | null
+          ocr_text?: string | null
           storage_path: string
           tag?: Database["public"]["Enums"]["inventory_media_tag"]
           updated_at?: string
@@ -429,6 +433,8 @@ export type Database = {
           inventory_item_id?: string
           media_type?: string
           notes?: string | null
+          ocr_extracted_at?: string | null
+          ocr_text?: string | null
           storage_path?: string
           tag?: Database["public"]["Enums"]["inventory_media_tag"]
           updated_at?: string
