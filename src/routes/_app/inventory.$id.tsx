@@ -337,6 +337,10 @@ function MediaSection({ inventoryItemId }: { inventoryItemId: string }) {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="font-semibold">Media</h2>
         <div className="flex items-center gap-2">
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Checkbox checked={hasPriceTag} onCheckedChange={(v) => setHasPriceTag(!!v)} />
+            Includes price tag
+          </label>
           <Select value={tag} onValueChange={v=>setTag(v as InventoryMediaTag)}>
             <SelectTrigger className="w-[140px] h-9 text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>{INVENTORY_MEDIA_TAGS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
