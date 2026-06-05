@@ -47,12 +47,19 @@
 - QR labels auto-encode `descendants=1` for container kinds
 - Public `/catalog` route (no auth): `getPublicCatalog` via `supabaseAdmin`, sanitized projection (no cost/vendor/internal status), signed photo URLs, same query params as `/inventory` so scanned labels deep-link for customers too
 
+### Sprint 7 — Intake capture upgrades
+- `BarcodeScanDialog` (ZXing) wired into receive flow: case-insensitive match on `vendor_item_id`, +1 received_quantity on match (toggle), debounce, scroll matched row into view
+- `receive-row-:id` ids on receive table rows for scan targeting
+- Per-row photo on Quick Add Create rows (parallel uploads); shared photo demoted to fallback
+- `bulkImportInventoryRows` accepts per-row `photo_path` / `photo_file_name`
+
 ## Current priority queue
 
-1. **Intake capture upgrades** — Barcode scan on receive (ZXing) + per-row photo on bulk add
-2. **Per-type fields + pricing approval queue** — JSONB `attrs` per item_type; admin override review UI
-3. **AI parsing bring-your-own key** — Workspace OpenAI/Gemini key, fallback to Lovable AI Gateway
-4. **Audit + Clover** — Static + browser automation audit, then Clover POS read-sync
+1. **Per-type fields + pricing approval queue** — JSONB `attrs` per item_type; admin override review UI
+2. **AI parsing bring-your-own key** — Workspace OpenAI/Gemini key, fallback to Lovable AI Gateway
+3. **Audit + Clover** — Static + browser automation audit, then Clover POS read-sync
+4. **Sprint 7 follow-up** — HID barcode wedge input + persisted scan history for receive audit
+
 
 ## Invariants (never override)
 
