@@ -87,11 +87,11 @@ export const updateAISettings = createServerFn({ method: "POST" })
       .from("workspace_ai_settings").select("id").limit(1).maybeSingle();
     if (existing) {
       const { error } = await supabaseAdmin
-        .from("workspace_ai_settings").update(payload).eq("id", (existing as any).id);
+        .from("workspace_ai_settings").update(payload as any).eq("id", (existing as any).id);
       if (error) throw new Error(error.message);
     } else {
       const { error } = await supabaseAdmin
-        .from("workspace_ai_settings").insert(payload);
+        .from("workspace_ai_settings").insert(payload as any);
       if (error) throw new Error(error.message);
     }
     return { ok: true };
