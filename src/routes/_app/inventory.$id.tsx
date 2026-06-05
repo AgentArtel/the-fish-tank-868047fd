@@ -121,6 +121,13 @@ function DetailsCard({ item }: { item: any }) {
 function ControlsCard({ item, locations, onDone }: { item: any; locations: any[]; onDone: () => void }) {
   const setAvail = useServerFn(setInventoryAvailability);
   const setLive = useServerFn(setInventoryLiveSale);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [pendingAvail, setPendingAvail] = useState<InventoryAvailability | null>(null);
+
+  const applyAvail = async (s: InventoryAvailability) => {
+    try { await setAvail({ data: { id: item.id, status: s } }); toast.success("Availability updated"); onDone(); }
+    catch (e: any) { toast.error(e.message); }
+  };
 
   const changeLocation = async (locationId: string) => {
     const { error } = await supabase.from("inventory_items")
@@ -128,8 +135,12 @@ function ControlsCard({ item, locations, onDone }: { item: any; locations: any[]
     if (error) toast.error(error.message); else { toast.success("Location updated"); onDone(); }
   };
   const changeAvail = async (s: string) => {
-    try { await setAvail({ data: { id: item.id, status: s as InventoryAvailability } }); toast.success("Availability updated"); onDone(); }
-    catch (e: any) { toast.error(e.message); }
+    const next = s as InventoryAvailability;
+    if (next === "available") {
+      const hasPhoto = await inventoryHasPhoto(item.id);
+      if (!hasPhoto) { setPendingAvail(next); setWizardOpen(true); return; }
+    }
+    applyAvail(next);
   };
   const changeLive = async (s: string) => {
     try { await setLive({ data: { id: item.id, status: s as InventoryLiveSale } }); toast.success("Live-sale updated"); onDone(); }
