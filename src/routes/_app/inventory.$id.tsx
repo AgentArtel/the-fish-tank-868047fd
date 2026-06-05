@@ -24,10 +24,12 @@ import {
 import {
   setInventoryAvailability, setInventoryLiveSale,
   adjustInventoryQuantities, getSignedInventoryMediaUrl,
-  parseTagPhoto,
+  parseTagPhoto, updateInventoryAttrs, updateInventoryItemType,
 } from "@/lib/ops.functions";
 import { Sparkles, Loader2 } from "lucide-react";
 import { PhotoOnFileWizard, inventoryHasPhoto } from "@/components/photo-on-file-wizard";
+import { AttrsEditor } from "@/components/attrs-editor";
+import { ITEM_TYPE_LABELS, type ItemType } from "@/lib/item-type-attrs";
 
 export const Route = createFileRoute("/_app/inventory/$id")({ component: InventoryDetail });
 
