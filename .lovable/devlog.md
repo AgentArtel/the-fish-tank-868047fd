@@ -4,6 +4,54 @@ Living record of what's been built, what was extra/unplanned, and what's still a
 
 ---
 
+## 2026-06-05 (Sprint 7) — Intake capture upgrades
+
+Two long-standing intake pain points are closed: receiving a big shipment no longer requires line-by-line typing, and bulk-add no longer forces a single "shared" photo across heterogeneous rows.
+
+Receive flow now has a **Scan** button on `ReceiveSection` that opens a camera-based ZXing reader (`@zxing/browser`). Each successful decode is matched case-insensitively against `vendor_line_items.vendor_item_id` on the current batch only; matches optionally `+1` the row's `received_quantity` (toggle in the scan dialog), toast-confirm, and smooth-scroll the matched `<tr id="receive-row-:id">` into view with a brief target highlight. Duplicate codes within 1.5s are debounced so a sticker held in frame doesn't double-count. Unknown codes are listed in the scan log so the receiver can spot mislabeled items without leaving the dialog.
+
+Bulk-add (Quick Add → Create rows) now supports **per-row photos**. Each Create row gets its own photo slot; the existing shared photo picker stays but is re-labeled as the **fallback** used only for rows that don't pick their own. `bulkImportInventoryRows` server fn accepts optional `photo_path` + `photo_file_name` per row and prefers them over `shared_photo_path` at apply time. Per-row uploads run in parallel before the mutation fires.
+
+### Planned vs shipped
+
+| Plan item | Status |
+|---|---|
+| Barcode scan on receive (ZXing camera reader) | Done |
+| Match by `vendor_item_id` within current batch (case-insensitive) | Done |
+| Auto-increment `received_quantity` on match (toggleable) | Done |
+| Scroll matched row into view + highlight | Done |
+| Debounce duplicate codes in-frame | Done |
+| Per-row photo on Quick Add Create rows | Done |
+| Shared photo demoted to "fallback" role | Done |
+| `bulkImportInventoryRows` accepts per-row `photo_path` | Done |
+| Parallel per-row uploads | Done |
+| `id={receive-row-${l.id}}` on receive `<tr>` for scroll targeting | Done |
+| USB/Bluetooth HID barcode wedge support (no camera) | Deferred (covered today because most HID scanners type into a focused input, but we should still add a dedicated capture input next sprint) |
+| Save scan history to DB for audit | Deferred (in-memory only; receive logs already capture the qty delta) |
+
+### Migrations
+
+- None. Pure UI + serverFn payload additions on existing tables.
+
+### Files
+
+- new `src/components/barcode-scan-dialog.tsx` — ZXing reader, debounce, match list, auto-increment toggle.
+- edit `src/components/quick-add-fab.tsx` — `RowPhotoSlot`, parallel uploads, shared-as-fallback wording.
+- edit `src/lib/ops.functions.ts` — `bulkImportInventoryRows` accepts `photo_path` / `photo_file_name` per row.
+- edit `src/routes/_app/batches.$id.tsx` — Scan button on `ReceiveSection`, `onMatch` handler, `id="receive-row-:id"` + `scroll-mt-24 target:bg-amber-50` for scroll targeting.
+- add dep `@zxing/browser`.
+
+### What's next (mirrors roadmap)
+
+1. Sprint 8 — Per-type fields (coral / dry_good / fish JSONB `attrs`) + pricing approval queue.
+2. Sprint 9 — AI parsing bring-your-own key (OpenAI / Gemini), fallback to Lovable AI Gateway.
+3. Sprint 10 — Static + browser automation audit, then Clover POS read-sync.
+4. Sprint 7 follow-up — HID barcode wedge input + persisted scan history for receive audit.
+
+---
+
+
+
 ## 2026-06-05 (Sprint 6 · part 2) — Public `/catalog` route
 
 Customers (and anyone with a scanned label URL) can now browse what's in stock without signing in. New top-level `/catalog` route, no auth gate, SSR. Pulls `availability_status='available'` items that have `quantity_available > 0`, `retail_price > 0`, and at least one photo on file — same trust gate the photo-on-file wizard already enforces. Accepts the exact same `?location=`, `?descendants=1`, `?type=` query params as `/inventory`, so QR labels printed for staff also work as public catalog deep links. Includes debounced search by name / scientific name, type filter, active-filter chips, and lazy-loaded image grid.
