@@ -355,7 +355,7 @@ function PhotoPicker({
   );
 }
 
-// ---- Markdown bulk ----
+// ---- Markdown bulk with dedupe ----
 type ParsedRow = {
   item_name: string;
   scientific_name?: string;
@@ -366,12 +366,30 @@ type ParsedRow = {
   notes?: string;
 };
 
+type DupeMatch = {
+  id: string;
+  item_name: string;
+  scientific_name: string | null;
+  item_type: string | null;
+  quantity_available: number | null;
+  retail_price: number | null;
+  availability_status: string | null;
+  score: number;
+};
+
+type ReviewRow = ParsedRow & {
+  dupe_status: "exact" | "likely" | "new";
+  dupe_match: DupeMatch | null;
+  decision: "create" | "merge" | "skip";
+};
+
 function MarkdownBulk({
   defaultType, locations, onSaved,
 }: { defaultType: ItemType; locations: any[]; onSaved: () => void }) {
   const [md, setMd] = useState("");
-  const [rows, setRows] = useState<ParsedRow[]>([]);
+  const [rows, setRows] = useState<ReviewRow[]>([]);
   const [parsing, setParsing] = useState(false);
+  const [checkingDupes, setCheckingDupes] = useState(false);
   const [saving, setSaving] = useState(false);
   const [locationId, setLocationId] = useState<string>("");
   const [vendorId, setVendorId] = useState<string>("");
@@ -379,59 +397,121 @@ function MarkdownBulk({
   const [bulkPreview, setBulkPreview] = useState<string>("");
 
   const parseFn = useServerFn(parseInventoryMarkdown);
-  const quickAdd = useServerFn(quickAddInventoryItem);
+  const dedupeFn = useServerFn(findInventoryDuplicates);
+  const bulkImport = useServerFn(bulkImportInventoryRows);
 
   const onParse = async () => {
     if (!md.trim()) { toast.error("Paste a list first"); return; }
     setParsing(true);
     try {
       const r = await parseFn({ data: { markdown: md, default_type: defaultType } });
-      setRows(r.items ?? []);
-      toast.success(`Parsed ${r.items?.length ?? 0} item(s) — review below`);
+      const items = r.items ?? [];
+      if (items.length === 0) { toast.error("AI found no items"); setRows([]); return; }
+      // Initial rows, decision defaults will be set after dedupe pass.
+      const initial: ReviewRow[] = items.map(it => ({
+        ...it,
+        dupe_status: "new",
+        dupe_match: null,
+        decision: "create",
+      }));
+      setRows(initial);
+
+      setCheckingDupes(true);
+      try {
+        const dupe = await dedupeFn({ data: {
+          rows: items.map(it => ({
+            item_name: it.item_name,
+            scientific_name: it.scientific_name ?? null,
+          })),
+        } });
+        setRows(prev => prev.map((row, i) => {
+          const d = dupe.results[i];
+          if (!d) return row;
+          return {
+            ...row,
+            dupe_status: d.status,
+            dupe_match: d.match,
+            decision: d.status === "exact" ? "merge" : "create",
+          };
+        }));
+        toast.success(`Parsed ${items.length} · ${dupe.results.filter(d=>d.status!=="new").length} possible duplicate(s)`);
+      } finally { setCheckingDupes(false); }
     } catch (e: any) {
       toast.error(e.message ?? "Parse failed");
     } finally { setParsing(false); }
   };
 
-  const updateRow = (i: number, patch: Partial<ParsedRow>) =>
+  const updateRow = (i: number, patch: Partial<ReviewRow>) =>
     setRows(rs => rs.map((r, idx) => idx === i ? { ...r, ...patch } : r));
   const removeRow = (i: number) => setRows(rs => rs.filter((_, idx) => idx !== i));
 
   const saveAll = async () => {
     if (rows.length === 0) { toast.error("Nothing to save"); return; }
-    if (!bulkPhoto) { toast.error("A shared photo is required for bulk add. Add a single representative photo for now — each item will reuse it until you upload an item-specific photo."); return; }
-    const invalid = rows.find(r => !r.item_name?.trim() || !(r.retail_price! >= 0));
-    if (invalid) { toast.error("All rows need a name and price"); return; }
+    const actionable = rows.filter(r => r.decision !== "skip");
+    if (actionable.length === 0) { toast.error("All rows are set to Skip"); return; }
+    const needsPhoto = actionable.some(r => r.decision === "create");
+    if (needsPhoto && !bulkPhoto) {
+      toast.error("A shared photo is required for new items. Either add one or set all rows to Merge / Skip.");
+      return;
+    }
+    const invalid = actionable.find(r =>
+      !r.item_name?.trim() ||
+      !Number.isFinite(Number(r.retail_price)) ||
+      Number(r.retail_price) < 0 ||
+      (r.decision === "merge" && !r.dupe_match?.id)
+    );
+    if (invalid) { toast.error(`"${invalid.item_name || "row"}" is missing a name, price, or merge target`); return; }
+
     setSaving(true);
     try {
-      const photo = await uploadToInventoryBucket(bulkPhoto);
-      let okCount = 0;
-      for (const r of rows) {
-        try {
-          await quickAdd({ data: {
-            item_name: r.item_name.trim(),
-            scientific_name: r.scientific_name?.trim() || null,
-            item_type: (r.item_type as ItemType) ?? defaultType,
-            quantity: r.quantity ?? 1,
-            retail_price: Number(r.retail_price ?? 0),
-            wholesale_cost: r.wholesale_cost != null ? Number(r.wholesale_cost) : null,
-            location_id: locationId || null,
-            source_vendor_id: vendorId || null,
-            notes: r.notes ?? null,
-            primary_photo_path: photo.path,
-            primary_photo_file_name: photo.fileName,
-            has_price_tag: false,
-            tag_photo_path: null,
-            set_available: true,
-          } });
-          okCount++;
-        } catch (e: any) {
-          console.error("row failed", r.item_name, e);
-        }
+      // Upload shared photo only when at least one row creates.
+      let photo = { path: "", fileName: "" };
+      if (needsPhoto && bulkPhoto) {
+        const p = await uploadToInventoryBucket(bulkPhoto);
+        photo = { path: p.path, fileName: p.fileName };
+      } else {
+        // Backend requires a non-empty path; supply a sentinel that won't be inserted (only "create" rows reach the photo insert).
+        photo = { path: "_unused_no_create_rows", fileName: "noop.jpg" };
       }
-      toast.success(`Added ${okCount} of ${rows.length}`);
+
+      const payloadRows = rows.map(r => ({
+        item_name: r.item_name.trim(),
+        scientific_name: r.scientific_name?.trim() || null,
+        item_type: ((r.item_type as ItemType) ?? defaultType),
+        quantity: Math.max(1, Number(r.quantity ?? 1)),
+        retail_price: Number(r.retail_price ?? 0),
+        wholesale_cost: r.wholesale_cost != null ? Number(r.wholesale_cost) : null,
+        notes: r.notes?.trim() || null,
+        decision: r.decision,
+        merge_target_id: r.decision === "merge" ? r.dupe_match?.id ?? null : null,
+      }));
+
+      const result = await bulkImport({ data: {
+        rows: payloadRows,
+        location_id: locationId || null,
+        source_vendor_id: vendorId || null,
+        shared_photo_path: photo.path,
+        shared_photo_file_name: photo.fileName,
+        set_available: true,
+      } });
+
+      const parts = [];
+      if (result.created) parts.push(`${result.created} created`);
+      if (result.merged) parts.push(`${result.merged} merged`);
+      if (result.skipped) parts.push(`${result.skipped} skipped`);
+      if (result.errors.length) parts.push(`${result.errors.length} error(s)`);
+      toast[result.errors.length ? "warning" : "success"](parts.join(" · ") || "Done");
+      if (result.errors.length) console.warn("bulk import errors", result.errors);
       onSaved();
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to save");
     } finally { setSaving(false); }
+  };
+
+  const statusBadge = (s: "exact" | "likely" | "new") => {
+    if (s === "exact") return <Badge className="bg-amber-100 text-amber-800 border-0 text-[10px]">Exact match</Badge>;
+    if (s === "likely") return <Badge className="bg-blue-100 text-blue-800 border-0 text-[10px]">Likely dup</Badge>;
+    return <Badge variant="outline" className="text-[10px]">New</Badge>;
   };
 
   return (
@@ -444,35 +524,63 @@ function MarkdownBulk({
         placeholder={`- Salifert KH Test Kit — $24.99\n- Two Little Fishies Reactor — qty 2, $89\n- Yellow Tang, Zebrasoma flavescens, $129.99`}
       />
       <div className="flex justify-end">
-        <Button size="sm" onClick={onParse} disabled={parsing}>
-          {parsing ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />}
-          Parse with AI
+        <Button size="sm" onClick={onParse} disabled={parsing || checkingDupes}>
+          {(parsing || checkingDupes) ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />}
+          {parsing ? "Parsing…" : checkingDupes ? "Checking dupes…" : "Parse with AI"}
         </Button>
       </div>
 
       {rows.length > 0 && (
         <>
-          <div className="rounded-md border divide-y max-h-[40vh] overflow-y-auto">
+          <div className="rounded-md border divide-y max-h-[50vh] overflow-y-auto">
             {rows.map((r, i) => (
-              <div key={i} className="p-2 grid grid-cols-12 gap-2 items-center text-xs">
-                <Input className="col-span-4 h-8" value={r.item_name} onChange={e => updateRow(i, { item_name: e.target.value })} />
-                <Select value={r.item_type ?? defaultType} onValueChange={v => updateRow(i, { item_type: v })}>
-                  <SelectTrigger className="col-span-2 h-8"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {ITEM_TYPES.map(t => <SelectItem key={t} value={t}>{ITEM_TYPE_LABELS[t]}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Input type="number" min={1} className="col-span-2 h-8" value={r.quantity ?? 1} onChange={e => updateRow(i, { quantity: Number(e.target.value) })} placeholder="Qty" />
-                <Input type="number" step="0.01" className="col-span-3 h-8" value={r.retail_price ?? ""} onChange={e => updateRow(i, { retail_price: Number(e.target.value) })} placeholder="Retail $" />
-                <button onClick={() => removeRow(i)} className="col-span-1 text-muted-foreground hover:text-destructive">
-                  <Trash2 className="w-3 h-3" />
-                </button>
+              <div key={i} className="p-2 space-y-2 text-xs">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {statusBadge(r.dupe_status)}
+                  {r.dupe_match && (
+                    <span className="text-muted-foreground">
+                      → <span className="font-medium text-foreground">{r.dupe_match.item_name}</span>
+                      {r.dupe_match.scientific_name ? <em className="ml-1">({r.dupe_match.scientific_name})</em> : null}
+                      {" · "}qty {r.dupe_match.quantity_available ?? 0}
+                      {r.dupe_match.retail_price != null ? ` · $${r.dupe_match.retail_price}` : ""}
+                      {" · "}{Math.round(r.dupe_match.score * 100)}% match
+                    </span>
+                  )}
+                  <div className="ml-auto flex items-center gap-1">
+                    <Select value={r.decision} onValueChange={v => updateRow(i, { decision: v as any })}>
+                      <SelectTrigger className="h-7 w-[140px] text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="create">Create new</SelectItem>
+                        <SelectItem value="merge" disabled={!r.dupe_match}>Add qty to existing</SelectItem>
+                        <SelectItem value="skip">Skip</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <button onClick={() => removeRow(i)} className="text-muted-foreground hover:text-destructive p-1">
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-12 gap-2 items-center">
+                  <Input className="col-span-5 h-8" value={r.item_name} onChange={e => updateRow(i, { item_name: e.target.value })} />
+                  <Select value={(r.item_type as string) ?? defaultType} onValueChange={v => updateRow(i, { item_type: v })}>
+                    <SelectTrigger className="col-span-3 h-8"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {ITEM_TYPES.map(t => <SelectItem key={t} value={t}>{ITEM_TYPE_LABELS[t]}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Input type="number" min={1} className="col-span-2 h-8" value={r.quantity ?? 1}
+                    onChange={e => updateRow(i, { quantity: Number(e.target.value) })} placeholder="Qty" />
+                  <Input type="number" step="0.01" className="col-span-2 h-8" value={r.retail_price ?? ""}
+                    onChange={e => updateRow(i, { retail_price: Number(e.target.value) })} placeholder="Retail $" />
+                </div>
               </div>
             ))}
           </div>
 
           <div className="grid sm:grid-cols-2 gap-3">
-            <PhotoPicker label="Shared photo for these items (required)" preview={bulkPreview}
+            <PhotoPicker
+              label={`Shared photo${rows.some(r => r.decision === "create") ? " (required for Create rows)" : " (not needed — no Create rows)"}`}
+              preview={bulkPreview}
               onPick={(f) => { setBulkPhoto(f); setBulkPreview(f ? URL.createObjectURL(f) : ""); }} />
             <div className="space-y-1.5">
               <Label className="text-xs">Location for all</Label>
@@ -490,10 +598,16 @@ function MarkdownBulk({
             <VendorPickerCombo value={vendorId} onChange={setVendorId} />
           </div>
 
+          <div className="text-[11px] text-muted-foreground">
+            {rows.filter(r => r.decision === "create").length} create ·
+            {" "}{rows.filter(r => r.decision === "merge").length} merge ·
+            {" "}{rows.filter(r => r.decision === "skip").length} skip
+          </div>
+
           <DialogFooter>
             <Button onClick={saveAll} disabled={saving}>
               {saving ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
-              {saving ? `Saving…` : `Add ${rows.length} item(s)`}
+              {saving ? `Saving…` : `Apply ${rows.filter(r => r.decision !== "skip").length} decision(s)`}
             </Button>
           </DialogFooter>
         </>
