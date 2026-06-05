@@ -1,14 +1,18 @@
 import { createFileRoute, Outlet, redirect, Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useMe } from "@/hooks/use-me";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { QuickAddFab } from "@/components/quick-add-fab";
+import { getWorkload } from "@/lib/workload.functions";
 import { useState, useEffect } from "react";
 import {
   LayoutDashboard, Calendar, FileText, Image, Package,
   Megaphone, CheckSquare, Settings, Users, LogOut,
   PackageOpen, Truck, MapPin, ListChecks, DollarSign, Boxes, Menu,
+  ChevronDown, ChevronRight,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_app")({
@@ -19,50 +23,59 @@ export const Route = createFileRoute("/_app")({
   component: AppLayout,
 });
 
-type NavItem = { to: string; label: string; icon: any; soon?: boolean; adminOnly?: boolean };
+type BadgeKey = "intakeAwaitingReview" | "pricingPending" | "missingTags";
+type NavItem = { to: string; label: string; icon: any; soon?: boolean; adminOnly?: boolean; badge?: BadgeKey };
 type NavGroup = { label: string; items: NavItem[] };
 
 const GROUPS: NavGroup[] = [
   {
-    label: "Workspace",
-    items: [{ to: "/dashboard", label: "Dashboard", icon: LayoutDashboard }],
-  },
-  {
-    label: "Content",
+    label: "Today",
     items: [
+      { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { to: "/calendar", label: "Calendar", icon: Calendar },
-      { to: "/content", label: "Content Items", icon: FileText },
-      { to: "/publishing", label: "Publishing", icon: CheckSquare },
-      { to: "/campaigns", label: "Campaigns", icon: Megaphone },
+      { to: "/tasks", label: "Tasks / SOPs", icon: ListChecks, soon: true },
     ],
   },
   {
-    label: "Media",
-    items: [{ to: "/media", label: "Media Library", icon: Image }],
-  },
-  {
-    label: "Products",
-    items: [{ to: "/products", label: "Products", icon: Package }],
-  },
-  {
-    label: "Operations",
+    label: "Inventory",
     items: [
-      { to: "/batches", label: "Inventory Intake", icon: PackageOpen },
-      { to: "/pricing-approval", label: "Pricing Approval", icon: DollarSign },
-      { to: "/inventory", label: "Inventory", icon: Boxes },
+      { to: "/batches", label: "Intake", icon: PackageOpen, badge: "intakeAwaitingReview" },
+      { to: "/pricing-approval", label: "Pricing Queue", icon: DollarSign, badge: "pricingPending" },
+      { to: "/inventory", label: "Stock", icon: Boxes, badge: "missingTags" },
+      { to: "/store-locations", label: "Locations", icon: MapPin },
       { to: "/vendors", label: "Vendors", icon: Truck },
-      { to: "/store-locations", label: "Store Locations", icon: MapPin },
-      { to: "/tasks", label: "Tasks / SOPs", icon: ListChecks, soon: true },
+    ],
+  },
+  {
+    label: "Marketing",
+    items: [
+      { to: "/content", label: "Posts", icon: FileText },
+      { to: "/publishing", label: "Publishing", icon: CheckSquare },
+      { to: "/campaigns", label: "Campaigns", icon: Megaphone },
+      { to: "/media", label: "Media Library", icon: Image },
+      { to: "/products", label: "Products", icon: Package },
     ],
   },
   {
     label: "Settings",
     items: [
-      { to: "/settings/meta", label: "Meta Placeholder", icon: Settings },
+      { to: "/settings/meta", label: "Workspace", icon: Settings },
       { to: "/settings/users", label: "Users", icon: Users, adminOnly: true },
     ],
   },
 ];
+
+function NavBadge({ count, tone = "default" }: { count: number; tone?: "default" | "warn" }) {
+  if (!count) return null;
+  const cls = tone === "warn"
+    ? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+    : "bg-primary/15 text-primary";
+  return (
+    <span className={`text-[10px] font-semibold rounded px-1.5 py-0.5 ${cls}`}>
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
 
 function SidebarBody({
   me, isAdmin, pathname, onNavigate, onSignOut,
@@ -70,6 +83,24 @@ function SidebarBody({
   me: any; isAdmin: boolean; pathname: string;
   onNavigate?: () => void; onSignOut: () => void;
 }) {
+  const fn = useServerFn(getWorkload);
+  const { data: workload } = useQuery({
+    queryKey: ["workload"],
+    queryFn: () => fn(),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
+    if (typeof window === "undefined") return {};
+    try { return JSON.parse(localStorage.getItem("nav.collapsed") ?? "{}"); } catch { return {}; }
+  });
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("nav.collapsed", JSON.stringify(collapsed));
+    }
+  }, [collapsed]);
+
   return (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
       <div className="p-4 border-b flex items-center gap-2.5">
@@ -79,43 +110,62 @@ function SidebarBody({
           <div className="text-xs text-muted-foreground">Workspace</div>
         </div>
       </div>
-      <nav className="flex-1 p-2 space-y-4 overflow-y-auto">
+      <nav className="flex-1 p-2 space-y-2 overflow-y-auto">
         {GROUPS.map(group => {
           const visibleItems = group.items.filter(i => !i.adminOnly || isAdmin);
           if (visibleItems.length === 0) return null;
+          const hasActive = visibleItems.some(i => pathname === i.to || (i.to !== "/dashboard" && pathname.startsWith(i.to + "/")));
+          const isCollapsed = !!collapsed[group.label] && !hasActive;
+          const groupBadge = visibleItems.reduce((sum, i) => {
+            if (!i.badge || !workload) return sum;
+            return sum + ((workload as any)[i.badge] ?? 0);
+          }, 0);
+
           return (
             <div key={group.label}>
-              <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                {group.label}
-              </div>
-              <div className="space-y-0.5">
-                {visibleItems.map(item => {
-                  const Icon = item.icon;
-                  const active = pathname === item.to || (item.to !== "/dashboard" && pathname.startsWith(item.to + "/"));
-                  return (
-                    <Link
-                      key={item.to}
-                      to={item.to}
-                      onClick={onNavigate}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
-                        active
-                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                          : item.soon
-                            ? "text-muted-foreground hover:bg-sidebar-accent/40"
-                            : "hover:bg-sidebar-accent/50"
-                      }`}
-                    >
-                      <Icon className="w-4 h-4" />
-                      <span className="flex-1">{item.label}</span>
-                      {item.soon && (
-                        <span className="text-[9px] uppercase font-semibold tracking-wide bg-muted text-muted-foreground rounded px-1.5 py-0.5">
-                          Soon
-                        </span>
-                      )}
-                    </Link>
-                  );
-                })}
-              </div>
+              <button
+                type="button"
+                onClick={() => setCollapsed(c => ({ ...c, [group.label]: !c[group.label] }))}
+                className="w-full flex items-center gap-1 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+              >
+                {isCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                <span className="flex-1 text-left">{group.label}</span>
+                {isCollapsed && groupBadge > 0 && <NavBadge count={groupBadge} tone="warn" />}
+              </button>
+              {!isCollapsed && (
+                <div className="space-y-0.5 mt-0.5">
+                  {visibleItems.map(item => {
+                    const Icon = item.icon;
+                    const active = pathname === item.to || (item.to !== "/dashboard" && pathname.startsWith(item.to + "/"));
+                    const count = item.badge && workload ? ((workload as any)[item.badge] ?? 0) : 0;
+                    return (
+                      <Link
+                        key={item.to}
+                        to={item.to}
+                        onClick={onNavigate}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
+                          active
+                            ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                            : item.soon
+                              ? "text-muted-foreground hover:bg-sidebar-accent/40"
+                              : "hover:bg-sidebar-accent/50"
+                        }`}
+                      >
+                        <Icon className="w-4 h-4" />
+                        <span className="flex-1">{item.label}</span>
+                        {item.soon && (
+                          <span className="text-[9px] uppercase font-semibold tracking-wide bg-muted text-muted-foreground rounded px-1.5 py-0.5">
+                            Soon
+                          </span>
+                        )}
+                        {!item.soon && count > 0 && (
+                          <NavBadge count={count} tone={item.badge === "pricingPending" ? "warn" : "default"} />
+                        )}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           );
         })}
@@ -136,7 +186,6 @@ function AppLayout() {
   const pathname = useRouterState({ select: s => s.location.pathname });
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Close drawer on route change.
   useEffect(() => { setMobileOpen(false); }, [pathname]);
 
   if (isLoading) {
@@ -155,13 +204,11 @@ function AppLayout() {
 
   return (
     <div className="min-h-screen flex bg-muted/20">
-      {/* Desktop sidebar */}
       <aside className="hidden md:flex w-60 border-r flex-col shrink-0">
         <SidebarBody me={me} isAdmin={isAdmin} pathname={pathname} onSignOut={signOut} />
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Mobile top bar */}
         <header className="md:hidden sticky top-0 z-30 flex items-center gap-2 px-3 h-12 border-b bg-background">
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild>
