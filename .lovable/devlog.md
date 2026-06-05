@@ -466,3 +466,19 @@ From `mem://features/intake-roadmap` — kept in sync as items ship:
 - Convert requires `review=approved` AND `pricing=approved` AND admin role
 - Inventory item cannot be `available` without at least one photo (DB trigger)
 - DOA tag requires both in-bag and on-lid photos (DB trigger + server pre-check)
+
+## Sprint 8 — Per-type fields (2026-06-05)
+
+**Planned:** JSONB per-type attributes + pricing approval queue polish.
+
+**Shipped:**
+| Area | Change |
+|---|---|
+| Schema | `inventory_items.attrs jsonb NOT NULL DEFAULT '{}'`, same on `vendor_line_items`; GIN indexes for lookup |
+| Schema definitions | `src/lib/item-type-attrs.ts` — per-type field groups for fish (care/swim zone/reef-safe), coral (type/lighting/flow/placement/aggression), invert, live_rock, dry_good (brand/SKU/UPC/expiry), equipment (brand/model/serial/wattage/warranty), other |
+| UI | `src/components/attrs-editor.tsx` — schema-driven form (text/number/select/boolean); dirty-state save button |
+| UI | `PerTypeCard` on `/inventory/:id` with item-type selector + auto-loaded fields |
+| Server | `updateInventoryAttrs`, `updateInventoryItemType` server fns (editor-gated, zod-validated) |
+| Pricing queue | `/pricing-approval` was already shipped — admin-gated approve, hooked to `approveLinePricing` |
+
+**Deferred (Sprint 8 follow-up):** vendor line item per-type editor during intake review, expose `attrs` on `/catalog` projection, server-side filters on `/inventory` by attribute (e.g. `?attr.reef_safe=yes`).
