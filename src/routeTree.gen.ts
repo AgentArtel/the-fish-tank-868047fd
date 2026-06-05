@@ -31,6 +31,7 @@ import { Route as AppContentIndexRouteImport } from './routes/_app/content.index
 import { Route as AppBatchesIndexRouteImport } from './routes/_app/batches.index'
 import { Route as AppSettingsUsersRouteImport } from './routes/_app/settings.users'
 import { Route as AppSettingsMetaRouteImport } from './routes/_app/settings.meta'
+import { Route as AppInventoryMissingTagsRouteImport } from './routes/_app/inventory.missing-tags'
 import { Route as AppInventoryIdRouteImport } from './routes/_app/inventory.$id'
 import { Route as AppContentNewRouteImport } from './routes/_app/content.new'
 import { Route as AppContentIdRouteImport } from './routes/_app/content.$id'
@@ -145,6 +146,11 @@ const AppSettingsMetaRoute = AppSettingsMetaRouteImport.update({
   path: '/settings/meta',
   getParentRoute: () => AppRoute,
 } as any)
+const AppInventoryMissingTagsRoute = AppInventoryMissingTagsRouteImport.update({
+  id: '/missing-tags',
+  path: '/missing-tags',
+  getParentRoute: () => AppInventoryRoute,
+} as any)
 const AppInventoryIdRoute = AppInventoryIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -187,6 +193,7 @@ export interface FileRoutesByFullPath {
   '/content/$id': typeof AppContentIdRoute
   '/content/new': typeof AppContentNewRoute
   '/inventory/$id': typeof AppInventoryIdRoute
+  '/inventory/missing-tags': typeof AppInventoryMissingTagsRoute
   '/settings/meta': typeof AppSettingsMetaRoute
   '/settings/users': typeof AppSettingsUsersRoute
   '/batches/': typeof AppBatchesIndexRoute
@@ -212,6 +219,7 @@ export interface FileRoutesByTo {
   '/content/$id': typeof AppContentIdRoute
   '/content/new': typeof AppContentNewRoute
   '/inventory/$id': typeof AppInventoryIdRoute
+  '/inventory/missing-tags': typeof AppInventoryMissingTagsRoute
   '/settings/meta': typeof AppSettingsMetaRoute
   '/settings/users': typeof AppSettingsUsersRoute
   '/batches': typeof AppBatchesIndexRoute
@@ -241,6 +249,7 @@ export interface FileRoutesById {
   '/_app/content/$id': typeof AppContentIdRoute
   '/_app/content/new': typeof AppContentNewRoute
   '/_app/inventory/$id': typeof AppInventoryIdRoute
+  '/_app/inventory/missing-tags': typeof AppInventoryMissingTagsRoute
   '/_app/settings/meta': typeof AppSettingsMetaRoute
   '/_app/settings/users': typeof AppSettingsUsersRoute
   '/_app/batches/': typeof AppBatchesIndexRoute
@@ -270,6 +279,7 @@ export interface FileRouteTypes {
     | '/content/$id'
     | '/content/new'
     | '/inventory/$id'
+    | '/inventory/missing-tags'
     | '/settings/meta'
     | '/settings/users'
     | '/batches/'
@@ -295,6 +305,7 @@ export interface FileRouteTypes {
     | '/content/$id'
     | '/content/new'
     | '/inventory/$id'
+    | '/inventory/missing-tags'
     | '/settings/meta'
     | '/settings/users'
     | '/batches'
@@ -323,6 +334,7 @@ export interface FileRouteTypes {
     | '/_app/content/$id'
     | '/_app/content/new'
     | '/_app/inventory/$id'
+    | '/_app/inventory/missing-tags'
     | '/_app/settings/meta'
     | '/_app/settings/users'
     | '/_app/batches/'
@@ -494,6 +506,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsMetaRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/inventory/missing-tags': {
+      id: '/_app/inventory/missing-tags'
+      path: '/missing-tags'
+      fullPath: '/inventory/missing-tags'
+      preLoaderRoute: typeof AppInventoryMissingTagsRouteImport
+      parentRoute: typeof AppInventoryRoute
+    }
     '/_app/inventory/$id': {
       id: '/_app/inventory/$id'
       path: '/$id'
@@ -541,11 +560,13 @@ const AppBatchesRouteWithChildren = AppBatchesRoute._addFileChildren(
 
 interface AppInventoryRouteChildren {
   AppInventoryIdRoute: typeof AppInventoryIdRoute
+  AppInventoryMissingTagsRoute: typeof AppInventoryMissingTagsRoute
   AppInventoryIndexRoute: typeof AppInventoryIndexRoute
 }
 
 const AppInventoryRouteChildren: AppInventoryRouteChildren = {
   AppInventoryIdRoute: AppInventoryIdRoute,
+  AppInventoryMissingTagsRoute: AppInventoryMissingTagsRoute,
   AppInventoryIndexRoute: AppInventoryIndexRoute,
 }
 

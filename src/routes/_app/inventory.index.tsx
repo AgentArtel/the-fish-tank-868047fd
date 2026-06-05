@@ -18,7 +18,7 @@ import { setInventoryAvailability, setInventoryLiveSale } from "@/lib/ops.functi
 import { PhotoOnFileWizard, inventoryHasPhoto } from "@/components/photo-on-file-wizard";
 import { QuickAddButton } from "@/components/quick-add-fab";
 import { Button } from "@/components/ui/button";
-import { PackagePlus } from "lucide-react";
+import { PackagePlus, Tag } from "lucide-react";
 
 export const Route = createFileRoute("/_app/inventory/")({ component: InventoryPage });
 
@@ -53,7 +53,10 @@ function InventoryPage() {
             {INVENTORY_AVAILABILITY.map(s => <SelectItem key={s} value={s}>{INVENTORY_AVAILABILITY_LABELS[s]}</SelectItem>)}
           </SelectContent>
         </Select>
-        <div className="ml-auto">
+        <div className="ml-auto flex gap-2">
+          <Button asChild size="sm" variant="outline">
+            <Link to="/inventory/missing-tags"><Tag className="w-4 h-4 mr-1" /> Missing tags</Link>
+          </Button>
           <QuickAddButton size="sm">Quick Add</QuickAddButton>
         </div>
       </div>
