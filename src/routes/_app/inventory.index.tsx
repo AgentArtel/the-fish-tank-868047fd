@@ -100,6 +100,8 @@ function InventoryPage() {
 function InventoryRow({ item, onDone }: { item: any; onDone: () => void }) {
   const setAvail = useServerFn(setInventoryAvailability);
   const setLive = useServerFn(setInventoryLiveSale);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [pendingAvail, setPendingAvail] = useState<string | null>(null);
 
   const { data: locations } = useQuery({
     queryKey: ["all-locations"],
@@ -111,9 +113,16 @@ function InventoryRow({ item, onDone }: { item: any; onDone: () => void }) {
     const { error } = await supabase.from("inventory_items").update({ location_id: locationId === "none" ? null : locationId }).eq("id", item.id);
     if (error) toast.error(error.message); else onDone();
   };
-  const changeAvail = async (s: string) => {
+  const applyAvail = async (s: string) => {
     try { await setAvail({ data: { id: item.id, status: s as any } }); onDone(); }
     catch (e: any) { toast.error(e.message); }
+  };
+  const changeAvail = async (s: string) => {
+    if (s === "available") {
+      const hasPhoto = await inventoryHasPhoto(item.id);
+      if (!hasPhoto) { setPendingAvail(s); setWizardOpen(true); return; }
+    }
+    applyAvail(s);
   };
   const changeLive = async (s: string) => {
     try { await setLive({ data: { id: item.id, status: s as any } }); onDone(); }
