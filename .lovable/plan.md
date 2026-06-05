@@ -42,13 +42,17 @@
 - `getShopOverview` aggregates stock value by `item_type` server-side
 - `/dashboard` shows Livestock / Coral / Dry goods KPIs + total + "Other" footnote
 
-## Current priority queue (re-prioritized)
+### Sprint 6 — QR deep-linking + public catalog
+- `/inventory` accepts `?location=:id&descendants=1&type=:t` with filter chips
+- QR labels auto-encode `descendants=1` for container kinds
+- Public `/catalog` route (no auth): `getPublicCatalog` via `supabaseAdmin`, sanitized projection (no cost/vendor/internal status), signed photo URLs, same query params as `/inventory` so scanned labels deep-link for customers too
 
-1. **QR deep-linking + customer catalog** — `/inventory?location=:id&descendants=1&type=:t` filtering ✅ (part 1 shipped 2026-06-05); public `/catalog` route still pending (part 2)
-2. **Intake capture upgrades** — Barcode scan on receive (ZXing) + per-row photo on bulk add
-3. **Per-type fields + pricing approval queue** — JSONB `attrs` per item_type; admin override review UI
-4. **AI parsing bring-your-own key** — Workspace OpenAI/Gemini key, fallback to Lovable AI Gateway
-5. **Audit + Clover** — Static + browser automation audit, then Clover POS read-sync
+## Current priority queue
+
+1. **Intake capture upgrades** — Barcode scan on receive (ZXing) + per-row photo on bulk add
+2. **Per-type fields + pricing approval queue** — JSONB `attrs` per item_type; admin override review UI
+3. **AI parsing bring-your-own key** — Workspace OpenAI/Gemini key, fallback to Lovable AI Gateway
+4. **Audit + Clover** — Static + browser automation audit, then Clover POS read-sync
 
 ## Invariants (never override)
 

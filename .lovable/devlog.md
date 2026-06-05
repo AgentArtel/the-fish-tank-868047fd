@@ -4,6 +4,40 @@ Living record of what's been built, what was extra/unplanned, and what's still a
 
 ---
 
+## 2026-06-05 (Sprint 6 · part 2) — Public `/catalog` route
+
+Customers (and anyone with a scanned label URL) can now browse what's in stock without signing in. New top-level `/catalog` route, no auth gate, SSR. Pulls `availability_status='available'` items that have `quantity_available > 0`, `retail_price > 0`, and at least one photo on file — same trust gate the photo-on-file wizard already enforces. Accepts the exact same `?location=`, `?descendants=1`, `?type=` query params as `/inventory`, so QR labels printed for staff also work as public catalog deep links. Includes debounced search by name / scientific name, type filter, active-filter chips, and lazy-loaded image grid.
+
+Server function `getPublicCatalog` is unauthenticated and uses `supabaseAdmin` (dynamic import inside the handler) with a tightly scoped projection — no wholesale cost, no vendor, no internal status fields ever leave the server. Photos are returned as 1-hour signed URLs, preferring `website` > `social`/`live_sale` > `internal` tag when an item has multiple shots.
+
+### Planned vs shipped
+
+| Plan item | Status |
+|---|---|
+| Public `/catalog` route, no auth, SSR-friendly | Done |
+| `getPublicCatalog` server fn (admin client, sanitized projection) | Done |
+| Filters: search, type, location (+ descendants), URL-driven | Done |
+| Photo-first grid; items without photos are hidden | Done |
+| Reuses QR label format from Sprint 6 · part 1 (zero label changes) | Done |
+| SEO head() with og:title / og:description / twitter tags | Done |
+| Customer-facing QR variant pointing at `/catalog` | Deferred (existing labels work; revisit if shop wants outward-facing signage) |
+
+### Migrations
+
+- None. Pure read path through `supabaseAdmin` with safe column projection.
+
+### Files
+
+- new `src/lib/catalog.functions.ts` — `getPublicCatalog` server fn (admin client, descendant resolver, signed-URL batching).
+- new `src/routes/catalog.tsx` — public route, validateSearch, filter UI, photo grid, og tags.
+
+### What's next (mirrors roadmap)
+
+1. Sprint 7 — Intake capture upgrades (barcode scan on receive, bulk-add per-row photo).
+2. Sprint 8 — Per-type fields (coral/dry_good/fish) + pricing approval queue.
+3. Sprint 9 — AI parsing bring-your-own key (OpenAI / Gemini).
+4. Sprint 10 — Static + browser automation audit, then Clover POS sync.
+
 ## 2026-06-05 (Sprint 6 · part 1) — QR deep-linking on `/inventory`
 
 Printed QR labels now actually do something useful when scanned. `/inventory` accepts `?location=:uuid`, `?descendants=1`, and `?type=:itemType` search params, filters the list server-side, and shows clearable filter chips with the resolved location name + a one-click toggle to include sub-locations. The QR label generator on `/store-locations` encodes `descendants=1` automatically for container kinds (zone/room/rack/shelf/freezer/cooler) so scanning a "Coral Room" label shows everything inside it, not just items directly tagged to the room itself.
