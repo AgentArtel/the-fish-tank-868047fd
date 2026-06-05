@@ -86,9 +86,9 @@ function InventoryPage() {
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["inventory"] });
 
-  const clearLocation = () => nav({ search: (prev) => ({ ...prev, location: undefined, descendants: undefined }) });
-  const clearType = () => nav({ search: (prev) => ({ ...prev, type: undefined }) });
-  const toggleDescendants = () => nav({ search: (prev) => ({ ...prev, descendants: descendants ? undefined : true }) });
+  const clearLocation = () => nav({ search: (prev: any) => ({ ...prev, location: undefined, descendants: undefined }) });
+  const clearType = () => nav({ search: (prev: any) => ({ ...prev, type: undefined }) });
+  const toggleDescendants = () => nav({ search: (prev: any) => ({ ...prev, descendants: descendants ? undefined : true }) });
 
   const hasActiveFilters = !!locationId || !!type;
 
