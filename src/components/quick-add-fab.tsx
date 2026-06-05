@@ -395,6 +395,7 @@ function MarkdownBulk({
   const [vendorId, setVendorId] = useState<string>("");
   const [bulkPhoto, setBulkPhoto] = useState<File | null>(null);
   const [bulkPreview, setBulkPreview] = useState<string>("");
+  const [rowPhotos, setRowPhotos] = useState<Record<number, { file: File; preview: string }>>({});
 
   const parseFn = useServerFn(parseInventoryMarkdown);
   const dedupeFn = useServerFn(findInventoryDuplicates);
@@ -443,7 +444,27 @@ function MarkdownBulk({
 
   const updateRow = (i: number, patch: Partial<ReviewRow>) =>
     setRows(rs => rs.map((r, idx) => idx === i ? { ...r, ...patch } : r));
-  const removeRow = (i: number) => setRows(rs => rs.filter((_, idx) => idx !== i));
+  const removeRow = (i: number) => {
+    setRows(rs => rs.filter((_, idx) => idx !== i));
+    setRowPhotos(rp => {
+      const next: typeof rp = {};
+      for (const [k, v] of Object.entries(rp)) {
+        const ki = Number(k);
+        if (ki === i) continue;
+        next[ki > i ? ki - 1 : ki] = v;
+      }
+      return next;
+    });
+  };
+  const setRowPhoto = (i: number, file: File | null) => {
+    setRowPhotos(rp => {
+      const next = { ...rp };
+      if (next[i]?.preview) URL.revokeObjectURL(next[i].preview);
+      if (file) next[i] = { file, preview: URL.createObjectURL(file) };
+      else delete next[i];
+      return next;
+    });
+  };
 
   const saveAll = async () => {
     if (rows.length === 0) { toast.error("Nothing to save"); return; }
