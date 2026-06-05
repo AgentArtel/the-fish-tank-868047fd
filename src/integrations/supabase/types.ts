@@ -700,6 +700,53 @@ export type Database = {
           },
         ]
       }
+      store_location_media: {
+        Row: {
+          caption: string | null
+          created_at: string
+          id: string
+          is_primary: boolean
+          location_id: string
+          public_url: string
+          sort_order: number
+          storage_path: string
+          updated_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          location_id: string
+          public_url: string
+          sort_order?: number
+          storage_path: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          location_id?: string
+          public_url?: string
+          sort_order?: number
+          storage_path?: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_location_media_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "store_locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       store_locations: {
         Row: {
           capacity_notes: string | null
@@ -711,7 +758,9 @@ export type Database = {
           name: string
           notes: string | null
           parent_location_id: string | null
+          primary_photo_url: string | null
           slug: string
+          sort_order: number
           updated_at: string
         }
         Insert: {
@@ -724,7 +773,9 @@ export type Database = {
           name: string
           notes?: string | null
           parent_location_id?: string | null
+          primary_photo_url?: string | null
           slug: string
+          sort_order?: number
           updated_at?: string
         }
         Update: {
@@ -737,7 +788,9 @@ export type Database = {
           name?: string
           notes?: string | null
           parent_location_id?: string | null
+          primary_photo_url?: string | null
           slug?: string
+          sort_order?: number
           updated_at?: string
         }
         Relationships: [
@@ -1289,7 +1342,13 @@ export type Database = {
       show_trgm: { Args: { "": string }; Returns: string[] }
     }
     Enums: {
-      app_role: "admin" | "creator" | "reviewer"
+      app_role:
+        | "admin"
+        | "creator"
+        | "reviewer"
+        | "manager"
+        | "staff"
+        | "viewer"
       availability_status:
         | "available"
         | "sold"
@@ -1556,7 +1615,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "creator", "reviewer"],
+      app_role: ["admin", "creator", "reviewer", "manager", "staff", "viewer"],
       availability_status: [
         "available",
         "sold",
