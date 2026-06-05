@@ -178,7 +178,7 @@ function Dashboard() {
             tone={(w?.liveSale ?? 0) > 0 ? "good" : "default"}
           />
           <Kpi
-            label="Stock value"
+            label="Total stock value"
             value={data ? fmtMoney(data.stockValue) : "—"}
             sub="Retail × available qty"
             icon={DollarSign}
@@ -186,6 +186,41 @@ function Dashboard() {
           />
         </div>
       </section>
+
+      {/* Stock value by category */}
+      <section>
+        <div className="flex items-baseline justify-between mb-3">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Stock value by category</h2>
+          <span className="text-xs text-muted-foreground">
+            Total {data ? fmtMoney(data.stockValue) : "—"}
+            {data && data.stockByCat.other > 0 ? ` · Other ${fmtMoney(data.stockByCat.other)}` : ""}
+          </span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <Kpi
+            label="Livestock"
+            value={data ? fmtMoney(data.stockByCat.livestock) : "—"}
+            sub="Fish, inverts, live rock"
+            icon={Boxes}
+            to="/inventory"
+          />
+          <Kpi
+            label="Coral"
+            value={data ? fmtMoney(data.stockByCat.coral) : "—"}
+            sub="All coral"
+            icon={Boxes}
+            to="/inventory"
+          />
+          <Kpi
+            label="Dry goods"
+            value={data ? fmtMoney(data.stockByCat.dryGoods) : "—"}
+            sub="Dry goods & equipment"
+            icon={Boxes}
+            to="/inventory"
+          />
+        </div>
+      </section>
+
 
       {/* Recents */}
       <section className="grid lg:grid-cols-3 gap-4">
