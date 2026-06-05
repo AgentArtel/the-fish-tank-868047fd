@@ -16,7 +16,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { ITEM_TYPES, ITEM_TYPE_LABELS, type ItemType } from "@/lib/ops";
-import { quickAddInventoryItem, parseTagPhoto, parseInventoryMarkdown, quickCreateVendor } from "@/lib/ops.functions";
+import { quickAddInventoryItem, parseTagPhoto, parseInventoryMarkdown, quickCreateVendor, findInventoryDuplicates, bulkImportInventoryRows } from "@/lib/ops.functions";
+import { Badge } from "@/components/ui/badge";
 
 type Mode = "livestock" | "dry_good";
 
