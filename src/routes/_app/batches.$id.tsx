@@ -27,7 +27,9 @@ import {
   fmtMoney,
   type VendorLineReview,
 } from "@/lib/ops";
-import { convertLineItemsToInventory, getSignedVendorInvoiceUrl, extractBatchWithAI, receiveBatchLines, uploadDoaPhoto, getSignedInventoryMediaUrl } from "@/lib/ops.functions";
+import { convertLineItemsToInventory, getSignedVendorInvoiceUrl, extractBatchWithAI, receiveBatchLines, uploadDoaPhoto, getSignedInventoryMediaUrl, promoteQuickAddBatchVendor, computeQuickAddReconciliation, confirmReconciliation } from "@/lib/ops.functions";
+import { ReconcileSection } from "@/components/reconcile-section";
+
 
 export const Route = createFileRoute("/_app/batches/$id")({ component: BatchDetail });
 
