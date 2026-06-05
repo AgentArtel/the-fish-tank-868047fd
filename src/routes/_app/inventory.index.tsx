@@ -18,7 +18,7 @@ import { setInventoryAvailability, setInventoryLiveSale } from "@/lib/ops.functi
 import { PhotoOnFileWizard, inventoryHasPhoto } from "@/components/photo-on-file-wizard";
 import { QuickAddButton } from "@/components/quick-add-fab";
 import { Button } from "@/components/ui/button";
-import { PackagePlus } from "lucide-react";
+import { PackagePlus, Tag } from "lucide-react";
 
 export const Route = createFileRoute("/_app/inventory/")({ component: InventoryPage });
 
