@@ -8,7 +8,7 @@ export const getWorkload = createServerFn({ method: "GET" })
 
     const [batches, pricing, inv, media, content] = await Promise.all([
       supabase.from("vendor_batches").select("id,intake_status"),
-      supabase.from("intake_lines")
+      supabase.from("vendor_line_items")
         .select("id", { count: "exact", head: true })
         .eq("kind", "sellable")
         .neq("pricing_status", "approved")
