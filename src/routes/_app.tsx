@@ -140,6 +140,21 @@ function SidebarBody({
                     const Icon = item.icon;
                     const active = pathname === item.to || (item.to !== "/dashboard" && pathname.startsWith(item.to + "/"));
                     const count = item.badge && workload ? ((workload as any)[item.badge] ?? 0) : 0;
+                    if (item.soon && item.to !== "/tasks") {
+                      return (
+                        <div
+                          key={item.to}
+                          className="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted-foreground/70 cursor-not-allowed"
+                          title="Coming soon"
+                        >
+                          <Icon className="w-4 h-4" />
+                          <span className="flex-1">{item.label}</span>
+                          <span className="text-[9px] uppercase font-semibold tracking-wide bg-muted text-muted-foreground rounded px-1.5 py-0.5">
+                            Soon
+                          </span>
+                        </div>
+                      );
+                    }
                     return (
                       <Link
                         key={item.to}
