@@ -809,7 +809,9 @@ export const quickAddInventoryItem = createServerFn({ method: "POST" })
           extraction_status: "manual",
           invoice_date: today.toISOString().slice(0,10),
           notes: "Auto-created Quick Add batch (in-store restock).",
+          is_quick_add: true,
           created_by: userId,
+
         }).select("id").single();
       if (cErr) throw new Error(cErr.message);
       batchId = created.id;
