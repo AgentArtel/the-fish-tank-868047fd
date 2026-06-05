@@ -31,8 +31,8 @@ export const getWorkload = createServerFn({ method: "GET" })
     const invRows = inv.data ?? [];
     const inventoryTotal = invRows.length;
     const available = invRows.filter(i => i.availability_status === "available").length;
-    const hold = invRows.filter(i => i.availability_status === "hold").length;
-    const liveSale = invRows.filter(i => i.live_sale_status && i.live_sale_status !== "none").length;
+    const hold = invRows.filter(i => i.availability_status === "on_hold" || i.availability_status === "quarantine").length;
+    const liveSale = invRows.filter(i => i.live_sale_status === "live" || i.live_sale_status === "staged").length;
 
     // Items with at least one photo tagged with a price tag.
     const taggedSet = new Set(
