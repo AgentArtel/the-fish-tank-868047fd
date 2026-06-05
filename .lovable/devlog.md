@@ -4,6 +4,39 @@ Living record of what's been built, what was extra/unplanned, and what's still a
 
 ---
 
+## 2026-06-05 (later) — UX polish: mobile sidebar + flexible location nesting
+
+Two setup-quality issues blocking real use of the app on the floor.
+
+### Planned vs shipped
+
+| Plan item | Status |
+|---|---|
+| Mobile-collapsible sidebar (Sheet drawer + hamburger top bar; desktop unchanged) | Done |
+| Auto-close mobile drawer on route change | Done |
+| Allow arbitrary nesting in `store_locations` (room → freezer → shelf → bin, etc.) | Done |
+| New location kinds: `room`, `rack`, `shelf`, `bin`, `freezer`, `cooler` | Done |
+| Recursive tree UI with expand/collapse + "Add inside" on container kinds | Done |
+| Parent picker excludes self + own descendants (cycle-safe) | Done |
+
+### Migrations
+
+- `20260605_*` — `ALTER TYPE store_location_kind ADD VALUE` for room, rack, shelf, bin, freezer, cooler.
+
+### Files
+
+- edited `src/lib/ops.ts` — extended `STORE_LOCATION_KINDS`/labels, added `STORE_LOCATION_CONTAINER_KINDS`.
+- rewrote `src/routes/_app/store-locations.tsx` — recursive tree, generalized dialog (any container can be a parent).
+- edited `src/routes/_app.tsx` — extracted `SidebarBody`, desktop `aside` hidden on mobile, mobile `Sheet` drawer with hamburger header.
+
+### What's next (unchanged order)
+
+1. Sprint 2 — Bulk paste import with dedupe (next).
+2. Sprint 3 — Photo wizard for Quick Add (camera-first capture).
+3. Sprint 4 — Missing-tag export (printable list of inventory needing labels).
+
+---
+
 ## 2026-06-05 — Sprint 1.6: Attach-PO-later reconciliation for Quick Add batches
 
 When a restock is logged via Quick Add and the vendor PO/invoice shows up later, the user can now upload it onto the same batch and reconcile extracted PO lines against the inventory items they already created on the floor.
