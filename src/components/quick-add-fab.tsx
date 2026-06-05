@@ -609,9 +609,17 @@ function MarkdownBulk({
                   <Input type="number" step="0.01" className="col-span-2 h-8" value={r.retail_price ?? ""}
                     onChange={e => updateRow(i, { retail_price: Number(e.target.value) })} placeholder="Retail $" />
                 </div>
+                {r.decision === "create" && (
+                  <RowPhotoSlot
+                    photo={rowPhotos[i]}
+                    hasSharedFallback={!!bulkPhoto}
+                    onPick={(f) => setRowPhoto(i, f)}
+                  />
+                )}
               </div>
             ))}
           </div>
+
 
           <div className="grid sm:grid-cols-2 gap-3">
             <PhotoPicker
