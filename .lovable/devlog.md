@@ -149,14 +149,18 @@ No schema migration — used existing `vendors` + `inventory_items.vendor_id` co
 
 From `mem://features/intake-roadmap` — kept in sync as items ship:
 
-1. Own-API-key option for AI parsing (user-provided OPENAI/GEMINI key preferred over `LOVABLE_API_KEY`)
-2. Barcode scan on receive (`getUserMedia` + ZXing) → `vendor_item_id` lookup
-3. Purchase order upload + reconciliation (`purchase_orders` + `po_lines`, PO ↔ invoice ↔ received match)
-4. Customer-facing inventory search (public read-only catalog filtered by `availability='available'`)
-5. Per-type fields: coral fragging metadata, dry-good SKU/UPC, fish size/sex/age
-6. Pricing approval queue showing market-rate overrides with reason
-7. Bulk-add: per-row photo upload instead of a single shared photo
-8. Clover POS sync — out of scope until inventory flow is stable
+1. Sprint 2 — Bulk paste import with dedupe (from earlier roadmap of feature sprints)
+2. Sprint 3 — One-time photo-on-file wizard the first time an item is made Available
+3. Sprint 4 — Missing-price-tag export (CSV / printable sheet of items without a tag photo)
+4. Full audit pass using browser automation, tracked in an audit doc
+5. Own-API-key option for AI parsing (user-provided OPENAI/GEMINI key preferred over `LOVABLE_API_KEY`)
+6. Barcode scan on receive (`getUserMedia` + ZXing) → `vendor_item_id` lookup
+7. Customer-facing inventory search (public read-only catalog filtered by `availability='available'`)
+8. Per-type fields: coral fragging metadata, dry-good SKU/UPC, fish size/sex/age
+9. Pricing approval queue showing market-rate overrides with reason
+10. Bulk-add: per-row photo upload instead of a single shared photo
+11. Clover POS sync — out of scope until inventory flow is stable
+
 
 ## Standing rules (in force)
 - AI cannot approve pricing, mark review approved, convert to inventory, or create `inventory_items`
