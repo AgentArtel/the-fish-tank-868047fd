@@ -61,12 +61,20 @@
 - `updateInventoryAttrs` + `updateInventoryItemType` server fns (editor-gated)
 - Pricing approval queue (`/pricing-approval`) shipped earlier; remains the admin override surface
 
+### Sprint 9 — Bring-your-own AI keys
+- `workspace_ai_settings` table (admin-only RLS, singleton row seeded with `provider='lovable'`)
+- `src/lib/ai-call.server.ts` central helper: resolves provider → OpenAI / Gemini OpenAI-compat / Lovable Gateway, records `last_used_*`, optionally falls back to Lovable on BYO failure
+- `getAISettings` / `updateAISettings` / `testAISettings` server fns (admin-gated, masked keys on read)
+- `/settings/ai` admin page (provider switch, masked key inputs, model overrides, test ping, last-error display)
+- Refactored `aiExtractInvoice`, `parseTagPhoto`, `parseInventoryMarkdown` to use `callAIChat`
+
 ## Current priority queue
 
-1. **AI parsing bring-your-own key** — Workspace OpenAI/Gemini key, fallback to Lovable AI Gateway
-2. **Audit + Clover** — Static + browser automation audit, then Clover POS read-sync
-3. **Sprint 7 follow-up** — HID barcode wedge input + persisted scan history for receive audit
-4. **Sprint 8 follow-up** — surface `attrs` in `/catalog` projection + per-type editor on vendor line items during intake review
+1. **Audit + Clover** — Static + browser automation audit, then Clover POS read-sync
+2. **Sprint 7 follow-up** — HID barcode wedge input + persisted scan history for receive audit
+3. **Sprint 8 follow-up** — surface `attrs` in `/catalog` projection + per-type editor on vendor line items during intake review
+4. **Sprint 9 follow-up** — per-feature provider override (e.g. always-Gemini-Pro for invoices) + usage/cost log
+
 
 
 ## Invariants (never override)
