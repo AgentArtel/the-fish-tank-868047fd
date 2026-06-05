@@ -79,9 +79,11 @@ function BatchDetail() {
       />
 
       <BatchHeaderForm batch={batch} onDone={refreshAll} />
+      <ReconcileSection batch={batch} onDone={refreshAll} />
       <LineItemsSection batchId={id} vendorId={batch.vendor_id} lines={lines ?? []} onDone={refreshAll} />
       <ReceiveSection batchId={id} lines={lines ?? []} onDone={refreshAll} />
       <ChargesSection batchId={id} charges={charges ?? []} onDone={refreshAll} />
+
     </div>
   );
 }
