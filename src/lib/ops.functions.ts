@@ -1000,8 +1000,6 @@ export const parseInventoryMarkdown = createServerFn({ method: "POST" })
   }).parse(d))
   .handler(async ({ data, context }) => {
     await requireEditor(context.supabase, context.userId);
-    const apiKey = process.env.LOVABLE_API_KEY;
-    if (!apiKey) throw new Error("AI not configured");
 
     const tool = {
       type: "function",
@@ -1035,26 +1033,27 @@ export const parseInventoryMarkdown = createServerFn({ method: "POST" })
       },
     };
 
-    const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+    let j: any;
+    try {
+      const r = await callAIChat({
+        tier: "flash",
+        lovableModel: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: `You convert pasted markdown/text lists of aquarium store items into structured rows. Default item_type='${data.default_type}'. Quantities default to 1 if missing. Retail price is USD number only.` },
           { role: "user", content: data.markdown },
         ],
         tools: [tool],
         tool_choice: { type: "function", function: { name: "submit_items" } },
-      }),
-    });
-    if (!resp.ok) {
-      const t = await resp.text().catch(()=> "");
-      if (resp.status === 429) throw new Error("AI rate limit. Try again shortly.");
-      if (resp.status === 402) throw new Error("AI credits exhausted.");
-      throw new Error(`AI error ${resp.status}: ${t.slice(0,200)}`);
+      });
+      j = r.json;
+    } catch (e: any) {
+      const s = e?.status;
+      if (s === 429) throw new Error("AI rate limit. Try again shortly.");
+      if (s === 402) throw new Error("AI credits exhausted. Add a workspace OpenAI/Gemini key in Settings → AI or top up Lovable AI.");
+      if (s === 401) throw new Error("AI rejected the configured API key. Update it in Settings → AI.");
+      throw new Error(e?.message ?? "AI call failed");
     }
-    const j = await resp.json();
+
     const call = j?.choices?.[0]?.message?.tool_calls?.[0];
     if (!call?.function?.arguments) throw new Error("AI returned no items");
     const parsed = JSON.parse(call.function.arguments);
