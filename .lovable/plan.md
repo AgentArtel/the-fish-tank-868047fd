@@ -44,7 +44,7 @@
 
 ## Current priority queue (re-prioritized)
 
-1. **QR deep-linking + customer catalog** — `/inventory?location=:id&type=:t` filtering, QR labels deep-link, public `/catalog`
+1. **QR deep-linking + customer catalog** — `/inventory?location=:id&descendants=1&type=:t` filtering ✅ (part 1 shipped 2026-06-05); public `/catalog` route still pending (part 2)
 2. **Intake capture upgrades** — Barcode scan on receive (ZXing) + per-row photo on bulk add
 3. **Per-type fields + pricing approval queue** — JSONB `attrs` per item_type; admin override review UI
 4. **AI parsing bring-your-own key** — Workspace OpenAI/Gemini key, fallback to Lovable AI Gateway
