@@ -47,10 +47,8 @@ Extended the role system so invites/role-assignment cover staff and viewers, and
 
 ---
 
-## 2026-06-05 (UX polish) — Mobile sidebar + flexible locations
-
-
 ## 2026-06-05 (Sprint 2) — Bulk paste import with dedupe
+
 
 Pasted lists now go through a dedupe pass before insert. Each row is tagged New / Likely dup / Exact match against existing inventory; the user can choose Create new, Add qty to existing, or Skip per row, and apply all decisions in a single server call.
 
