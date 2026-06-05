@@ -1,59 +1,59 @@
-# Make Quick Add discoverable + add vendor on the fly
+# Intake & Inventory Plan
 
-## What you're seeing
+## Shipped
 
-Inventory is empty because nothing has been converted from a vendor batch yet, and the Quick Add entry point isn't obvious. The floating `+` button (bottom-right of every app page) opens the Quick Add dialog, but:
+### Sprint 1.5 — Quick Add polish
+- QuickAddButton inline on `/inventory` header + real empty state
+- VendorPickerCombo inside Quick Add (search existing + inline create)
+- `quickCreateVendor` server fn with case-insensitive dedupe
+- Field order in Manual form mirrors restock flow
 
-- The `/inventory` empty state says "Approve and convert vendor line items to populate" and never mentions Quick Add.
-- There's no inline Add button in the page header, so the FAB is easy to miss.
-- Quick Add doesn't let you pick (or create) the vendor the item came from — so existing/restock stock can't capture where it was bought.
+### Sprint 1.6 — Attach-PO-later reconciliation
+- `vendor_batches.is_quick_add` flag
+- `vendor_line_items.{reconciliation_status, reconciled_inventory_item_id, reconciliation_notes}`
+- Server fns: `promoteQuickAddBatchVendor`, `computeQuickAddReconciliation`, `confirmReconciliation`
+- ReconcileSection UI on batch detail
 
-## The fix
+### Sprint 2 — Dedupe-aware bulk import
+- `findInventoryDuplicates` + `bulkImportInventoryRows` server fns
+- Per-row decision: Create / Merge / Skip with name+sci scoring
+- Merge increments quantity; shared photo required when any Create row exists
 
-### 1. Make Quick Add reachable from the page
-- Refactor `src/components/quick-add-fab.tsx`: keep `QuickAddFab` (floating), and export a new `QuickAddButton` (normal button that opens the same dialog, accepts `variant`/`size`/optional `defaultMode`).
-- `src/routes/_app/inventory.index.tsx`: add `<QuickAddButton>Quick Add</QuickAddButton>` to the right of the search/filter row.
-- Replace the one-line empty state with a real empty state inside the table area:
-  - "No inventory yet"
-  - Sub: "Add items as you restock with Quick Add, or convert a vendor batch for a full intake run."
-  - Buttons: `Quick add an item` + outline `Open vendor batches` (Link to `/batches`).
+### Sprint 2.5 — Roles + Location Mapping polish
+- Extended `app_role` enum: admin, manager, staff, viewer
+- `setUserRole` server fn + RoleSelect UI (invite + inline change)
+- `store_location_media` table + photo gallery + star-for-thumbnail
+- Location tree: thumbnails, breadcrumbs, item counts, inline rename, reorder siblings, printable QR labels
+- Mobile-collapsible sidebar (Sheet drawer)
+- `store_locations` supports arbitrary nesting with kinds: room, rack, shelf, bin, freezer, cooler
 
-### 2. Vendor picker inside Quick Add (Manual + Markdown)
-Add a vendor selector to the Quick Add forms so each item records where it was bought.
+### Sprint 3 — Photo-on-file wizard
+- `PhotoOnFileWizard` dialog: camera/file capture, preview, price-tag toggle, auto-upload to `inventory-media`
+- Intercepts availability_status → `available` when no photo on file
+- Wired into `inventory.$id` ControlsCard and `inventory.index` InventoryRow
+- `guard_inventory_photo_required` trigger enforced at DB level
 
-- New small combobox `VendorPickerCombo` inside `quick-add-fab.tsx`:
-  - Searchable list of existing active vendors (queried client-side from `vendors`).
-  - Footer action: "+ Add new vendor…" — opens a tiny inline form (name required, optional contact name/email/phone, notes) that creates the vendor via a new server fn `quickCreateVendor` and immediately selects it.
-  - Vendor is optional (you can leave it blank for legacy stock with unknown source).
+### Sprint 4 — Missing-price-tag export
+- `/inventory/missing-tags` page: grouped by location, shows items lacking `has_price_tag=true`
+- Print + Download CSV buttons
+- Linked from `/inventory` header
 
-- Wire `vendor_id` through:
-  - `quickAddInventoryItem` server fn — add `vendor_id?: string | null` to the input validator, write to `inventory_items.vendor_id` (column already exists per current schema).
-  - The Manual and Markdown bulk submit paths both pass the selected vendor.
+## Current priority queue (re-prioritized)
 
-- New server fn `quickCreateVendor` in `src/lib/ops.functions.ts`:
-  - Editor-gated (`requireEditor`).
-  - Input: `{ name: string; contact_name?: string|null; contact_email?: string|null; contact_phone?: string|null; notes?: string|null }`.
-  - Inserts into `vendors` with `is_active=true`, returns the new id+name.
-  - Trims and rejects empty name; case-insensitive dedupe against existing vendor names (return existing id if match).
+1. **QR deep-linking** — Filter `/inventory` by `?location=:id` so printed QR labels actually work when scanned
+2. **Customer-facing inventory search** — Public read-only catalog filtered by `availability='available'`; no auth required
+3. **Barcode scan on receive** — `getUserMedia` + ZXing to scan vendor barcodes during intake → vendor_item_id lookup
+4. **Bulk-add per-row photo upload** — Instead of one shared photo for the whole batch, allow a photo per row
+5. **Per-type fields** — Coral fragging metadata, dry-good SKU/UPC, fish size/sex/age
+6. **Pricing approval queue** — Market-rate overrides with admin review UI
+7. **Own API key option for AI parsing** — User-provided OPENAI/GEMINI key setting, fallback to Lovable AI Gateway
+8. **Full browser audit pass** — Systematic flow testing + gap documentation
+9. **Clover POS sync** — Deferred until inventory flow is rock solid
 
-### 3. Tiny polish in the Manual form
-- Move the field order to mirror your restock flow: Vendor → Item name → Type → Qty → Retail → Wholesale → Location → Notes.
-- Quantity input keeps "current on-hand" semantics (it already maps to `quantity_received`/`quantity_available` in the existing fn).
+## Invariants (never override)
 
-## Out of scope (still queued)
-
-- Sprint 2 dedupe-aware bulk import.
-- Sprint 3 one-time photo-on-file wizard.
-- Sprint 4 missing-price-tag export.
-- No PO upload path is being added — you confirmed you don't have one for this stock.
-
-## Files touched
-
-- `src/lib/ops.functions.ts` — add `quickCreateVendor`; extend `quickAddInventoryItem` input with `vendor_id`.
-- `src/components/quick-add-fab.tsx` — extract `QuickAddButton`, add `VendorPickerCombo`, thread `vendor_id` through both submit paths, reorder fields.
-- `src/routes/_app/inventory.index.tsx` — header button + new empty state.
-- `.lovable/devlog.md` — append a Sprint-1.5 note for the vendor-on-quick-add addition.
-
-No schema migration needed — `inventory_items.vendor_id` and the `vendors` table already exist.
-
-Approve and I'll implement.
+- AI is draft-only on intake: cannot approve pricing, mark review approved, convert to inventory, or create `inventory_items`.
+- All mutating server fns check `is_active` + role (`requireEditor` for editors, `isAdmin` for admin-only).
+- Pricing baseline is 3× wholesale. Admin must approve before live; override supported per line.
+- Inventory item cannot be `available` without at least one photo (DB trigger + UI intercept).
+- Convert requires `review=approved` AND `pricing=approved` AND admin.
