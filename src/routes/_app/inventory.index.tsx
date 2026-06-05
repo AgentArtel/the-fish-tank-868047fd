@@ -15,6 +15,7 @@ import {
   fmtMoney,
 } from "@/lib/ops";
 import { setInventoryAvailability, setInventoryLiveSale } from "@/lib/ops.functions";
+import { PhotoOnFileWizard, inventoryHasPhoto } from "@/components/photo-on-file-wizard";
 import { QuickAddButton } from "@/components/quick-add-fab";
 import { Button } from "@/components/ui/button";
 import { PackagePlus } from "lucide-react";
