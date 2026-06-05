@@ -82,6 +82,7 @@ function InventoryDetail() {
       </div>
 
       <QuantitiesCard item={item} onDone={refresh} />
+      <PerTypeCard item={item} onDone={refresh} />
       <NotesCard item={item} onDone={refresh} />
       <MediaSection inventoryItemId={id} />
       <ActivityLog logs={logs ?? []} />
