@@ -97,10 +97,10 @@ function FieldInput({ field, value, onChange }: { field: AttrField; value: any; 
     return (
       <div className="space-y-1">
         <Label className="text-xs">{field.label}</Label>
-        <Select value={value ?? ""} onValueChange={(v) => onChange(v || null)}>
+        <Select value={value ?? "__clear__"} onValueChange={(v) => onChange(v === "__clear__" ? null : v)}>
           <SelectTrigger className="h-9"><SelectValue placeholder="—" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="__clear__" onSelect={(e) => { e.preventDefault(); onChange(null); }}>—</SelectItem>
+            <SelectItem value="__clear__">—</SelectItem>
             {(field.options ?? []).map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
           </SelectContent>
         </Select>
