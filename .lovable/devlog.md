@@ -4,6 +4,45 @@ Living record of what's been built, what was extra/unplanned, and what's still a
 
 ---
 
+## 2026-06-05 — Sprint 1.6: Attach-PO-later reconciliation for Quick Add batches
+
+When a restock is logged via Quick Add and the vendor PO/invoice shows up later, the user can now upload it onto the same batch and reconcile extracted PO lines against the inventory items they already created on the floor.
+
+### Planned vs shipped
+
+| Plan item | Status |
+|---|---|
+| Mark new Quick Add batches with `is_quick_add=true` (back-fill existing) | Done |
+| `vendor_line_items.reconciliation_status` + `reconciled_inventory_item_id` + `reconciliation_notes` | Done |
+| `promoteQuickAddBatchVendor` server fn (editor-gated, reassigns vendor on batch + on QA inventory items) | Done |
+| `computeQuickAddReconciliation` server fn (token-overlap name match + scientific-name fallback, returns confirmed / suggested / unmatched PO / unmatched inv) | Done |
+| `confirmReconciliation` server fn (matches, accept-PO-line, flag-missing, flag-extra; respects `inventory_items.source_vendor_line_item_id` UNIQUE) | Done |
+| `ReconcileSection` UI on batch detail (visible only when `is_quick_add=true`) | Done |
+| Vendor promotion combobox at top of section | Done |
+| Reuse existing `extractBatchWithAI` for PO PDF parsing (no separate attach fn needed) | Done |
+| pg_trgm extension enabled for future fuzzy queries | Done |
+
+### Migrations
+
+- `20260605_*_quick_add_po_reconciliation` — `vendor_batches.is_quick_add`, three `vendor_line_items` reconciliation columns + check constraint + index, back-fill of existing quick-add batches, `pg_trgm` extension.
+
+### Files
+
+- `src/lib/ops.functions.ts` — `promoteQuickAddBatchVendor`, `computeQuickAddReconciliation`, `confirmReconciliation`; `quickAddInventoryItem` + `getOrCreateQuickAddBatch` now set `is_quick_add: true`.
+- `src/components/reconcile-section.tsx` — new section component with VendorPromote + ReconcileMatcher.
+- `src/routes/_app/batches.$id.tsx` — import + render `<ReconcileSection>` above line items.
+
+### Notes / decisions
+
+- Matching is in-process JS (normalized token overlap + scientific-name fallback) since both sets are small per-batch. `pg_trgm` is installed for future use (e.g. searching across batches).
+- Activity log uses `action: "updated"` with a `"PO line matched to Quick Add inventory item"` summary — the existing activity-action enum doesn't include a `reconciled` value and we didn't widen it this sprint.
+- `confirmReconciliation` is idempotent: it re-runs the same selections safely, skipping items already linked to other lines.
+- "Flag extras" appends a dated note to the inventory item rather than blocking it — it stays sellable.
+
+---
+
+
+
 ## 2026-06-04 (late) — Sprint 1.5: Quick Add discoverability + vendor on the fly
 
 Unblocking restock-as-you-go: empty inventory page hid the FAB, and Quick Add couldn't capture vendor.
