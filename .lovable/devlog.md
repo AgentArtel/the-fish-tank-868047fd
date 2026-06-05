@@ -4,6 +4,42 @@ Living record of what's been built, what was extra/unplanned, and what's still a
 
 ---
 
+## 2026-06-05 (Sprint 6 · part 1) — QR deep-linking on `/inventory`
+
+Printed QR labels now actually do something useful when scanned. `/inventory` accepts `?location=:uuid`, `?descendants=1`, and `?type=:itemType` search params, filters the list server-side, and shows clearable filter chips with the resolved location name + a one-click toggle to include sub-locations. The QR label generator on `/store-locations` encodes `descendants=1` automatically for container kinds (zone/room/rack/shelf/freezer/cooler) so scanning a "Coral Room" label shows everything inside it, not just items directly tagged to the room itself.
+
+### Planned vs shipped
+
+| Plan item | Status |
+|---|---|
+| `validateSearch` on `/inventory` with zod (`location`, `descendants`, `type`) | Done |
+| Filter inventory query by `location_id` (single or via `IN (descendants)`) | Done |
+| Filter inventory query by `item_type` | Done |
+| Active-filter chips with location name + clear + toggle descendants | Done |
+| Empty-state copy adapts when filters are active | Done |
+| QR label URL encodes `&descendants=1` for container kinds | Done |
+| Public `/catalog` route | Deferred to Sprint 6 · part 2 |
+| Barcode scan on receive | Sprint 7 |
+
+### Migrations
+
+- None.
+
+### Files
+
+- edited `src/routes/_app/inventory.index.tsx` — validateSearch, descendant resolver, filter chips, type filter, shared locations query.
+- edited `src/routes/_app/store-locations.tsx` — QR URL includes `&descendants=1` for container kinds.
+
+### What's next (mirrors roadmap)
+
+1. Sprint 6 · part 2 — Public `/catalog` (read-only, no auth, available items with photos).
+2. Sprint 7 — Intake capture upgrades (barcode scan on receive, bulk-add per-row photo).
+3. Sprint 8 — Per-type fields (coral/dry_good/fish) + pricing approval queue.
+4. Sprint 9 — AI parsing bring-your-own key (OpenAI / Gemini).
+5. Sprint 10 — Static + browser automation audit, then Clover POS sync.
+
+
+
 ## 2026-06-05 (Sprint 5) — Dashboard stock value by category
 
 Owner wanted a glance-level read on where money is tied up. Replaced the single "Stock value" KPI on `/dashboard` with a category breakdown: Livestock (fish + invert + live_rock), Coral, and Dry goods (dry_good + equipment). Total + "Other" footnote shown in the section header. Aggregation done server-side in `getShopOverview` to keep it cheap.

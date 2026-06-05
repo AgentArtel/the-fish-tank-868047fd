@@ -1,50 +1,101 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/page-header";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { OpsBadge, availabilityTone, liveSaleTone, pricingTone } from "@/components/ops-badge";
 import {
   INVENTORY_AVAILABILITY, INVENTORY_AVAILABILITY_LABELS,
   INVENTORY_LIVE_SALE, INVENTORY_LIVE_SALE_LABELS,
   INVENTORY_PRICING_LABELS,
+  ITEM_TYPES, ITEM_TYPE_LABELS, type ItemType,
   fmtMoney,
 } from "@/lib/ops";
 import { setInventoryAvailability, setInventoryLiveSale } from "@/lib/ops.functions";
 import { PhotoOnFileWizard, inventoryHasPhoto } from "@/components/photo-on-file-wizard";
 import { QuickAddButton } from "@/components/quick-add-fab";
 import { Button } from "@/components/ui/button";
-import { PackagePlus, Tag } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { PackagePlus, Tag, X } from "lucide-react";
+import { z } from "zod";
 
-export const Route = createFileRoute("/_app/inventory/")({ component: InventoryPage });
+const searchSchema = z.object({
+  location: z.string().uuid().optional(),
+  descendants: z.union([z.literal("1"), z.literal("0"), z.boolean()]).optional()
+    .transform((v) => v === "1" || v === true ? true : undefined),
+  type: z.enum(ITEM_TYPES).optional(),
+});
+
+export const Route = createFileRoute("/_app/inventory/")({
+  component: InventoryPage,
+  validateSearch: (s) => searchSchema.parse(s),
+});
 
 function InventoryPage() {
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const { location: locationId, descendants, type } = Route.useSearch();
+  const nav = useNavigate({ from: "/inventory" });
   const qc = useQueryClient();
 
+  const { data: allLocations } = useQuery({
+    queryKey: ["all-locations"],
+    queryFn: async () => (await supabase.from("store_locations").select("id,name,is_live_sale,parent_location_id").eq("is_active", true).order("name")).data ?? [],
+    staleTime: 60_000,
+  });
+
+  const locationName = useMemo(
+    () => allLocations?.find((l: any) => l.id === locationId)?.name ?? null,
+    [allLocations, locationId],
+  );
+
+  const locationIds = useMemo(() => {
+    if (!locationId) return null;
+    if (!descendants || !allLocations) return [locationId];
+    const byParent: Record<string, string[]> = {};
+    for (const l of allLocations as any[]) {
+      if (l.parent_location_id) (byParent[l.parent_location_id] ||= []).push(l.id);
+    }
+    const ids = new Set<string>([locationId]);
+    const stack = [locationId];
+    while (stack.length) {
+      const cur = stack.pop()!;
+      for (const c of byParent[cur] ?? []) if (!ids.has(c)) { ids.add(c); stack.push(c); }
+    }
+    return Array.from(ids);
+  }, [locationId, descendants, allLocations]);
+
   const { data } = useQuery({
-    queryKey: ["inventory", q, statusFilter],
+    queryKey: ["inventory", q, statusFilter, locationIds, type],
     queryFn: async () => {
       let query = supabase.from("inventory_items")
         .select("*, store_locations(name,is_live_sale), vendors(name)")
         .order("updated_at",{ascending:false}).limit(500);
       if (statusFilter !== "all") query = query.eq("availability_status", statusFilter as any);
       if (q) query = query.ilike("item_name", `%${q}%`);
+      if (type) query = query.eq("item_type", type);
+      if (locationIds) query = query.in("location_id", locationIds);
       return (await query).data ?? [];
     },
+    enabled: locationId ? !!allLocations : true,
   });
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["inventory"] });
 
+  const clearLocation = () => nav({ search: (prev: any) => ({ ...prev, location: undefined, descendants: undefined }) });
+  const clearType = () => nav({ search: (prev: any) => ({ ...prev, type: undefined }) });
+  const toggleDescendants = () => nav({ search: (prev: any) => ({ ...prev, descendants: descendants ? undefined : true }) });
+
+  const hasActiveFilters = !!locationId || !!type;
+
   return (
     <div className="p-8">
       <PageHeader title="Inventory" description="Store inventory created from approved vendor line items." />
-      <div className="flex gap-2 mb-4 items-center">
+      <div className="flex gap-2 mb-4 items-center flex-wrap">
         <Input placeholder="Search item name…" value={q} onChange={e=>setQ(e.target.value)} className="max-w-xs" />
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="max-w-[200px]"><SelectValue /></SelectTrigger>
@@ -60,6 +111,33 @@ function InventoryPage() {
           <QuickAddButton size="sm">Quick Add</QuickAddButton>
         </div>
       </div>
+      {hasActiveFilters && (
+        <div className="flex gap-2 mb-4 items-center flex-wrap">
+          <span className="text-xs text-muted-foreground">Filters:</span>
+          {locationId && (
+            <>
+              <Badge variant="secondary" className="gap-1">
+                Location: {locationName ?? "…"}
+                {descendants && <span className="text-muted-foreground">+ sub-locations</span>}
+                <button onClick={clearLocation} className="ml-1 hover:text-destructive" aria-label="Clear location filter">
+                  <X className="w-3 h-3" />
+                </button>
+              </Badge>
+              <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={toggleDescendants}>
+                {descendants ? "Exact location only" : "Include sub-locations"}
+              </Button>
+            </>
+          )}
+          {type && (
+            <Badge variant="secondary" className="gap-1">
+              Type: {ITEM_TYPE_LABELS[type as ItemType]}
+              <button onClick={clearType} className="ml-1 hover:text-destructive" aria-label="Clear type filter">
+                <X className="w-3 h-3" />
+              </button>
+            </Badge>
+          )}
+        </div>
+      )}
       <div className="rounded-lg border bg-card overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-left">
@@ -71,23 +149,33 @@ function InventoryPage() {
             </tr>
           </thead>
           <tbody>
-            {(data ?? []).map((i: any) => <InventoryRow key={i.id} item={i} onDone={refresh} />)}
+            {(data ?? []).map((i: any) => <InventoryRow key={i.id} item={i} locations={allLocations ?? []} onDone={refresh} />)}
             {data?.length === 0 && (
               <tr>
                 <td colSpan={8} className="p-10">
                   <div className="flex flex-col items-center text-center gap-3">
                     <PackagePlus className="w-8 h-8 text-muted-foreground" />
                     <div>
-                      <div className="font-medium">No inventory yet</div>
+                      <div className="font-medium">
+                        {hasActiveFilters ? "No items match the current filters" : "No inventory yet"}
+                      </div>
                       <div className="text-sm text-muted-foreground max-w-md">
-                        Add items as you restock with Quick Add, or convert a vendor batch for a full intake run.
+                        {hasActiveFilters
+                          ? "Try clearing a filter, or include sub-locations if this is a zone."
+                          : "Add items as you restock with Quick Add, or convert a vendor batch for a full intake run."}
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <QuickAddButton size="sm">Quick add an item</QuickAddButton>
-                      <Button asChild size="sm" variant="outline">
-                        <Link to="/batches">Open vendor batches</Link>
-                      </Button>
+                      {hasActiveFilters ? (
+                        <Button size="sm" variant="outline" onClick={() => nav({ search: {} })}>Clear filters</Button>
+                      ) : (
+                        <>
+                          <QuickAddButton size="sm">Quick add an item</QuickAddButton>
+                          <Button asChild size="sm" variant="outline">
+                            <Link to="/batches">Open vendor batches</Link>
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </td>
@@ -100,17 +188,11 @@ function InventoryPage() {
   );
 }
 
-function InventoryRow({ item, onDone }: { item: any; onDone: () => void }) {
+function InventoryRow({ item, locations, onDone }: { item: any; locations: any[]; onDone: () => void }) {
   const setAvail = useServerFn(setInventoryAvailability);
   const setLive = useServerFn(setInventoryLiveSale);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [pendingAvail, setPendingAvail] = useState<string | null>(null);
-
-  const { data: locations } = useQuery({
-    queryKey: ["all-locations"],
-    queryFn: async () => (await supabase.from("store_locations").select("id,name,is_live_sale").eq("is_active",true).order("name")).data ?? [],
-    staleTime: 60_000,
-  });
 
   const setLocation = async (locationId: string) => {
     const { error } = await supabase.from("inventory_items").update({ location_id: locationId === "none" ? null : locationId }).eq("id", item.id);
@@ -151,7 +233,7 @@ function InventoryRow({ item, onDone }: { item: any; onDone: () => void }) {
           <SelectTrigger className="h-7 text-xs w-[150px]"><SelectValue placeholder="—" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="none">— None —</SelectItem>
-            {(locations ?? []).map((l: any) => <SelectItem key={l.id} value={l.id}>{l.name}{l.is_live_sale ? " ★" : ""}</SelectItem>)}
+            {locations.map((l: any) => <SelectItem key={l.id} value={l.id}>{l.name}{l.is_live_sale ? " ★" : ""}</SelectItem>)}
           </SelectContent>
         </Select>
       </td>
