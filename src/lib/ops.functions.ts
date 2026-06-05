@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { callAIChat } from "@/lib/ai-call.server";
+
 
 async function isAdmin(supabase: any, userId: string) {
   const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
@@ -524,11 +526,11 @@ export const extractBatchWithAI = createServerFn({ method: "POST" })
       const apiKey = process.env.LOVABLE_API_KEY;
       if (!apiKey) return await failWith("LOVABLE_API_KEY is not configured on the server.");
 
-      const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-pro",
+      let aiJson: any;
+      try {
+        const r = await callAIChat({
+          tier: "pro",
+          lovableModel: "google/gemini-2.5-pro",
           messages: [
             { role: "system", content: SYSTEM_PROMPT },
             {
@@ -541,16 +543,16 @@ export const extractBatchWithAI = createServerFn({ method: "POST" })
           ],
           tools: [EXTRACTION_TOOL],
           tool_choice: { type: "function", function: { name: "submit_invoice_extraction" } },
-        }),
-      });
-
-      if (!aiResp.ok) {
-        const errText = await aiResp.text().catch(() => "");
-        if (aiResp.status === 429) return await failWith("AI rate limit exceeded. Wait a moment and try again.");
-        if (aiResp.status === 402) return await failWith("AI credits exhausted. Top up Lovable AI in workspace settings.");
-        return await failWith(`AI gateway returned ${aiResp.status}: ${errText.slice(0, 500)}`);
+        });
+        aiJson = r.json;
+      } catch (e: any) {
+        const status = e?.status;
+        if (status === 429) return await failWith("AI rate limit exceeded. Wait a moment and try again.");
+        if (status === 402) return await failWith("AI credits exhausted. Top up Lovable AI or add a workspace OpenAI/Gemini key in Settings → AI.");
+        if (status === 401) return await failWith("AI rejected the configured API key. Update it in Settings → AI.");
+        return await failWith(e?.message ?? "AI call failed");
       }
-      const aiJson: any = await aiResp.json();
+
       const toolCall = aiJson?.choices?.[0]?.message?.tool_calls?.[0];
       if (!toolCall?.function?.arguments) {
         return await failWith(`AI did not return a tool call. Raw: ${JSON.stringify(aiJson).slice(0, 500)}`);
@@ -913,9 +915,6 @@ export const parseTagPhoto = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     await requireEditor(supabase, userId);
 
-    const apiKey = process.env.LOVABLE_API_KEY;
-    if (!apiKey) throw new Error("AI not configured (missing LOVABLE_API_KEY)");
-
     const { data: signed, error: sErr } = await supabase.storage
       .from("inventory-media").createSignedUrl(data.storage_path, 600);
     if (sErr) throw new Error(sErr.message);
@@ -949,11 +948,11 @@ export const parseTagPhoto = createServerFn({ method: "POST" })
       },
     };
 
-    const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+    let json: any;
+    try {
+      const r = await callAIChat({
+        tier: "flash",
+        lovableModel: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: "You parse aquarium store price tags / livestock bag labels. Extract trade/common name, scientific name if shown, item type (fish/coral/invert/dry_good/live_rock/equipment/other), retail price (USD number, no symbols), all raw readable text, and whether a price tag is clearly visible. If a field isn't visible, omit it." },
           { role: "user", content: [
@@ -963,15 +962,16 @@ export const parseTagPhoto = createServerFn({ method: "POST" })
         ],
         tools: [tool],
         tool_choice: { type: "function", function: { name: "submit_tag" } },
-      }),
-    });
-    if (!aiResp.ok) {
-      const t = await aiResp.text().catch(()=> "");
-      if (aiResp.status === 429) throw new Error("AI rate limit. Try again shortly.");
-      if (aiResp.status === 402) throw new Error("AI credits exhausted. Add credits in Workspace settings.");
-      throw new Error(`AI error ${aiResp.status}: ${t.slice(0,200)}`);
+      });
+      json = r.json;
+    } catch (e: any) {
+      const s = e?.status;
+      if (s === 429) throw new Error("AI rate limit. Try again shortly.");
+      if (s === 402) throw new Error("AI credits exhausted. Add a workspace OpenAI/Gemini key in Settings → AI or top up Lovable AI.");
+      if (s === 401) throw new Error("AI rejected the configured API key. Update it in Settings → AI.");
+      throw new Error(e?.message ?? "AI call failed");
     }
-    const json = await aiResp.json();
+
     const call = json?.choices?.[0]?.message?.tool_calls?.[0];
     if (!call?.function?.arguments) throw new Error("AI returned no structured output");
     const parsed = JSON.parse(call.function.arguments) as {
@@ -1000,8 +1000,6 @@ export const parseInventoryMarkdown = createServerFn({ method: "POST" })
   }).parse(d))
   .handler(async ({ data, context }) => {
     await requireEditor(context.supabase, context.userId);
-    const apiKey = process.env.LOVABLE_API_KEY;
-    if (!apiKey) throw new Error("AI not configured");
 
     const tool = {
       type: "function",
@@ -1035,26 +1033,27 @@ export const parseInventoryMarkdown = createServerFn({ method: "POST" })
       },
     };
 
-    const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+    let j: any;
+    try {
+      const r = await callAIChat({
+        tier: "flash",
+        lovableModel: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: `You convert pasted markdown/text lists of aquarium store items into structured rows. Default item_type='${data.default_type}'. Quantities default to 1 if missing. Retail price is USD number only.` },
           { role: "user", content: data.markdown },
         ],
         tools: [tool],
         tool_choice: { type: "function", function: { name: "submit_items" } },
-      }),
-    });
-    if (!resp.ok) {
-      const t = await resp.text().catch(()=> "");
-      if (resp.status === 429) throw new Error("AI rate limit. Try again shortly.");
-      if (resp.status === 402) throw new Error("AI credits exhausted.");
-      throw new Error(`AI error ${resp.status}: ${t.slice(0,200)}`);
+      });
+      j = r.json;
+    } catch (e: any) {
+      const s = e?.status;
+      if (s === 429) throw new Error("AI rate limit. Try again shortly.");
+      if (s === 402) throw new Error("AI credits exhausted. Add a workspace OpenAI/Gemini key in Settings → AI or top up Lovable AI.");
+      if (s === 401) throw new Error("AI rejected the configured API key. Update it in Settings → AI.");
+      throw new Error(e?.message ?? "AI call failed");
     }
-    const j = await resp.json();
+
     const call = j?.choices?.[0]?.message?.tool_calls?.[0];
     if (!call?.function?.arguments) throw new Error("AI returned no items");
     const parsed = JSON.parse(call.function.arguments);

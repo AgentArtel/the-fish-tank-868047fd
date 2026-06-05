@@ -482,3 +482,30 @@ From `mem://features/intake-roadmap` — kept in sync as items ship:
 | Pricing queue | `/pricing-approval` was already shipped — admin-gated approve, hooked to `approveLinePricing` |
 
 **Deferred (Sprint 8 follow-up):** vendor line item per-type editor during intake review, expose `attrs` on `/catalog` projection, server-side filters on `/inventory` by attribute (e.g. `?attr.reef_safe=yes`).
+
+---
+
+## Sprint 9 — Bring-Your-Own AI keys
+
+The whole intake stack (`aiExtractInvoice`, `parseTagPhoto`, `parseInventoryMarkdown`) hard-coded the Lovable AI Gateway. That meant any rate limit, credit issue, or "use my own paid OpenAI quota" preference forced us to redeploy. Sprint 9 fixes that without changing any feature behavior.
+
+### What shipped
+
+| Layer | Change |
+|---|---|
+| DB | `workspace_ai_settings` (singleton, admin-only RLS, GRANT/RLS/trigger), seeded with `provider='lovable'` so existing code paths keep working |
+| Helper | `src/lib/ai-call.server.ts` — `callAIChat({ tier, lovableModel, messages, tools, tool_choice })` resolves provider → OpenAI (`api.openai.com`) / Gemini (OpenAI-compat `generativelanguage.googleapis.com/v1beta/openai`) / Lovable Gateway, surfaces upstream status as `e.status`, optionally falls back to Lovable, and records `last_used_at/provider/error` |
+| Server fns | `getAISettings` (masked), `updateAISettings` (clear-with-empty-string, leave-alone-with-undefined), `testAISettings` (ping → "pong") — all admin-gated via `requireAdmin` |
+| Refactor | All three AI call sites now use `callAIChat` with explicit `tier: "pro"` for invoice extraction and `tier: "flash"` for label/list parsing; user-facing errors mention Settings → AI |
+| UI | `/settings/ai` admin page: provider switch (locks providers without a stored key), masked-key inputs with "leave blank to keep existing" semantics, per-tier model overrides, fallback toggle, **Send test ping** button, last-call/last-error panel |
+| Nav | Added "AI keys" entry under Settings, admin-only |
+
+### Security posture
+
+Keys live in `workspace_ai_settings`, RLS = admin-only. The Data API never returns raw keys to non-admins. `getAISettings` returns masked values (first 4 + last 4). The settings table is touched only via `supabaseAdmin` from server fns that themselves run `requireAdmin(supabase, userId)` — so a non-admin can't bypass the masking via the server fn either. The new `last_error` column avoids leaking the key itself — only the upstream response status / message snippet.
+
+### Deferred (Sprint 9 follow-up)
+
+- Per-feature provider override (e.g. always Gemini Pro for invoices regardless of default provider)
+- Persisted AI usage log (per call: feature, provider, model, tokens, latency, cost estimate)
+- Show fallback warnings inline in the UI when an intake call quietly fell back to Lovable

@@ -1330,6 +1330,57 @@ export type Database = {
         }
         Relationships: []
       }
+      workspace_ai_settings: {
+        Row: {
+          fallback_to_lovable: boolean
+          gemini_api_key: string | null
+          gemini_model_flash: string | null
+          gemini_model_pro: string | null
+          id: string
+          last_error: string | null
+          last_used_at: string | null
+          last_used_provider: string | null
+          openai_api_key: string | null
+          openai_model_flash: string | null
+          openai_model_pro: string | null
+          provider: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          fallback_to_lovable?: boolean
+          gemini_api_key?: string | null
+          gemini_model_flash?: string | null
+          gemini_model_pro?: string | null
+          id?: string
+          last_error?: string | null
+          last_used_at?: string | null
+          last_used_provider?: string | null
+          openai_api_key?: string | null
+          openai_model_flash?: string | null
+          openai_model_pro?: string | null
+          provider?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          fallback_to_lovable?: boolean
+          gemini_api_key?: string | null
+          gemini_model_flash?: string | null
+          gemini_model_pro?: string | null
+          id?: string
+          last_error?: string | null
+          last_used_at?: string | null
+          last_used_provider?: string | null
+          openai_api_key?: string | null
+          openai_model_flash?: string | null
+          openai_model_pro?: string | null
+          provider?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

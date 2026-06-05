@@ -60,6 +60,7 @@ const GROUPS: NavGroup[] = [
     label: "Settings",
     items: [
       { to: "/settings/meta", label: "Workspace", icon: Settings },
+      { to: "/settings/ai", label: "AI keys", icon: Settings, adminOnly: true },
       { to: "/settings/clover", label: "Clover POS", icon: Store, soon: true },
       { to: "/settings/users", label: "Users", icon: Users, adminOnly: true },
     ],
