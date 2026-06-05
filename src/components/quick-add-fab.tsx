@@ -466,13 +466,19 @@ function MarkdownBulk({
     });
   };
 
+  const createRowIndexes = () => rows
+    .map((r, i) => ({ r, i }))
+    .filter(({ r }) => r.decision === "create");
+  const rowsNeedingShared = () => createRowIndexes().filter(({ i }) => !rowPhotos[i]);
+
   const saveAll = async () => {
     if (rows.length === 0) { toast.error("Nothing to save"); return; }
     const actionable = rows.filter(r => r.decision !== "skip");
     if (actionable.length === 0) { toast.error("All rows are set to Skip"); return; }
-    const needsPhoto = actionable.some(r => r.decision === "create");
-    if (needsPhoto && !bulkPhoto) {
-      toast.error("A shared photo is required for new items. Either add one or set all rows to Merge / Skip.");
+    const creates = createRowIndexes();
+    const missingShared = rowsNeedingShared();
+    if (creates.length > 0 && missingShared.length > 0 && !bulkPhoto) {
+      toast.error(`${missingShared.length} create row(s) have no photo. Add a per-row photo or a shared fallback.`);
       return;
     }
     const invalid = actionable.find(r =>
@@ -485,17 +491,24 @@ function MarkdownBulk({
 
     setSaving(true);
     try {
-      // Upload shared photo only when at least one row creates.
-      let photo = { path: "", fileName: "" };
-      if (needsPhoto && bulkPhoto) {
+      // Upload shared fallback only if needed by at least one create row.
+      let sharedPath: string | null = null;
+      let sharedName: string | null = null;
+      if (creates.length > 0 && missingShared.length > 0 && bulkPhoto) {
         const p = await uploadToInventoryBucket(bulkPhoto);
-        photo = { path: p.path, fileName: p.fileName };
-      } else {
-        // Backend requires a non-empty path; supply a sentinel that won't be inserted (only "create" rows reach the photo insert).
-        photo = { path: "_unused_no_create_rows", fileName: "noop.jpg" };
+        sharedPath = p.path;
+        sharedName = p.fileName;
       }
+      // Upload per-row photos in parallel.
+      const perRowEntries = Object.entries(rowPhotos);
+      const uploads = await Promise.all(perRowEntries.map(async ([k, { file }]) => {
+        const p = await uploadToInventoryBucket(file);
+        return [Number(k), p] as const;
+      }));
+      const uploadedByIndex: Record<number, { path: string; fileName: string }> = {};
+      for (const [i, p] of uploads) uploadedByIndex[i] = p;
 
-      const payloadRows = rows.map(r => ({
+      const payloadRows = rows.map((r, i) => ({
         item_name: r.item_name.trim(),
         scientific_name: r.scientific_name?.trim() || null,
         item_type: ((r.item_type as ItemType) ?? defaultType),
@@ -505,14 +518,16 @@ function MarkdownBulk({
         notes: r.notes?.trim() || null,
         decision: r.decision,
         merge_target_id: r.decision === "merge" ? r.dupe_match?.id ?? null : null,
+        photo_path: uploadedByIndex[i]?.path ?? null,
+        photo_file_name: uploadedByIndex[i]?.fileName ?? null,
       }));
 
       const result = await bulkImport({ data: {
         rows: payloadRows,
         location_id: locationId || null,
         source_vendor_id: vendorId || null,
-        shared_photo_path: photo.path,
-        shared_photo_file_name: photo.fileName,
+        shared_photo_path: sharedPath,
+        shared_photo_file_name: sharedName,
         set_available: true,
       } });
 
