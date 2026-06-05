@@ -41,7 +41,7 @@ export const getWorkload = createServerFn({ method: "GET" })
         .map(m => m.inventory_item_id as string)
     );
     const missingTags = invRows.filter(i =>
-      i.availability_status !== "archived" && !taggedSet.has(i.id as string)
+      i.availability_status !== "dead_lost" && i.availability_status !== "sold_out" && !taggedSet.has(i.id as string)
     ).length;
 
     const contentRows = content.data ?? [];
