@@ -526,11 +526,11 @@ export const extractBatchWithAI = createServerFn({ method: "POST" })
       const apiKey = process.env.LOVABLE_API_KEY;
       if (!apiKey) return await failWith("LOVABLE_API_KEY is not configured on the server.");
 
-      const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-pro",
+      let aiJson: any;
+      try {
+        const r = await callAIChat({
+          tier: "pro",
+          lovableModel: "google/gemini-2.5-pro",
           messages: [
             { role: "system", content: SYSTEM_PROMPT },
             {
@@ -543,16 +543,16 @@ export const extractBatchWithAI = createServerFn({ method: "POST" })
           ],
           tools: [EXTRACTION_TOOL],
           tool_choice: { type: "function", function: { name: "submit_invoice_extraction" } },
-        }),
-      });
-
-      if (!aiResp.ok) {
-        const errText = await aiResp.text().catch(() => "");
-        if (aiResp.status === 429) return await failWith("AI rate limit exceeded. Wait a moment and try again.");
-        if (aiResp.status === 402) return await failWith("AI credits exhausted. Top up Lovable AI in workspace settings.");
-        return await failWith(`AI gateway returned ${aiResp.status}: ${errText.slice(0, 500)}`);
+        });
+        aiJson = r.json;
+      } catch (e: any) {
+        const status = e?.status;
+        if (status === 429) return await failWith("AI rate limit exceeded. Wait a moment and try again.");
+        if (status === 402) return await failWith("AI credits exhausted. Top up Lovable AI or add a workspace OpenAI/Gemini key in Settings → AI.");
+        if (status === 401) return await failWith("AI rejected the configured API key. Update it in Settings → AI.");
+        return await failWith(e?.message ?? "AI call failed");
       }
-      const aiJson: any = await aiResp.json();
+
       const toolCall = aiJson?.choices?.[0]?.message?.tool_calls?.[0];
       if (!toolCall?.function?.arguments) {
         return await failWith(`AI did not return a tool call. Raw: ${JSON.stringify(aiJson).slice(0, 500)}`);
