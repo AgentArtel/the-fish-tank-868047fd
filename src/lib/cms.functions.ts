@@ -112,7 +112,7 @@ export const inviteUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({
     email: z.string().trim().email().max(255),
-    role: z.enum(["admin","creator","reviewer"]),
+    role: ROLE_ENUM,
     display_name: z.string().trim().min(1).max(120).optional(),
   }).parse(d))
   .handler(async ({ data, context }) => {
