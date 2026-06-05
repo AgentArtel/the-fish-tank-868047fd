@@ -1256,3 +1256,191 @@ export const confirmReconciliation = createServerFn({ method: "POST" })
 
     return { matched, accepted, missing, extras, errors };
   });
+
+// ============================================================
+// Sprint 2 — Bulk paste import with dedupe
+// ============================================================
+
+const ItemTypeEnum = z.enum(["fish","coral","invert","dry_good","live_rock","equipment","other"]);
+
+export const findInventoryDuplicates = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({
+    rows: z.array(z.object({
+      item_name: z.string().min(1).max(200),
+      scientific_name: z.string().max(200).nullable().optional(),
+    })).min(1).max(200),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await requireEditor(supabase, userId);
+
+    // Pull a working set of existing items. For a single-store inventory this
+    // is small; we cap to 2000 to stay safe.
+    const { data: existing, error } = await supabase
+      .from("inventory_items")
+      .select("id, item_name, scientific_name, item_type, quantity_available, retail_price, availability_status, location_id")
+      .neq("availability_status", "dead_lost")
+      .limit(2000);
+    if (error) throw new Error(error.message);
+
+    const list = existing ?? [];
+    const results = data.rows.map((row) => {
+      let best: { item: any; score: number } | null = null;
+      for (const item of list) {
+        const sName = nameScore(row.item_name, item.item_name);
+        const sSci = row.scientific_name && item.scientific_name
+          ? nameScore(row.scientific_name, item.scientific_name) : 0;
+        const score = Math.max(sName, sSci);
+        if (!best || score > best.score) best = { item, score };
+      }
+      let status: "exact" | "likely" | "new" = "new";
+      if (best && best.score >= 0.99) status = "exact";
+      else if (best && best.score >= 0.6) status = "likely";
+      return {
+        input: row,
+        status,
+        match: best && best.score >= 0.6 ? {
+          id: best.item.id,
+          item_name: best.item.item_name,
+          scientific_name: best.item.scientific_name,
+          item_type: best.item.item_type,
+          quantity_available: best.item.quantity_available,
+          retail_price: best.item.retail_price,
+          availability_status: best.item.availability_status,
+          score: Math.round(best.score * 100) / 100,
+        } : null,
+      };
+    });
+    return { results };
+  });
+
+export const bulkImportInventoryRows = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({
+    rows: z.array(z.object({
+      item_name: z.string().min(1).max(200),
+      scientific_name: z.string().max(200).nullable().optional(),
+      item_type: ItemTypeEnum,
+      quantity: z.number().int().positive().max(10000).default(1),
+      retail_price: z.number().nonnegative().max(1000000),
+      wholesale_cost: z.number().nonnegative().max(1000000).nullable().optional(),
+      notes: z.string().max(1000).nullable().optional(),
+      decision: z.enum(["create","merge","skip"]),
+      merge_target_id: z.string().uuid().nullable().optional(),
+    })).min(1).max(200),
+    location_id: z.string().uuid().nullable().optional(),
+    source_vendor_id: z.string().uuid().nullable().optional(),
+    shared_photo_path: z.string().min(1).max(500),
+    shared_photo_file_name: z.string().max(200).default("bulk.jpg"),
+    set_available: z.boolean().default(true),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await requireEditor(supabase, userId);
+
+    // Resolve / create today's quick-add batch (same shape as quickAddInventoryItem).
+    const { data: qaVendor } = await supabase
+      .from("vendors").select("id").eq("slug", "quick-add").maybeSingle();
+    if (!qaVendor) throw new Error("Quick Add vendor not found");
+
+    const today = new Date(); today.setHours(0,0,0,0);
+    const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate()+1);
+    let batchId: string;
+    const { data: existingBatch } = await supabase
+      .from("vendor_batches").select("id")
+      .eq("vendor_id", qaVendor.id).eq("created_by", userId)
+      .gte("created_at", today.toISOString()).lt("created_at", tomorrow.toISOString())
+      .maybeSingle();
+    if (existingBatch) batchId = existingBatch.id;
+    else {
+      const { data: created, error: cErr } = await supabase
+        .from("vendor_batches").insert({
+          vendor_id: qaVendor.id,
+          source_document_type: "manual_entry",
+          intake_status: "converted",
+          extraction_status: "manual",
+          invoice_date: today.toISOString().slice(0,10),
+          notes: "Auto-created Quick Add batch (bulk paste import).",
+          is_quick_add: true,
+          created_by: userId,
+        }).select("id").single();
+      if (cErr) throw new Error(cErr.message);
+      batchId = created.id;
+    }
+
+    let created = 0, merged = 0, skipped = 0;
+    const errors: Array<{ row: string; message: string }> = [];
+    const createdIds: string[] = [];
+
+    const nowIso = new Date().toISOString();
+    for (const r of data.rows) {
+      if (r.decision === "skip") { skipped++; continue; }
+      try {
+        if (r.decision === "merge") {
+          if (!r.merge_target_id) throw new Error("Missing merge target");
+          const { data: cur, error: gErr } = await supabase
+            .from("inventory_items")
+            .select("quantity_available, quantity_received, notes")
+            .eq("id", r.merge_target_id).maybeSingle();
+          if (gErr) throw new Error(gErr.message);
+          if (!cur) throw new Error("Target item not found");
+          const stamp = `[${nowIso.slice(0,10)}] Bulk merge +${r.quantity} via Quick Add`;
+          const notes = cur.notes ? `${cur.notes}\n${stamp}` : stamp;
+          const { error: uErr } = await supabase.from("inventory_items").update({
+            quantity_available: (cur.quantity_available ?? 0) + r.quantity,
+            quantity_received: (cur.quantity_received ?? 0) + r.quantity,
+            notes,
+          }).eq("id", r.merge_target_id);
+          if (uErr) throw new Error(uErr.message);
+          merged++;
+          continue;
+        }
+        // decision === "create"
+        const { data: inv, error: insErr } = await supabase.from("inventory_items").insert({
+          source_vendor_batch_id: batchId,
+          vendor_id: data.source_vendor_id ?? qaVendor.id,
+          item_name: r.item_name,
+          scientific_name: r.scientific_name ?? null,
+          item_type: r.item_type,
+          quantity_received: r.quantity,
+          quantity_available: r.quantity,
+          wholesale_cost: r.wholesale_cost ?? null,
+          retail_price: r.retail_price,
+          pricing_status: "approved",
+          location_id: data.location_id ?? null,
+          availability_status: "incoming",
+          live_sale_status: "not_eligible",
+          needs_photo: false,
+          notes: r.notes ?? null,
+          received_at: nowIso,
+          received_by: userId,
+          created_by: userId,
+        }).select("id").single();
+        if (insErr) throw new Error(insErr.message);
+
+        const { error: mErr } = await supabase.from("inventory_media").insert({
+          inventory_item_id: inv.id,
+          storage_path: data.shared_photo_path,
+          file_name: data.shared_photo_file_name,
+          media_type: "image",
+          tag: "internal",
+          uploader_id: userId,
+          has_price_tag: false,
+          notes: "Shared photo from bulk paste import",
+        });
+        if (mErr) throw new Error(`Photo: ${mErr.message}`);
+
+        if (data.set_available && data.location_id) {
+          await supabase.from("inventory_items")
+            .update({ availability_status: "available" }).eq("id", inv.id);
+        }
+        createdIds.push(inv.id);
+        created++;
+      } catch (e: any) {
+        errors.push({ row: r.item_name, message: e?.message ?? "Failed" });
+      }
+    }
+
+    return { created, merged, skipped, errors, batchId, createdIds };
+  });
