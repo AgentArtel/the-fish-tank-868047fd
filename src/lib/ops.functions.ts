@@ -915,9 +915,6 @@ export const parseTagPhoto = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     await requireEditor(supabase, userId);
 
-    const apiKey = process.env.LOVABLE_API_KEY;
-    if (!apiKey) throw new Error("AI not configured (missing LOVABLE_API_KEY)");
-
     const { data: signed, error: sErr } = await supabase.storage
       .from("inventory-media").createSignedUrl(data.storage_path, 600);
     if (sErr) throw new Error(sErr.message);
@@ -951,11 +948,11 @@ export const parseTagPhoto = createServerFn({ method: "POST" })
       },
     };
 
-    const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+    let json: any;
+    try {
+      const r = await callAIChat({
+        tier: "flash",
+        lovableModel: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: "You parse aquarium store price tags / livestock bag labels. Extract trade/common name, scientific name if shown, item type (fish/coral/invert/dry_good/live_rock/equipment/other), retail price (USD number, no symbols), all raw readable text, and whether a price tag is clearly visible. If a field isn't visible, omit it." },
           { role: "user", content: [
@@ -965,15 +962,16 @@ export const parseTagPhoto = createServerFn({ method: "POST" })
         ],
         tools: [tool],
         tool_choice: { type: "function", function: { name: "submit_tag" } },
-      }),
-    });
-    if (!aiResp.ok) {
-      const t = await aiResp.text().catch(()=> "");
-      if (aiResp.status === 429) throw new Error("AI rate limit. Try again shortly.");
-      if (aiResp.status === 402) throw new Error("AI credits exhausted. Add credits in Workspace settings.");
-      throw new Error(`AI error ${aiResp.status}: ${t.slice(0,200)}`);
+      });
+      json = r.json;
+    } catch (e: any) {
+      const s = e?.status;
+      if (s === 429) throw new Error("AI rate limit. Try again shortly.");
+      if (s === 402) throw new Error("AI credits exhausted. Add a workspace OpenAI/Gemini key in Settings → AI or top up Lovable AI.");
+      if (s === 401) throw new Error("AI rejected the configured API key. Update it in Settings → AI.");
+      throw new Error(e?.message ?? "AI call failed");
     }
-    const json = await aiResp.json();
+
     const call = json?.choices?.[0]?.message?.tool_calls?.[0];
     if (!call?.function?.arguments) throw new Error("AI returned no structured output");
     const parsed = JSON.parse(call.function.arguments) as {
