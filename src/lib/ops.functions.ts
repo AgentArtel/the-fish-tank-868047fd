@@ -296,6 +296,34 @@ export const adjustInventoryQuantities = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const updateInventoryAttrs = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({
+    id: z.string().uuid(),
+    attrs: z.record(z.string(), z.any()),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    await requireEditor(context.supabase, context.userId);
+    const { error } = await context.supabase.from("inventory_items")
+      .update({ attrs: data.attrs }).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const updateInventoryItemType = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({
+    id: z.string().uuid(),
+    item_type: z.enum(["fish","coral","invert","dry_good","live_rock","equipment","other"]).nullable(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    await requireEditor(context.supabase, context.userId);
+    const { error } = await context.supabase.from("inventory_items")
+      .update({ item_type: data.item_type }).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 const AI_CHARGE_TYPES = ["freight","packaging","heat_pack","box","fuel_surcharge","discount","credit","tax","other"] as const;
 
 const aiLineSchema = z.object({
