@@ -471,3 +471,48 @@ function ActivityLog({ logs }: { logs: any[] }) {
     </div>
   );
 }
+
+function PerTypeCard({ item, onDone }: { item: any; onDone: () => void }) {
+  const updateAttrs = useServerFn(updateInventoryAttrs);
+  const updateType = useServerFn(updateInventoryItemType);
+  const [saving, setSaving] = useState(false);
+  const [typeSaving, setTypeSaving] = useState(false);
+
+  const setType = async (v: string) => {
+    setTypeSaving(true);
+    try {
+      await updateType({ data: { id: item.id, item_type: (v || null) as ItemType | null } });
+      toast.success("Item type updated");
+      onDone();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setTypeSaving(false); }
+  };
+
+  const save = async (next: Record<string, any>) => {
+    setSaving(true);
+    try {
+      await updateAttrs({ data: { id: item.id, attrs: next } });
+      toast.success("Details saved");
+      onDone();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-lg border bg-card p-5 flex items-center gap-3">
+        <Label className="text-sm">Item type</Label>
+        <Select value={item.item_type ?? ""} onValueChange={setType} disabled={typeSaving}>
+          <SelectTrigger className="h-9 w-56"><SelectValue placeholder="Choose type…" /></SelectTrigger>
+          <SelectContent>
+            {Object.entries(ITEM_TYPE_LABELS).map(([k, v]) => (
+              <SelectItem key={k} value={k}>{v}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <span className="text-xs text-muted-foreground">Drives which fields appear below.</span>
+      </div>
+      <AttrsEditor itemType={item.item_type} value={item.attrs ?? {}} onSave={save} saving={saving} />
+    </div>
+  );
+}
