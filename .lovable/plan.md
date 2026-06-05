@@ -38,17 +38,17 @@
 - Print + Download CSV buttons
 - Linked from `/inventory` header
 
+### Sprint 5 — Dashboard stock value by category
+- `getShopOverview` aggregates stock value by `item_type` server-side
+- `/dashboard` shows Livestock / Coral / Dry goods KPIs + total + "Other" footnote
+
 ## Current priority queue (re-prioritized)
 
-1. **QR deep-linking** — Filter `/inventory` by `?location=:id` so printed QR labels actually work when scanned
-2. **Customer-facing inventory search** — Public read-only catalog filtered by `availability='available'`; no auth required
-3. **Barcode scan on receive** — `getUserMedia` + ZXing to scan vendor barcodes during intake → vendor_item_id lookup
-4. **Bulk-add per-row photo upload** — Instead of one shared photo for the whole batch, allow a photo per row
-5. **Per-type fields** — Coral fragging metadata, dry-good SKU/UPC, fish size/sex/age
-6. **Pricing approval queue** — Market-rate overrides with admin review UI
-7. **Own API key option for AI parsing** — User-provided OPENAI/GEMINI key setting, fallback to Lovable AI Gateway
-8. **Full browser audit pass** — Systematic flow testing + gap documentation
-9. **Clover POS sync** — Deferred until inventory flow is rock solid
+1. **QR deep-linking + customer catalog** — `/inventory?location=:id&type=:t` filtering, QR labels deep-link, public `/catalog`
+2. **Intake capture upgrades** — Barcode scan on receive (ZXing) + per-row photo on bulk add
+3. **Per-type fields + pricing approval queue** — JSONB `attrs` per item_type; admin override review UI
+4. **AI parsing bring-your-own key** — Workspace OpenAI/Gemini key, fallback to Lovable AI Gateway
+5. **Audit + Clover** — Static + browser automation audit, then Clover POS read-sync
 
 ## Invariants (never override)
 

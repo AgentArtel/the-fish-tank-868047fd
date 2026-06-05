@@ -31,15 +31,23 @@ const getShopOverview = createServerFn({ method: "GET" })
       supabase.from("content_items")
         .select("id, title").eq("status", "needs_media").limit(5),
       supabase.from("inventory_items")
-        .select("retail_price, quantity_available")
+        .select("retail_price, quantity_available, item_type")
         .eq("availability_status", "available"),
     ]);
 
-    const stockValue = (topValue.data ?? []).reduce((sum, r: any) => {
+    const stockByCat = { livestock: 0, coral: 0, dryGoods: 0, other: 0 };
+    let stockValue = 0;
+    for (const r of (topValue.data ?? []) as any[]) {
       const price = Number(r.retail_price ?? 0);
       const qty = Number(r.quantity_available ?? 1);
-      return sum + price * qty;
-    }, 0);
+      const v = price * qty;
+      stockValue += v;
+      const t = r.item_type as string;
+      if (t === "fish" || t === "invert" || t === "live_rock") stockByCat.livestock += v;
+      else if (t === "coral") stockByCat.coral += v;
+      else if (t === "dry_good" || t === "equipment") stockByCat.dryGoods += v;
+      else stockByCat.other += v;
+    }
 
     return {
       recentIntake: recentIntake.data ?? [],
@@ -47,6 +55,7 @@ const getShopOverview = createServerFn({ method: "GET" })
       upcomingContent: upcomingContent.data ?? [],
       needsMedia: needsMedia.data ?? [],
       stockValue,
+      stockByCat,
     };
   });
 
@@ -169,7 +178,7 @@ function Dashboard() {
             tone={(w?.liveSale ?? 0) > 0 ? "good" : "default"}
           />
           <Kpi
-            label="Stock value"
+            label="Total stock value"
             value={data ? fmtMoney(data.stockValue) : "—"}
             sub="Retail × available qty"
             icon={DollarSign}
@@ -177,6 +186,41 @@ function Dashboard() {
           />
         </div>
       </section>
+
+      {/* Stock value by category */}
+      <section>
+        <div className="flex items-baseline justify-between mb-3">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Stock value by category</h2>
+          <span className="text-xs text-muted-foreground">
+            Total {data ? fmtMoney(data.stockValue) : "—"}
+            {data && data.stockByCat.other > 0 ? ` · Other ${fmtMoney(data.stockByCat.other)}` : ""}
+          </span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <Kpi
+            label="Livestock"
+            value={data ? fmtMoney(data.stockByCat.livestock) : "—"}
+            sub="Fish, inverts, live rock"
+            icon={Boxes}
+            to="/inventory"
+          />
+          <Kpi
+            label="Coral"
+            value={data ? fmtMoney(data.stockByCat.coral) : "—"}
+            sub="All coral"
+            icon={Boxes}
+            to="/inventory"
+          />
+          <Kpi
+            label="Dry goods"
+            value={data ? fmtMoney(data.stockByCat.dryGoods) : "—"}
+            sub="Dry goods & equipment"
+            icon={Boxes}
+            to="/inventory"
+          />
+        </div>
+      </section>
+
 
       {/* Recents */}
       <section className="grid lg:grid-cols-3 gap-4">
