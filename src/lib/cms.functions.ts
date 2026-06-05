@@ -63,11 +63,13 @@ export const getSignedUrl = createServerFn({ method: "POST" })
     return { url: signed.signedUrl };
   });
 
+const ROLE_ENUM = z.enum(["admin","manager","creator","reviewer","staff","viewer"]);
+
 export const approveUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({
     userId: z.string().uuid(),
-    role: z.enum(["admin","creator","reviewer"]),
+    role: ROLE_ENUM,
   }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
@@ -76,6 +78,21 @@ export const approveUser = createServerFn({ method: "POST" })
     await supabase.from("profiles").update({
       is_active: true, approved_at: new Date().toISOString(), approved_by: userId,
     }).eq("id", data.userId);
+    await supabase.from("user_roles").insert({ user_id: data.userId, role: data.role });
+    return { ok: true };
+  });
+
+export const setUserRole = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({
+    userId: z.string().uuid(),
+    role: ROLE_ENUM,
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+    if (!(roles ?? []).some((r: any) => r.role === "admin")) throw new Error("Admins only");
+    await supabase.from("user_roles").delete().eq("user_id", data.userId);
     await supabase.from("user_roles").insert({ user_id: data.userId, role: data.role });
     return { ok: true };
   });
