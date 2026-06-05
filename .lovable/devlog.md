@@ -4,6 +4,42 @@ Living record of what's been built, what was extra/unplanned, and what's still a
 
 ---
 
+## 2026-06-05 (Sprint 2) — Bulk paste import with dedupe
+
+Pasted lists now go through a dedupe pass before insert. Each row is tagged New / Likely dup / Exact match against existing inventory; the user can choose Create new, Add qty to existing, or Skip per row, and apply all decisions in a single server call.
+
+### Planned vs shipped
+
+| Plan item | Status |
+|---|---|
+| `findInventoryDuplicates` server fn — name + scientific-name scoring vs existing items | Done |
+| `bulkImportInventoryRows` server fn — atomic-ish per-row create / merge / skip, editor-gated | Done |
+| Reuses today's Quick Add batch (same as single Quick Add) | Done |
+| Merge path increments `quantity_available` + `quantity_received` and stamps notes | Done |
+| Reviewable grid: per-row decision dropdown, candidate name + score + qty + price shown | Done |
+| Shared photo required only when ≥1 row is set to Create | Done |
+| Tally line ("X create · Y merge · Z skip") + summary toast on apply | Done |
+| Vendor + location pickers apply to all rows | Done (existing) |
+
+### Migrations
+
+- None (pg_trgm already enabled in Sprint 1.6; scoring uses the same token-overlap helper as reconciliation).
+
+### Files
+
+- edited `src/lib/ops.functions.ts` — appended `findInventoryDuplicates` + `bulkImportInventoryRows`.
+- edited `src/components/quick-add-fab.tsx` — rewrote `MarkdownBulk` with dedupe pass, per-row decision UI, and single-call bulk apply.
+
+### What's next (unchanged order)
+
+1. Sprint 3 — One-time photo-on-file wizard the first time an item is made Available.
+2. Sprint 4 — Missing-price-tag export (CSV / printable sheet).
+3. Full audit pass via browser automation.
+4. Own-API-key option for AI parsing.
+5. Barcode scan on receive.
+
+---
+
 ## 2026-06-05 (later) — UX polish: mobile sidebar + flexible location nesting
 
 Two setup-quality issues blocking real use of the app on the floor.
