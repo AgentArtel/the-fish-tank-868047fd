@@ -646,7 +646,7 @@ function ReceiveSection({ batchId, lines, onDone }: { batchId: string; lines: an
                 const doaActive = d.loss_reason === "dead_on_arrival" && Number(d.lost_quantity ?? 0) > 0;
                 const doaComplete = have.has("in_bag") && have.has("on_lid");
                 return (
-                  <tr key={l.id} className="border-t align-top">
+                  <tr key={l.id} id={`receive-row-${l.id}`} className="border-t align-top scroll-mt-24 target:bg-amber-50">
                     <td className="p-2">
                       <div className="font-medium">{l.clean_item_name || l.raw_description || "(no name)"}</div>
                       {l.scientific_name && <div className="text-xs italic text-muted-foreground">{l.scientific_name}</div>}
