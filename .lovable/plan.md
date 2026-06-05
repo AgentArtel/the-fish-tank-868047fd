@@ -53,12 +53,20 @@
 - Per-row photo on Quick Add Create rows (parallel uploads); shared photo demoted to fallback
 - `bulkImportInventoryRows` accepts per-row `photo_path` / `photo_file_name`
 
+### Sprint 8 — Per-type fields
+- `inventory_items.attrs` and `vendor_line_items.attrs` JSONB columns (GIN-indexed)
+- Schema-driven editor in `src/lib/item-type-attrs.ts` + `src/components/attrs-editor.tsx` — adding a per-type field is now a code-only change
+- Per-type schemas for fish, coral, invert, live_rock, dry_good, equipment, other (care level, lighting/flow, brand/SKU/warranty, etc.)
+- `PerTypeCard` on `/inventory/:id` with item-type selector + auto-loaded fields
+- `updateInventoryAttrs` + `updateInventoryItemType` server fns (editor-gated)
+- Pricing approval queue (`/pricing-approval`) shipped earlier; remains the admin override surface
+
 ## Current priority queue
 
-1. **Per-type fields + pricing approval queue** — JSONB `attrs` per item_type; admin override review UI
-2. **AI parsing bring-your-own key** — Workspace OpenAI/Gemini key, fallback to Lovable AI Gateway
-3. **Audit + Clover** — Static + browser automation audit, then Clover POS read-sync
-4. **Sprint 7 follow-up** — HID barcode wedge input + persisted scan history for receive audit
+1. **AI parsing bring-your-own key** — Workspace OpenAI/Gemini key, fallback to Lovable AI Gateway
+2. **Audit + Clover** — Static + browser automation audit, then Clover POS read-sync
+3. **Sprint 7 follow-up** — HID barcode wedge input + persisted scan history for receive audit
+4. **Sprint 8 follow-up** — surface `attrs` in `/catalog` projection + per-type editor on vendor line items during intake review
 
 
 ## Invariants (never override)

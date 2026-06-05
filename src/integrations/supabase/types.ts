@@ -265,6 +265,7 @@ export type Database = {
       }
       inventory_items: {
         Row: {
+          attrs: Json
           availability_status: Database["public"]["Enums"]["inventory_availability_status"]
           category: string | null
           created_at: string
@@ -297,6 +298,7 @@ export type Database = {
           wholesale_cost: number | null
         }
         Insert: {
+          attrs?: Json
           availability_status?: Database["public"]["Enums"]["inventory_availability_status"]
           category?: string | null
           created_at?: string
@@ -329,6 +331,7 @@ export type Database = {
           wholesale_cost?: number | null
         }
         Update: {
+          attrs?: Json
           availability_status?: Database["public"]["Enums"]["inventory_availability_status"]
           category?: string | null
           created_at?: string
@@ -1026,6 +1029,7 @@ export type Database = {
           approved_by: string | null
           approved_retail_price: number | null
           assigned_location_id: string | null
+          attrs: Json
           category: string | null
           clean_item_name: string | null
           converted_inventory_item_id: string | null
@@ -1071,6 +1075,7 @@ export type Database = {
           approved_by?: string | null
           approved_retail_price?: number | null
           assigned_location_id?: string | null
+          attrs?: Json
           category?: string | null
           clean_item_name?: string | null
           converted_inventory_item_id?: string | null
@@ -1116,6 +1121,7 @@ export type Database = {
           approved_by?: string | null
           approved_retail_price?: number | null
           assigned_location_id?: string | null
+          attrs?: Json
           category?: string | null
           clean_item_name?: string | null
           converted_inventory_item_id?: string | null
