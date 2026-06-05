@@ -752,54 +752,76 @@ export type Database = {
       }
       store_locations: {
         Row: {
+          area_code: string | null
+          attrs: Json
           capacity_notes: string | null
           created_at: string
           id: string
           is_active: boolean
           is_live_sale: boolean
           kind: Database["public"]["Enums"]["store_location_kind"]
+          location_code: string | null
           name: string
           notes: string | null
           parent_location_id: string | null
+          planned: boolean
           primary_photo_url: string | null
           slug: string
           sort_order: number
+          system_group_id: string | null
           updated_at: string
         }
         Insert: {
+          area_code?: string | null
+          attrs?: Json
           capacity_notes?: string | null
           created_at?: string
           id?: string
           is_active?: boolean
           is_live_sale?: boolean
           kind?: Database["public"]["Enums"]["store_location_kind"]
+          location_code?: string | null
           name: string
           notes?: string | null
           parent_location_id?: string | null
+          planned?: boolean
           primary_photo_url?: string | null
           slug: string
           sort_order?: number
+          system_group_id?: string | null
           updated_at?: string
         }
         Update: {
+          area_code?: string | null
+          attrs?: Json
           capacity_notes?: string | null
           created_at?: string
           id?: string
           is_active?: boolean
           is_live_sale?: boolean
           kind?: Database["public"]["Enums"]["store_location_kind"]
+          location_code?: string | null
           name?: string
           notes?: string | null
           parent_location_id?: string | null
+          planned?: boolean
           primary_photo_url?: string | null
           slug?: string
           sort_order?: number
+          system_group_id?: string | null
           updated_at?: string
         }
         Relationships: [
           {
             foreignKeyName: "store_locations_parent_location_id_fkey"
             columns: ["parent_location_id"]
+            isOneToOne: false
+            referencedRelation: "store_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "store_locations_system_group_id_fkey"
+            columns: ["system_group_id"]
             isOneToOne: false
             referencedRelation: "store_locations"
             referencedColumns: ["id"]
@@ -1506,6 +1528,13 @@ export type Database = {
         | "freezer"
         | "cooler"
         | "bin"
+        | "fish_system"
+        | "coral_system"
+        | "frag_tank"
+        | "growout_tank"
+        | "offsite_storage"
+        | "support_station"
+        | "bulk_storage"
       usage_rights: "owned" | "vendor_allowed" | "needs_permission" | "unknown"
       usage_status: "unused" | "in_use" | "archived"
       vendor_batch_charge_type:
@@ -1783,6 +1812,13 @@ export const Constants = {
         "freezer",
         "cooler",
         "bin",
+        "fish_system",
+        "coral_system",
+        "frag_tank",
+        "growout_tank",
+        "offsite_storage",
+        "support_station",
+        "bulk_storage",
       ],
       usage_rights: ["owned", "vendor_allowed", "needs_permission", "unknown"],
       usage_status: ["unused", "in_use", "archived"],
