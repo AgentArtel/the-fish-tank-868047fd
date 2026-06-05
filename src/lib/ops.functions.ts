@@ -1328,11 +1328,13 @@ export const bulkImportInventoryRows = createServerFn({ method: "POST" })
       notes: z.string().max(1000).nullable().optional(),
       decision: z.enum(["create","merge","skip"]),
       merge_target_id: z.string().uuid().nullable().optional(),
+      photo_path: z.string().min(1).max(500).nullable().optional(),
+      photo_file_name: z.string().max(200).nullable().optional(),
     })).min(1).max(200),
     location_id: z.string().uuid().nullable().optional(),
     source_vendor_id: z.string().uuid().nullable().optional(),
-    shared_photo_path: z.string().min(1).max(500),
-    shared_photo_file_name: z.string().max(200).default("bulk.jpg"),
+    shared_photo_path: z.string().min(1).max(500).nullable().optional(),
+    shared_photo_file_name: z.string().max(200).nullable().optional(),
     set_available: z.boolean().default(true),
   }).parse(d))
   .handler(async ({ data, context }) => {
@@ -1419,15 +1421,19 @@ export const bulkImportInventoryRows = createServerFn({ method: "POST" })
         }).select("id").single();
         if (insErr) throw new Error(insErr.message);
 
+        const photoPath = r.photo_path ?? data.shared_photo_path ?? null;
+        const photoName = r.photo_file_name ?? data.shared_photo_file_name ?? "bulk.jpg";
+        if (!photoPath) throw new Error("No photo provided for this row (set per-row photo or a shared fallback)");
+
         const { error: mErr } = await supabase.from("inventory_media").insert({
           inventory_item_id: inv.id,
-          storage_path: data.shared_photo_path,
-          file_name: data.shared_photo_file_name,
+          storage_path: photoPath,
+          file_name: photoName,
           media_type: "image",
           tag: "internal",
           uploader_id: userId,
           has_price_tag: false,
-          notes: "Shared photo from bulk paste import",
+          notes: r.photo_path ? "Per-row photo from bulk paste import" : "Shared photo from bulk paste import",
         });
         if (mErr) throw new Error(`Photo: ${mErr.message}`);
 
