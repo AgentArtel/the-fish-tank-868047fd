@@ -27,6 +27,7 @@ import {
   parseTagPhoto,
 } from "@/lib/ops.functions";
 import { Sparkles, Loader2 } from "lucide-react";
+import { PhotoOnFileWizard, inventoryHasPhoto } from "@/components/photo-on-file-wizard";
 
 export const Route = createFileRoute("/_app/inventory/$id")({ component: InventoryDetail });
 
