@@ -12,7 +12,7 @@ import {
   LayoutDashboard, Calendar, FileText, Image, Package,
   Megaphone, CheckSquare, Settings, Users, LogOut,
   PackageOpen, Truck, MapPin, ListChecks, DollarSign, Boxes, Menu,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, Store,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_app")({
@@ -60,6 +60,7 @@ const GROUPS: NavGroup[] = [
     label: "Settings",
     items: [
       { to: "/settings/meta", label: "Workspace", icon: Settings },
+      { to: "/settings/clover", label: "Clover POS", icon: Store, soon: true },
       { to: "/settings/users", label: "Users", icon: Users, adminOnly: true },
     ],
   },
