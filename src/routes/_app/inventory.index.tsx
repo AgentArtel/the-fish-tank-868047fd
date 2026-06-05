@@ -158,6 +158,13 @@ function InventoryRow({ item, onDone }: { item: any; onDone: () => void }) {
           <SelectContent>{INVENTORY_AVAILABILITY.map(s => <SelectItem key={s} value={s}>{INVENTORY_AVAILABILITY_LABELS[s]}</SelectItem>)}</SelectContent>
         </Select>
         <div className="mt-1"><OpsBadge label={INVENTORY_AVAILABILITY_LABELS[item.availability_status as keyof typeof INVENTORY_AVAILABILITY_LABELS]} tone={availabilityTone(item.availability_status)} /></div>
+        <PhotoOnFileWizard
+          open={wizardOpen}
+          onOpenChange={setWizardOpen}
+          inventoryItemId={item.id}
+          itemName={item.item_name}
+          onUploaded={async () => { if (pendingAvail) { await applyAvail(pendingAvail); setPendingAvail(null); } }}
+        />
       </td>
       <td className="p-3">
         <Select value={item.live_sale_status} onValueChange={changeLive}>
