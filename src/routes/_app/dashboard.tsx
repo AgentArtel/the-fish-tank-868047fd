@@ -31,15 +31,23 @@ const getShopOverview = createServerFn({ method: "GET" })
       supabase.from("content_items")
         .select("id, title").eq("status", "needs_media").limit(5),
       supabase.from("inventory_items")
-        .select("retail_price, quantity_available")
+        .select("retail_price, quantity_available, item_type")
         .eq("availability_status", "available"),
     ]);
 
-    const stockValue = (topValue.data ?? []).reduce((sum, r: any) => {
+    const stockByCat = { livestock: 0, coral: 0, dryGoods: 0, other: 0 };
+    let stockValue = 0;
+    for (const r of (topValue.data ?? []) as any[]) {
       const price = Number(r.retail_price ?? 0);
       const qty = Number(r.quantity_available ?? 1);
-      return sum + price * qty;
-    }, 0);
+      const v = price * qty;
+      stockValue += v;
+      const t = r.item_type as string;
+      if (t === "fish" || t === "invert" || t === "live_rock") stockByCat.livestock += v;
+      else if (t === "coral") stockByCat.coral += v;
+      else if (t === "dry_good" || t === "equipment") stockByCat.dryGoods += v;
+      else stockByCat.other += v;
+    }
 
     return {
       recentIntake: recentIntake.data ?? [],
@@ -47,6 +55,7 @@ const getShopOverview = createServerFn({ method: "GET" })
       upcomingContent: upcomingContent.data ?? [],
       needsMedia: needsMedia.data ?? [],
       stockValue,
+      stockByCat,
     };
   });
 
