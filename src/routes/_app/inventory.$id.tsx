@@ -200,6 +200,13 @@ function ControlsCard({ item, locations, onDone }: { item: any; locations: any[]
         </div>
         <div><OpsBadge label={INVENTORY_LIVE_SALE_LABELS[item.live_sale_status as keyof typeof INVENTORY_LIVE_SALE_LABELS]} tone={liveSaleTone(item.live_sale_status)} /></div>
       </div>
+      <PhotoOnFileWizard
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        inventoryItemId={item.id}
+        itemName={item.item_name}
+        onUploaded={async () => { if (pendingAvail) { await applyAvail(pendingAvail); setPendingAvail(null); } }}
+      />
     </div>
   );
 }
