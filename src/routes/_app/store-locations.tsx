@@ -53,7 +53,7 @@ async function signLongLived(path: string): Promise<string> {
 }
 
 // ===== page =====
-export default function LocationsPage() {
+function LocationsPage() {
   const { data: locs, refetch: refetchLocs } = useQuery({
     queryKey: ["store-locations"],
     queryFn: async () => (await supabase.from("store_locations").select("*").order("sort_order").order("name")).data ?? [],
