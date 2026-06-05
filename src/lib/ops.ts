@@ -65,17 +65,22 @@ export const INVENTORY_LIVE_SALE_LABELS: Record<InventoryLiveSale,string> = {
   live:"Live", ended:"Ended",
 };
 
-export const STORE_LOCATION_KINDS = ["zone","room","rack","shelf","bin","freezer","cooler","display_tank","coral_flat","live_sale_tank","quarantine","holding","dry_goods","back_of_house","other"] as const;
+export const STORE_LOCATION_KINDS = ["zone","room","rack","shelf","bin","freezer","cooler","display_tank","coral_flat","live_sale_tank","quarantine","holding","dry_goods","back_of_house","fish_system","coral_system","frag_tank","growout_tank","offsite_storage","support_station","bulk_storage","other"] as const;
 export type StoreLocationKind = typeof STORE_LOCATION_KINDS[number];
 export const STORE_LOCATION_KIND_LABELS: Record<StoreLocationKind,string> = {
   zone:"Zone (group)", room:"Room", rack:"Rack", shelf:"Shelf", bin:"Bin",
   freezer:"Freezer", cooler:"Cooler",
   display_tank:"Display tank", coral_flat:"Coral flat", live_sale_tank:"Live-sale tank",
   quarantine:"Quarantine", holding:"Holding", dry_goods:"Dry goods",
-  back_of_house:"Back of house", other:"Other",
+  back_of_house:"Back of house",
+  fish_system:"Fish system", coral_system:"Coral system",
+  frag_tank:"Frag tank", growout_tank:"Growout tank",
+  offsite_storage:"Off-site storage", support_station:"Support station",
+  bulk_storage:"Bulk storage",
+  other:"Other",
 };
 // Kinds that can contain other locations (used as parent options in the picker).
-export const STORE_LOCATION_CONTAINER_KINDS: StoreLocationKind[] = ["zone","room","rack","shelf","freezer","cooler"];
+export const STORE_LOCATION_CONTAINER_KINDS: StoreLocationKind[] = ["zone","room","rack","shelf","freezer","cooler","fish_system","coral_system"];
 
 export const APP_ROLES = ["admin","manager","creator","reviewer","staff","viewer"] as const;
 export type AppRole = typeof APP_ROLES[number];
