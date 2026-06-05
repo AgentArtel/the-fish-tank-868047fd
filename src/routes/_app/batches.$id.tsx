@@ -10,7 +10,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, Upload, ArrowLeft, Sparkles, Camera, History, AlertTriangle } from "lucide-react";
+import { Plus, Upload, ArrowLeft, Sparkles, Camera, History, AlertTriangle, ScanBarcode } from "lucide-react";
+import { BarcodeScanDialog } from "@/components/barcode-scan-dialog";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useMe } from "@/hooks/use-me";
@@ -724,6 +725,24 @@ function ReceiveSection({ batchId, lines, onDone }: { batchId: string; lines: an
       {historyTarget && (
         <ReceiveHistoryDialog line={historyTarget} onClose={() => setHistoryTarget(null)} />
       )}
+      <BarcodeScanDialog
+        open={scanOpen}
+        onOpenChange={setScanOpen}
+        lines={sellable}
+        autoIncrement={scanAutoInc}
+        setAutoIncrement={setScanAutoInc}
+        onMatch={(line, code) => {
+          const d = getDraft(line);
+          const next = scanAutoInc ? Number(d.received_quantity ?? 0) + 1 : Number(d.received_quantity ?? 0);
+          setDraft(line.id, { received_quantity: next });
+          toast.success(`Scanned ${code}`, { description: `${line.clean_item_name ?? line.raw_description ?? "line"} · received now ${next}`, duration: 2000 });
+          // Scroll into view
+          setTimeout(() => {
+            const el = document.getElementById(`receive-row-${line.id}`);
+            if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+          }, 50);
+        }}
+      />
     </div>
   );
 }
