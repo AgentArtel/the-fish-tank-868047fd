@@ -718,7 +718,9 @@ export const getOrCreateQuickAddBatch = createServerFn({ method: "POST" })
         extraction_status: "manual",
         invoice_date: today.toISOString().slice(0,10),
         notes: "Auto-created Quick Add batch (in-store restock).",
+        is_quick_add: true,
         created_by: userId,
+
       }).select("id").single();
     if (cErr) throw new Error(cErr.message);
     return { batchId: created.id, vendorId: vendor.id };
@@ -807,7 +809,9 @@ export const quickAddInventoryItem = createServerFn({ method: "POST" })
           extraction_status: "manual",
           invoice_date: today.toISOString().slice(0,10),
           notes: "Auto-created Quick Add batch (in-store restock).",
+          is_quick_add: true,
           created_by: userId,
+
         }).select("id").single();
       if (cErr) throw new Error(cErr.message);
       batchId = created.id;
@@ -1027,4 +1031,228 @@ export const parseInventoryMarkdown = createServerFn({ method: "POST" })
     if (!call?.function?.arguments) throw new Error("AI returned no items");
     const parsed = JSON.parse(call.function.arguments);
     return parsed as { items: Array<{ item_name: string; scientific_name?: string; item_type?: string; quantity?: number; retail_price?: number; wholesale_cost?: number; notes?: string }> };
+  });
+
+// ============================================================
+// Sprint 1.6 — PO reconciliation against Quick Add batches
+// ============================================================
+
+function normalizeName(s: string | null | undefined): string {
+  return (s ?? "").toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function nameScore(a: string, b: string): number {
+  const na = normalizeName(a);
+  const nb = normalizeName(b);
+  if (!na || !nb) return 0;
+  if (na === nb) return 1;
+  if (na.includes(nb) || nb.includes(na)) return 0.85;
+  const ta = new Set(na.split(" ").filter(Boolean));
+  const tb = new Set(nb.split(" ").filter(Boolean));
+  if (ta.size === 0 || tb.size === 0) return 0;
+  let shared = 0;
+  for (const t of ta) if (tb.has(t)) shared++;
+  return shared / Math.max(ta.size, tb.size);
+}
+
+export const promoteQuickAddBatchVendor = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({
+    batchId: z.string().uuid(),
+    realVendorId: z.string().uuid(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await requireEditor(supabase, userId);
+    const { data: batch } = await supabase.from("vendor_batches")
+      .select("id, is_quick_add").eq("id", data.batchId).maybeSingle();
+    if (!batch) throw new Error("Batch not found");
+    if (!batch.is_quick_add) throw new Error("Only Quick Add batches can be promoted");
+    const { error } = await supabase.from("vendor_batches")
+      .update({ vendor_id: data.realVendorId }).eq("id", data.batchId);
+    if (error) throw new Error(error.message);
+    // Also reassign vendor_id on inventory items that still point at quick-add vendor
+    const { data: qa } = await supabase.from("vendors").select("id").eq("slug","quick-add").maybeSingle();
+    if (qa) {
+      await supabase.from("inventory_items")
+        .update({ vendor_id: data.realVendorId })
+        .eq("source_vendor_batch_id", data.batchId)
+        .eq("vendor_id", qa.id);
+    }
+    return { ok: true };
+  });
+
+export const computeQuickAddReconciliation = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ batchId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await requireEditor(supabase, userId);
+
+    const [{ data: batch }, { data: poLines }, { data: invItems }] = await Promise.all([
+      supabase.from("vendor_batches").select("id, is_quick_add").eq("id", data.batchId).maybeSingle(),
+      supabase.from("vendor_line_items")
+        .select("id, clean_item_name, raw_description, scientific_name, quantity, wholesale_cost, vendor_sell_price, reconciliation_status, reconciled_inventory_item_id")
+        .eq("vendor_batch_id", data.batchId).eq("kind", "sellable"),
+      supabase.from("inventory_items")
+        .select("id, item_name, scientific_name, quantity_received, wholesale_cost, retail_price, source_vendor_line_item_id")
+        .eq("source_vendor_batch_id", data.batchId),
+    ]);
+    if (!batch) throw new Error("Batch not found");
+    if (!batch.is_quick_add) throw new Error("Not a Quick Add batch");
+
+    const lines = (poLines ?? []) as any[];
+    const items = (invItems ?? []) as any[];
+
+    // Pre-existing matches (from previous reconcile saves)
+    const usedInvIds = new Set<string>();
+    const usedLineIds = new Set<string>();
+    const confirmed: any[] = [];
+    for (const l of lines) {
+      if (l.reconciled_inventory_item_id) {
+        const inv = items.find((i) => i.id === l.reconciled_inventory_item_id);
+        if (inv) {
+          confirmed.push({
+            vendorLineItemId: l.id, inventoryItemId: inv.id, score: 1,
+            poName: l.clean_item_name ?? l.raw_description ?? "",
+            invName: inv.item_name,
+            poQty: Number(l.quantity ?? 0), invQty: Number(inv.quantity_received ?? 0),
+            poCost: l.wholesale_cost ?? l.vendor_sell_price ?? null,
+            invCost: inv.wholesale_cost ?? null,
+            status: l.reconciliation_status,
+            confirmed: true,
+          });
+          usedInvIds.add(inv.id); usedLineIds.add(l.id);
+        }
+      }
+    }
+
+    // Score remaining pairs
+    type Cand = { line: any; inv: any; score: number };
+    const cands: Cand[] = [];
+    for (const l of lines) {
+      if (usedLineIds.has(l.id)) continue;
+      const lname = l.clean_item_name ?? l.raw_description ?? "";
+      const lsci = l.scientific_name ?? "";
+      for (const inv of items) {
+        if (usedInvIds.has(inv.id)) continue;
+        let s = nameScore(lname, inv.item_name);
+        if (lsci && inv.scientific_name) {
+          s = Math.max(s, nameScore(lsci, inv.scientific_name));
+        }
+        if (s >= 0.5) cands.push({ line: l, inv, score: s });
+      }
+    }
+    cands.sort((a,b) => b.score - a.score);
+
+    const suggested: any[] = [];
+    for (const c of cands) {
+      if (usedLineIds.has(c.line.id) || usedInvIds.has(c.inv.id)) continue;
+      usedLineIds.add(c.line.id); usedInvIds.add(c.inv.id);
+      suggested.push({
+        vendorLineItemId: c.line.id, inventoryItemId: c.inv.id, score: c.score,
+        poName: c.line.clean_item_name ?? c.line.raw_description ?? "",
+        invName: c.inv.item_name,
+        poQty: Number(c.line.quantity ?? 0), invQty: Number(c.inv.quantity_received ?? 0),
+        poCost: c.line.wholesale_cost ?? c.line.vendor_sell_price ?? null,
+        invCost: c.inv.wholesale_cost ?? null,
+        status: c.line.reconciliation_status,
+        confirmed: false,
+      });
+    }
+
+    const unmatchedPoLines = lines.filter((l) => !usedLineIds.has(l.id)).map((l) => ({
+      vendorLineItemId: l.id,
+      name: l.clean_item_name ?? l.raw_description ?? "(no name)",
+      scientificName: l.scientific_name ?? null,
+      qty: Number(l.quantity ?? 0),
+      cost: l.wholesale_cost ?? l.vendor_sell_price ?? null,
+      status: l.reconciliation_status,
+    }));
+    const unmatchedInvItems = items.filter((i) => !usedInvIds.has(i.id)).map((i) => ({
+      inventoryItemId: i.id,
+      name: i.item_name,
+      qty: Number(i.quantity_received ?? 0),
+      cost: i.wholesale_cost ?? null,
+      retail: i.retail_price ?? null,
+    }));
+
+    return { confirmed, suggested, unmatchedPoLines, unmatchedInvItems };
+  });
+
+export const confirmReconciliation = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({
+    batchId: z.string().uuid(),
+    matches: z.array(z.object({
+      vendorLineItemId: z.string().uuid(),
+      inventoryItemId: z.string().uuid(),
+      updateWholesale: z.boolean().default(false),
+      newWholesale: z.number().nonnegative().nullable().optional(),
+    })).default([]),
+    acceptPoLines: z.array(z.string().uuid()).default([]),
+    flagMissing: z.array(z.string().uuid()).default([]),
+    flagExtras: z.array(z.string().uuid()).default([]),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await requireEditor(supabase, userId);
+
+    const errors: string[] = [];
+    let matched = 0, accepted = 0, missing = 0, extras = 0;
+
+    for (const m of data.matches) {
+      // Don't break unique constraint: skip if inventory item already linked to a different line
+      const { data: inv } = await supabase.from("inventory_items")
+        .select("id, source_vendor_line_item_id, wholesale_cost").eq("id", m.inventoryItemId).maybeSingle();
+      if (!inv) { errors.push(`Inventory item ${m.inventoryItemId} missing`); continue; }
+
+      const invPatch: any = {};
+      if (!inv.source_vendor_line_item_id) invPatch.source_vendor_line_item_id = m.vendorLineItemId;
+      if (m.updateWholesale && m.newWholesale != null) invPatch.wholesale_cost = m.newWholesale;
+      if (Object.keys(invPatch).length) {
+        const { error } = await supabase.from("inventory_items").update(invPatch).eq("id", m.inventoryItemId);
+        if (error) { errors.push(`Inv ${m.inventoryItemId}: ${error.message}`); continue; }
+      }
+
+      const { error: lErr } = await supabase.from("vendor_line_items").update({
+        reconciled_inventory_item_id: m.inventoryItemId,
+        reconciliation_status: "matched",
+      }).eq("id", m.vendorLineItemId);
+      if (lErr) { errors.push(`Line ${m.vendorLineItemId}: ${lErr.message}`); continue; }
+
+      await supabase.from("inventory_activity_logs").insert({
+        inventory_item_id: m.inventoryItemId,
+        vendor_line_item_id: m.vendorLineItemId,
+        actor_id: userId,
+        action: "updated",
+        summary: "PO line matched to Quick Add inventory item",
+        detail: { batch_id: data.batchId, line_id: m.vendorLineItemId },
+      });
+      matched++;
+    }
+
+    if (data.acceptPoLines.length) {
+      const { error } = await supabase.from("vendor_line_items")
+        .update({ reconciliation_status: "accepted" })
+        .in("id", data.acceptPoLines);
+      if (error) errors.push(`Accept PO lines: ${error.message}`); else accepted = data.acceptPoLines.length;
+    }
+    if (data.flagMissing.length) {
+      const { error } = await supabase.from("vendor_line_items")
+        .update({ reconciliation_status: "missing" })
+        .in("id", data.flagMissing);
+      if (error) errors.push(`Flag missing: ${error.message}`); else missing = data.flagMissing.length;
+    }
+    if (data.flagExtras.length) {
+      for (const invId of data.flagExtras) {
+        const { data: cur } = await supabase.from("inventory_items").select("notes").eq("id", invId).maybeSingle();
+        const stamp = `[${new Date().toISOString().slice(0,10)}] Received but not on PO/invoice`;
+        const notes = cur?.notes ? `${cur.notes}\n${stamp}` : stamp;
+        const { error } = await supabase.from("inventory_items").update({ notes }).eq("id", invId);
+        if (error) errors.push(`Flag extra ${invId}: ${error.message}`); else extras++;
+      }
+    }
+
+    return { matched, accepted, missing, extras, errors };
   });

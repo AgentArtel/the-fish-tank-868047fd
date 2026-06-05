@@ -832,6 +832,7 @@ export type Database = {
           invoice_number: string | null
           invoice_subtotal: number | null
           invoice_total: number | null
+          is_quick_add: boolean
           notes: string | null
           order_number: string | null
           pdf_file_name: string | null
@@ -863,6 +864,7 @@ export type Database = {
           invoice_number?: string | null
           invoice_subtotal?: number | null
           invoice_total?: number | null
+          is_quick_add?: boolean
           notes?: string | null
           order_number?: string | null
           pdf_file_name?: string | null
@@ -894,6 +896,7 @@ export type Database = {
           invoice_number?: string | null
           invoice_subtotal?: number | null
           invoice_total?: number | null
+          is_quick_add?: boolean
           notes?: string | null
           order_number?: string | null
           pdf_file_name?: string | null
@@ -993,6 +996,9 @@ export type Database = {
           received_at: string | null
           received_by: string | null
           received_quantity: number | null
+          reconciled_inventory_item_id: string | null
+          reconciliation_notes: string | null
+          reconciliation_status: string
           regular_price: number | null
           review_status: Database["public"]["Enums"]["vendor_line_review_status"]
           scientific_name: string | null
@@ -1035,6 +1041,9 @@ export type Database = {
           received_at?: string | null
           received_by?: string | null
           received_quantity?: number | null
+          reconciled_inventory_item_id?: string | null
+          reconciliation_notes?: string | null
+          reconciliation_status?: string
           regular_price?: number | null
           review_status?: Database["public"]["Enums"]["vendor_line_review_status"]
           scientific_name?: string | null
@@ -1077,6 +1086,9 @@ export type Database = {
           received_at?: string | null
           received_by?: string | null
           received_quantity?: number | null
+          reconciled_inventory_item_id?: string | null
+          reconciliation_notes?: string | null
+          reconciliation_status?: string
           regular_price?: number | null
           review_status?: Database["public"]["Enums"]["vendor_line_review_status"]
           scientific_name?: string | null
@@ -1097,6 +1109,13 @@ export type Database = {
             columns: ["assigned_location_id"]
             isOneToOne: false
             referencedRelation: "store_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_line_items_reconciled_inventory_item_id_fkey"
+            columns: ["reconciled_inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
             referencedColumns: ["id"]
           },
           {
@@ -1266,6 +1285,8 @@ export type Database = {
         Returns: boolean
       }
       is_active_user: { Args: { _user_id: string }; Returns: boolean }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
     }
     Enums: {
       app_role: "admin" | "creator" | "reviewer"

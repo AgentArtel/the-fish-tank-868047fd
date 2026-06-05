@@ -27,7 +27,9 @@ import {
   fmtMoney,
   type VendorLineReview,
 } from "@/lib/ops";
-import { convertLineItemsToInventory, getSignedVendorInvoiceUrl, extractBatchWithAI, receiveBatchLines, uploadDoaPhoto, getSignedInventoryMediaUrl } from "@/lib/ops.functions";
+import { convertLineItemsToInventory, getSignedVendorInvoiceUrl, extractBatchWithAI, receiveBatchLines, uploadDoaPhoto, getSignedInventoryMediaUrl, promoteQuickAddBatchVendor, computeQuickAddReconciliation, confirmReconciliation } from "@/lib/ops.functions";
+import { ReconcileSection } from "@/components/reconcile-section";
+
 
 export const Route = createFileRoute("/_app/batches/$id")({ component: BatchDetail });
 
@@ -77,9 +79,11 @@ function BatchDetail() {
       />
 
       <BatchHeaderForm batch={batch} onDone={refreshAll} />
+      <ReconcileSection batch={batch} onDone={refreshAll} />
       <LineItemsSection batchId={id} vendorId={batch.vendor_id} lines={lines ?? []} onDone={refreshAll} />
       <ReceiveSection batchId={id} lines={lines ?? []} onDone={refreshAll} />
       <ChargesSection batchId={id} charges={charges ?? []} onDone={refreshAll} />
+
     </div>
   );
 }
