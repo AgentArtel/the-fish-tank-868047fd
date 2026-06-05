@@ -395,6 +395,7 @@ function MarkdownBulk({
   const [vendorId, setVendorId] = useState<string>("");
   const [bulkPhoto, setBulkPhoto] = useState<File | null>(null);
   const [bulkPreview, setBulkPreview] = useState<string>("");
+  const [rowPhotos, setRowPhotos] = useState<Record<number, { file: File; preview: string }>>({});
 
   const parseFn = useServerFn(parseInventoryMarkdown);
   const dedupeFn = useServerFn(findInventoryDuplicates);
@@ -443,15 +444,41 @@ function MarkdownBulk({
 
   const updateRow = (i: number, patch: Partial<ReviewRow>) =>
     setRows(rs => rs.map((r, idx) => idx === i ? { ...r, ...patch } : r));
-  const removeRow = (i: number) => setRows(rs => rs.filter((_, idx) => idx !== i));
+  const removeRow = (i: number) => {
+    setRows(rs => rs.filter((_, idx) => idx !== i));
+    setRowPhotos(rp => {
+      const next: typeof rp = {};
+      for (const [k, v] of Object.entries(rp)) {
+        const ki = Number(k);
+        if (ki === i) continue;
+        next[ki > i ? ki - 1 : ki] = v;
+      }
+      return next;
+    });
+  };
+  const setRowPhoto = (i: number, file: File | null) => {
+    setRowPhotos(rp => {
+      const next = { ...rp };
+      if (next[i]?.preview) URL.revokeObjectURL(next[i].preview);
+      if (file) next[i] = { file, preview: URL.createObjectURL(file) };
+      else delete next[i];
+      return next;
+    });
+  };
+
+  const createRowIndexes = () => rows
+    .map((r, i) => ({ r, i }))
+    .filter(({ r }) => r.decision === "create");
+  const rowsNeedingShared = () => createRowIndexes().filter(({ i }) => !rowPhotos[i]);
 
   const saveAll = async () => {
     if (rows.length === 0) { toast.error("Nothing to save"); return; }
     const actionable = rows.filter(r => r.decision !== "skip");
     if (actionable.length === 0) { toast.error("All rows are set to Skip"); return; }
-    const needsPhoto = actionable.some(r => r.decision === "create");
-    if (needsPhoto && !bulkPhoto) {
-      toast.error("A shared photo is required for new items. Either add one or set all rows to Merge / Skip.");
+    const creates = createRowIndexes();
+    const missingShared = rowsNeedingShared();
+    if (creates.length > 0 && missingShared.length > 0 && !bulkPhoto) {
+      toast.error(`${missingShared.length} create row(s) have no photo. Add a per-row photo or a shared fallback.`);
       return;
     }
     const invalid = actionable.find(r =>
@@ -464,17 +491,24 @@ function MarkdownBulk({
 
     setSaving(true);
     try {
-      // Upload shared photo only when at least one row creates.
-      let photo = { path: "", fileName: "" };
-      if (needsPhoto && bulkPhoto) {
+      // Upload shared fallback only if needed by at least one create row.
+      let sharedPath: string | null = null;
+      let sharedName: string | null = null;
+      if (creates.length > 0 && missingShared.length > 0 && bulkPhoto) {
         const p = await uploadToInventoryBucket(bulkPhoto);
-        photo = { path: p.path, fileName: p.fileName };
-      } else {
-        // Backend requires a non-empty path; supply a sentinel that won't be inserted (only "create" rows reach the photo insert).
-        photo = { path: "_unused_no_create_rows", fileName: "noop.jpg" };
+        sharedPath = p.path;
+        sharedName = p.fileName;
       }
+      // Upload per-row photos in parallel.
+      const perRowEntries = Object.entries(rowPhotos);
+      const uploads = await Promise.all(perRowEntries.map(async ([k, { file }]) => {
+        const p = await uploadToInventoryBucket(file);
+        return [Number(k), p] as const;
+      }));
+      const uploadedByIndex: Record<number, { path: string; fileName: string }> = {};
+      for (const [i, p] of uploads) uploadedByIndex[i] = p;
 
-      const payloadRows = rows.map(r => ({
+      const payloadRows = rows.map((r, i) => ({
         item_name: r.item_name.trim(),
         scientific_name: r.scientific_name?.trim() || null,
         item_type: ((r.item_type as ItemType) ?? defaultType),
@@ -484,14 +518,16 @@ function MarkdownBulk({
         notes: r.notes?.trim() || null,
         decision: r.decision,
         merge_target_id: r.decision === "merge" ? r.dupe_match?.id ?? null : null,
+        photo_path: uploadedByIndex[i]?.path ?? null,
+        photo_file_name: uploadedByIndex[i]?.fileName ?? null,
       }));
 
       const result = await bulkImport({ data: {
         rows: payloadRows,
         location_id: locationId || null,
         source_vendor_id: vendorId || null,
-        shared_photo_path: photo.path,
-        shared_photo_file_name: photo.fileName,
+        shared_photo_path: sharedPath,
+        shared_photo_file_name: sharedName,
         set_available: true,
       } });
 
@@ -573,13 +609,21 @@ function MarkdownBulk({
                   <Input type="number" step="0.01" className="col-span-2 h-8" value={r.retail_price ?? ""}
                     onChange={e => updateRow(i, { retail_price: Number(e.target.value) })} placeholder="Retail $" />
                 </div>
+                {r.decision === "create" && (
+                  <RowPhotoSlot
+                    photo={rowPhotos[i]}
+                    hasSharedFallback={!!bulkPhoto}
+                    onPick={(f) => setRowPhoto(i, f)}
+                  />
+                )}
               </div>
             ))}
           </div>
 
+
           <div className="grid sm:grid-cols-2 gap-3">
             <PhotoPicker
-              label={`Shared photo${rows.some(r => r.decision === "create") ? " (required for Create rows)" : " (not needed — no Create rows)"}`}
+              label={`Shared photo fallback${rowsNeedingShared().length > 0 ? ` — required for ${rowsNeedingShared().length} row(s) without their own` : " — not needed, every Create row has its own"}`}
               preview={bulkPreview}
               onPick={(f) => { setBulkPhoto(f); setBulkPreview(f ? URL.createObjectURL(f) : ""); }} />
             <div className="space-y-1.5">
@@ -616,7 +660,41 @@ function MarkdownBulk({
   );
 }
 
-// ---- Vendor combobox with quick-create ----
+function RowPhotoSlot({ photo, hasSharedFallback, onPick }: {
+  photo: { file: File; preview: string } | undefined;
+  hasSharedFallback: boolean;
+  onPick: (f: File | null) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  return (
+    <div className="flex items-center gap-2 pt-1">
+      {photo ? (
+        <>
+          <img src={photo.preview} alt="" className="h-10 w-10 rounded object-cover border" />
+          <span className="text-[11px] text-muted-foreground truncate flex-1">{photo.file.name}</span>
+          <Button type="button" size="sm" variant="ghost" className="h-6 text-[11px]" onClick={() => ref.current?.click()}>Replace</Button>
+          <button type="button" onClick={() => onPick(null)} className="text-muted-foreground hover:text-destructive p-1" aria-label="Remove photo">
+            <Trash2 className="w-3 h-3" />
+          </button>
+        </>
+      ) : (
+        <>
+          <button type="button" onClick={() => ref.current?.click()}
+            className="h-10 w-10 rounded border border-dashed bg-muted/20 flex items-center justify-center text-muted-foreground hover:bg-muted/40"
+            aria-label="Add row photo">
+            <Camera className="w-4 h-4" />
+          </button>
+          <span className="text-[11px] text-muted-foreground">
+            {hasSharedFallback ? "Will use shared photo fallback" : "Add a per-row photo, or set a shared fallback below"}
+          </span>
+        </>
+      )}
+      <input ref={ref} type="file" accept="image/*" capture="environment" className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) onPick(f); e.currentTarget.value = ""; }} />
+    </div>
+  );
+}
+
 function VendorPickerCombo({ value, onChange }: { value: string; onChange: (id: string) => void }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
