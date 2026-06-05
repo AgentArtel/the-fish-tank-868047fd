@@ -612,7 +612,12 @@ function ReceiveSection({ batchId, lines, onDone }: { batchId: string; lines: an
           <h2 className="font-semibold">Receive shipment</h2>
           <p className="text-xs text-muted-foreground">Every save is recorded in the receive audit trail with timestamp + user. DOA lines require an in-bag and on-lid photo per wholesaler policy.</p>
         </div>
-        <Button onClick={submit} disabled={busy || sellable.length === 0}>{busy ? "Saving…" : "Save received"}</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setScanOpen(true)} disabled={sellable.length === 0}>
+            <ScanBarcode className="w-4 h-4 mr-1" /> Scan
+          </Button>
+          <Button onClick={submit} disabled={busy || sellable.length === 0}>{busy ? "Saving…" : "Save received"}</Button>
+        </div>
       </div>
       {sellable.length === 0 && <p className="text-sm text-muted-foreground p-4 text-center">No unconverted sellable lines. Add a draft line or run AI extraction first.</p>}
       <div className="overflow-x-auto">
