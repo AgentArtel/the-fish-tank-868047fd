@@ -1384,6 +1384,12 @@ export type Database = {
         | "back_of_house"
         | "other"
         | "zone"
+        | "room"
+        | "rack"
+        | "shelf"
+        | "freezer"
+        | "cooler"
+        | "bin"
       usage_rights: "owned" | "vendor_allowed" | "needs_permission" | "unknown"
       usage_status: "unused" | "in_use" | "archived"
       vendor_batch_charge_type:
@@ -1655,6 +1661,12 @@ export const Constants = {
         "back_of_house",
         "other",
         "zone",
+        "room",
+        "rack",
+        "shelf",
+        "freezer",
+        "cooler",
+        "bin",
       ],
       usage_rights: ["owned", "vendor_allowed", "needs_permission", "unknown"],
       usage_status: ["unused", "in_use", "archived"],

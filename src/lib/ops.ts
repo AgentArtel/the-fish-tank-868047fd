@@ -65,13 +65,17 @@ export const INVENTORY_LIVE_SALE_LABELS: Record<InventoryLiveSale,string> = {
   live:"Live", ended:"Ended",
 };
 
-export const STORE_LOCATION_KINDS = ["zone","display_tank","coral_flat","live_sale_tank","quarantine","holding","dry_goods","back_of_house","other"] as const;
+export const STORE_LOCATION_KINDS = ["zone","room","rack","shelf","bin","freezer","cooler","display_tank","coral_flat","live_sale_tank","quarantine","holding","dry_goods","back_of_house","other"] as const;
 export type StoreLocationKind = typeof STORE_LOCATION_KINDS[number];
 export const STORE_LOCATION_KIND_LABELS: Record<StoreLocationKind,string> = {
-  zone:"Zone (group)", display_tank:"Display tank", coral_flat:"Coral flat", live_sale_tank:"Live-sale tank",
+  zone:"Zone (group)", room:"Room", rack:"Rack", shelf:"Shelf", bin:"Bin",
+  freezer:"Freezer", cooler:"Cooler",
+  display_tank:"Display tank", coral_flat:"Coral flat", live_sale_tank:"Live-sale tank",
   quarantine:"Quarantine", holding:"Holding", dry_goods:"Dry goods",
   back_of_house:"Back of house", other:"Other",
 };
+// Kinds that can contain other locations (used as parent options in the picker).
+export const STORE_LOCATION_CONTAINER_KINDS: StoreLocationKind[] = ["zone","room","rack","shelf","freezer","cooler"];
 
 export const ITEM_TYPES = ["fish","coral","invert","dry_good","live_rock","equipment","other"] as const;
 export type ItemType = typeof ITEM_TYPES[number];
