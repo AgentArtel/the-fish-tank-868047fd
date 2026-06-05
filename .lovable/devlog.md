@@ -4,6 +4,37 @@ Living record of what's been built, what was extra/unplanned, and what's still a
 
 ---
 
+## 2026-06-05 (Sprint 5) — Dashboard stock value by category
+
+Owner wanted a glance-level read on where money is tied up. Replaced the single "Stock value" KPI on `/dashboard` with a category breakdown: Livestock (fish + invert + live_rock), Coral, and Dry goods (dry_good + equipment). Total + "Other" footnote shown in the section header. Aggregation done server-side in `getShopOverview` to keep it cheap.
+
+### Planned vs shipped
+
+| Plan item | Status |
+|---|---|
+| Extend `getShopOverview` to return per-category stock value | Done |
+| Replace single "Stock value" KPI with Livestock / Coral / Dry goods row | Done |
+| Keep total stock value visible (now section subtitle + "Total stock value" KPI in glance row) | Done |
+| Link each category KPI to `/inventory` (deep-link by `?type=` lands in Sprint 6) | Done |
+
+### Migrations
+
+- None.
+
+### Files
+
+- edited `src/routes/_app/dashboard.tsx` — server fn aggregates by `item_type`; new "Stock value by category" section.
+
+### What's next (mirrors roadmap)
+
+1. Sprint 6 — QR deep-linking + customer-facing catalog (`?location=`, `?type=`, public `/catalog`).
+2. Sprint 7 — Intake capture upgrades (barcode scan on receive, bulk-add per-row photo).
+3. Sprint 8 — Per-type fields (coral/dry_good/fish) + pricing approval queue.
+4. Sprint 9 — AI parsing bring-your-own key (OpenAI / Gemini).
+5. Sprint 10 — Static + browser automation audit, then Clover POS sync.
+
+---
+
 ## 2026-06-05 (Sprint 3) — Photo-on-file wizard
 
 When someone tries to flip an item to Available without a photo on file, a modal now intercepts the change, captures a single photo (camera on mobile, file on desktop), uploads it, and then completes the availability change automatically. Works from both the inventory list row and the item detail page; the existing DB trigger (`guard_inventory_photo_required`) remains the source of truth.
