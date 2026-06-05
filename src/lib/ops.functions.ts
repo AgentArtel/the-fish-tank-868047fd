@@ -1225,7 +1225,7 @@ export const confirmReconciliation = createServerFn({ method: "POST" })
         inventory_item_id: m.inventoryItemId,
         vendor_line_item_id: m.vendorLineItemId,
         actor_id: userId,
-        action: "reconciled",
+        action: "updated",
         summary: "PO line matched to Quick Add inventory item",
         detail: { batch_id: data.batchId, line_id: m.vendorLineItemId },
       });
