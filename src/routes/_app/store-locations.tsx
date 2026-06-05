@@ -561,7 +561,8 @@ function PrintLabelsButton({ locations, byId }: { locations: Loc[]; byId: Record
     const origin = typeof window !== "undefined" ? window.location.origin : "";
     const labels = await Promise.all(
       locations.filter(l => l.is_active).map(async l => {
-        const url = `${origin}/inventory?location=${l.id}`;
+        const isContainer = (STORE_LOCATION_CONTAINER_KINDS as string[]).includes(l.kind);
+        const url = `${origin}/inventory?location=${l.id}${isContainer ? "&descendants=1" : ""}`;
         const dataUrl = await QRCode.toDataURL(url, { width: 220, margin: 1 });
         const path = buildPath(l, byId).map(p => p.name).join(" › ");
         return { name: l.name, path, kind: STORE_LOCATION_KIND_LABELS[l.kind as StoreLocationKind] ?? l.kind, dataUrl };
