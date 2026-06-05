@@ -623,7 +623,7 @@ function MarkdownBulk({
 
           <div className="grid sm:grid-cols-2 gap-3">
             <PhotoPicker
-              label={`Shared photo${rows.some(r => r.decision === "create") ? " (required for Create rows)" : " (not needed — no Create rows)"}`}
+              label={`Shared photo fallback${rowsNeedingShared().length > 0 ? ` — required for ${rowsNeedingShared().length} row(s) without their own` : " — not needed, every Create row has its own"}`}
               preview={bulkPreview}
               onPick={(f) => { setBulkPhoto(f); setBulkPreview(f ? URL.createObjectURL(f) : ""); }} />
             <div className="space-y-1.5">
