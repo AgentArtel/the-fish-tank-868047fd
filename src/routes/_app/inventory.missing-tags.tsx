@@ -26,7 +26,7 @@ type Row = {
   vendor_name: string;
 };
 
-const ACTIVE_STATUSES = ["available", "on_hold", "needs_id", "quarantine", "incoming"];
+const ACTIVE_STATUSES = ["available", "on_hold", "needs_id", "quarantine", "incoming"] as const;
 
 function MissingTagsPage() {
   const { data: locations } = useQuery({
