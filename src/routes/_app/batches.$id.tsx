@@ -523,6 +523,8 @@ function ReceiveSection({ batchId, lines, onDone }: { batchId: string; lines: an
   const [busy, setBusy] = useState(false);
   const [doaTarget, setDoaTarget] = useState<any | null>(null);
   const [historyTarget, setHistoryTarget] = useState<any | null>(null);
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanAutoInc, setScanAutoInc] = useState(true);
 
   const photoCountsByLine = (() => {
     const m: Record<string, Set<string>> = {};
