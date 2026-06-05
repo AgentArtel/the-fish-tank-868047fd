@@ -53,7 +53,10 @@ function InventoryPage() {
             {INVENTORY_AVAILABILITY.map(s => <SelectItem key={s} value={s}>{INVENTORY_AVAILABILITY_LABELS[s]}</SelectItem>)}
           </SelectContent>
         </Select>
-        <div className="ml-auto">
+        <div className="ml-auto flex gap-2">
+          <Button asChild size="sm" variant="outline">
+            <Link to="/inventory/missing-tags"><Tag className="w-4 h-4 mr-1" /> Missing tags</Link>
+          </Button>
           <QuickAddButton size="sm">Quick Add</QuickAddButton>
         </div>
       </div>
