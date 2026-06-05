@@ -660,7 +660,41 @@ function MarkdownBulk({
   );
 }
 
-// ---- Vendor combobox with quick-create ----
+function RowPhotoSlot({ photo, hasSharedFallback, onPick }: {
+  photo: { file: File; preview: string } | undefined;
+  hasSharedFallback: boolean;
+  onPick: (f: File | null) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  return (
+    <div className="flex items-center gap-2 pt-1">
+      {photo ? (
+        <>
+          <img src={photo.preview} alt="" className="h-10 w-10 rounded object-cover border" />
+          <span className="text-[11px] text-muted-foreground truncate flex-1">{photo.file.name}</span>
+          <Button type="button" size="sm" variant="ghost" className="h-6 text-[11px]" onClick={() => ref.current?.click()}>Replace</Button>
+          <button type="button" onClick={() => onPick(null)} className="text-muted-foreground hover:text-destructive p-1" aria-label="Remove photo">
+            <Trash2 className="w-3 h-3" />
+          </button>
+        </>
+      ) : (
+        <>
+          <button type="button" onClick={() => ref.current?.click()}
+            className="h-10 w-10 rounded border border-dashed bg-muted/20 flex items-center justify-center text-muted-foreground hover:bg-muted/40"
+            aria-label="Add row photo">
+            <Camera className="w-4 h-4" />
+          </button>
+          <span className="text-[11px] text-muted-foreground">
+            {hasSharedFallback ? "Will use shared photo fallback" : "Add a per-row photo, or set a shared fallback below"}
+          </span>
+        </>
+      )}
+      <input ref={ref} type="file" accept="image/*" capture="environment" className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) onPick(f); e.currentTarget.value = ""; }} />
+    </div>
+  );
+}
+
 function VendorPickerCombo({ value, onChange }: { value: string; onChange: (id: string) => void }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
