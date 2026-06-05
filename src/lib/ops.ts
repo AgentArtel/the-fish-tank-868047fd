@@ -77,6 +77,21 @@ export const STORE_LOCATION_KIND_LABELS: Record<StoreLocationKind,string> = {
 // Kinds that can contain other locations (used as parent options in the picker).
 export const STORE_LOCATION_CONTAINER_KINDS: StoreLocationKind[] = ["zone","room","rack","shelf","freezer","cooler"];
 
+export const APP_ROLES = ["admin","manager","creator","reviewer","staff","viewer"] as const;
+export type AppRole = typeof APP_ROLES[number];
+export const APP_ROLE_LABELS: Record<AppRole,string> = {
+  admin:"Admin", manager:"Manager", creator:"Creator", reviewer:"Reviewer",
+  staff:"Staff", viewer:"Viewer",
+};
+export const APP_ROLE_DESCRIPTIONS: Record<AppRole,string> = {
+  admin: "Full access. Approves pricing, manages users, deletes anything.",
+  manager: "Edit everything except pricing approval and user management.",
+  creator: "Create and edit drafts (intake, content, inventory).",
+  reviewer: "Edit and review intake, content, and inventory.",
+  staff: "Read-only floor access. Can browse inventory and locations.",
+  viewer: "Read-only. No editing anywhere.",
+};
+
 export const ITEM_TYPES = ["fish","coral","invert","dry_good","live_rock","equipment","other"] as const;
 export type ItemType = typeof ITEM_TYPES[number];
 export const ITEM_TYPE_LABELS: Record<ItemType,string> = {

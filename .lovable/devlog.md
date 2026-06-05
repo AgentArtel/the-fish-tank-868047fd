@@ -4,7 +4,51 @@ Living record of what's been built, what was extra/unplanned, and what's still a
 
 ---
 
+## 2026-06-05 (Sprint 2.5) — Roles + location mapping polish
+
+Extended the role system so invites/role-assignment cover staff and viewers, and rebuilt the Store Locations page into a visual map: thumbnails, photo gallery per location, breadcrumb path, item counts, inline rename, reorder, and printable QR labels.
+
+### Planned vs shipped
+
+| Plan item | Status |
+|---|---|
+| Add `manager`, `staff`, `viewer` to `app_role` enum | Done |
+| Treat `manager` as editor in `can_edit_content` | Done |
+| `setUserRole` server fn + RoleSelect with descriptions | Done |
+| Invite + active-user role dropdowns include all 6 roles | Done |
+| `store_location_media` table + bucket RLS (`media/store-locations/*`) | Done |
+| Photo gallery dialog (multi-upload, set primary, delete) | Done |
+| Thumbnail rendered in tree row | Done |
+| Breadcrumb path on each node | Done |
+| Direct + subtree item count badge | Done |
+| Inline rename (double-click) | Done |
+| Up/down reorder siblings via `sort_order` | Done |
+| Printable QR labels (one per active location, links to `/inventory?location=:id`) | Done |
+| Delete location action in edit dialog | Done (extra) |
+
+### Migrations
+
+- `20260605020*_extend_role_enum_locations.sql` — `app_role` += manager/staff/viewer; `store_locations.sort_order`, `store_locations.primary_photo_url`; new `store_location_media` table + RLS; storage policies for `media/store-locations/*`.
+- `20260605020*_can_edit_manager.sql` — `can_edit_content` now grants editor to `manager`.
+
+### Files
+
+- edited `src/lib/cms.functions.ts` — `ROLE_ENUM`, `setUserRole`, expanded enums on `approveUser`/`inviteUser`.
+- edited `src/lib/ops.ts` — `APP_ROLES`, `APP_ROLE_LABELS`, `APP_ROLE_DESCRIPTIONS`.
+- rewrote `src/routes/_app/settings.users.tsx` — `RoleSelect` w/ inline descriptions, role-change for active users.
+- rewrote `src/routes/_app/store-locations.tsx` — tree thumbnails, breadcrumbs, counts, reorder, inline rename, `PhotoDialog`, `PrintLabelsButton`.
+- added dep: `qrcode` (+ `@types/qrcode`).
+
+### What's next (mirrors roadmap)
+
+1. Sprint 3 — Photo-on-file wizard (single-photo intake for items already on the floor without a vendor batch).
+2. Filter Inventory page by `?location=:id` so QR labels actually deep-link.
+3. Drag-and-drop reorder + cross-parent move (current is up/down within siblings only).
+
+---
+
 ## 2026-06-05 (Sprint 2) — Bulk paste import with dedupe
+
 
 Pasted lists now go through a dedupe pass before insert. Each row is tagged New / Likely dup / Exact match against existing inventory; the user can choose Create new, Add qty to existing, or Skip per row, and apply all decisions in a single server call.
 
