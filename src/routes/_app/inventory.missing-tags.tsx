@@ -43,9 +43,8 @@ function MissingTagsPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("inventory_items")
-        .select("id,item_name,scientific_name,size,retail_price,availability_status,quantity_available,pricing_status,location_id,is_active,vendors(name),inventory_media(has_price_tag)")
-        .eq("is_active", true)
-        .in("availability_status", ACTIVE_STATUSES)
+        .select("id,item_name,scientific_name,size,retail_price,availability_status,quantity_available,pricing_status,location_id,vendors(name),inventory_media(has_price_tag)")
+        .in("availability_status", ACTIVE_STATUSES as unknown as string[])
         .order("updated_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
