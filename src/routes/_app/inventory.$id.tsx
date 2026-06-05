@@ -27,6 +27,7 @@ import {
   parseTagPhoto,
 } from "@/lib/ops.functions";
 import { Sparkles, Loader2 } from "lucide-react";
+import { PhotoOnFileWizard, inventoryHasPhoto } from "@/components/photo-on-file-wizard";
 
 export const Route = createFileRoute("/_app/inventory/$id")({ component: InventoryDetail });
 
@@ -120,6 +121,13 @@ function DetailsCard({ item }: { item: any }) {
 function ControlsCard({ item, locations, onDone }: { item: any; locations: any[]; onDone: () => void }) {
   const setAvail = useServerFn(setInventoryAvailability);
   const setLive = useServerFn(setInventoryLiveSale);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [pendingAvail, setPendingAvail] = useState<InventoryAvailability | null>(null);
+
+  const applyAvail = async (s: InventoryAvailability) => {
+    try { await setAvail({ data: { id: item.id, status: s } }); toast.success("Availability updated"); onDone(); }
+    catch (e: any) { toast.error(e.message); }
+  };
 
   const changeLocation = async (locationId: string) => {
     const { error } = await supabase.from("inventory_items")
@@ -127,8 +135,12 @@ function ControlsCard({ item, locations, onDone }: { item: any; locations: any[]
     if (error) toast.error(error.message); else { toast.success("Location updated"); onDone(); }
   };
   const changeAvail = async (s: string) => {
-    try { await setAvail({ data: { id: item.id, status: s as InventoryAvailability } }); toast.success("Availability updated"); onDone(); }
-    catch (e: any) { toast.error(e.message); }
+    const next = s as InventoryAvailability;
+    if (next === "available") {
+      const hasPhoto = await inventoryHasPhoto(item.id);
+      if (!hasPhoto) { setPendingAvail(next); setWizardOpen(true); return; }
+    }
+    applyAvail(next);
   };
   const changeLive = async (s: string) => {
     try { await setLive({ data: { id: item.id, status: s as InventoryLiveSale } }); toast.success("Live-sale updated"); onDone(); }
@@ -188,6 +200,13 @@ function ControlsCard({ item, locations, onDone }: { item: any; locations: any[]
         </div>
         <div><OpsBadge label={INVENTORY_LIVE_SALE_LABELS[item.live_sale_status as keyof typeof INVENTORY_LIVE_SALE_LABELS]} tone={liveSaleTone(item.live_sale_status)} /></div>
       </div>
+      <PhotoOnFileWizard
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        inventoryItemId={item.id}
+        itemName={item.item_name}
+        onUploaded={async () => { if (pendingAvail) { await applyAvail(pendingAvail); setPendingAvail(null); } }}
+      />
     </div>
   );
 }

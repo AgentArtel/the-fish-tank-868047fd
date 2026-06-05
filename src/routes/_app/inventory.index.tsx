@@ -15,6 +15,7 @@ import {
   fmtMoney,
 } from "@/lib/ops";
 import { setInventoryAvailability, setInventoryLiveSale } from "@/lib/ops.functions";
+import { PhotoOnFileWizard, inventoryHasPhoto } from "@/components/photo-on-file-wizard";
 import { QuickAddButton } from "@/components/quick-add-fab";
 import { Button } from "@/components/ui/button";
 import { PackagePlus } from "lucide-react";
@@ -99,6 +100,8 @@ function InventoryPage() {
 function InventoryRow({ item, onDone }: { item: any; onDone: () => void }) {
   const setAvail = useServerFn(setInventoryAvailability);
   const setLive = useServerFn(setInventoryLiveSale);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [pendingAvail, setPendingAvail] = useState<string | null>(null);
 
   const { data: locations } = useQuery({
     queryKey: ["all-locations"],
@@ -110,9 +113,16 @@ function InventoryRow({ item, onDone }: { item: any; onDone: () => void }) {
     const { error } = await supabase.from("inventory_items").update({ location_id: locationId === "none" ? null : locationId }).eq("id", item.id);
     if (error) toast.error(error.message); else onDone();
   };
-  const changeAvail = async (s: string) => {
+  const applyAvail = async (s: string) => {
     try { await setAvail({ data: { id: item.id, status: s as any } }); onDone(); }
     catch (e: any) { toast.error(e.message); }
+  };
+  const changeAvail = async (s: string) => {
+    if (s === "available") {
+      const hasPhoto = await inventoryHasPhoto(item.id);
+      if (!hasPhoto) { setPendingAvail(s); setWizardOpen(true); return; }
+    }
+    applyAvail(s);
   };
   const changeLive = async (s: string) => {
     try { await setLive({ data: { id: item.id, status: s as any } }); onDone(); }
@@ -148,6 +158,13 @@ function InventoryRow({ item, onDone }: { item: any; onDone: () => void }) {
           <SelectContent>{INVENTORY_AVAILABILITY.map(s => <SelectItem key={s} value={s}>{INVENTORY_AVAILABILITY_LABELS[s]}</SelectItem>)}</SelectContent>
         </Select>
         <div className="mt-1"><OpsBadge label={INVENTORY_AVAILABILITY_LABELS[item.availability_status as keyof typeof INVENTORY_AVAILABILITY_LABELS]} tone={availabilityTone(item.availability_status)} /></div>
+        <PhotoOnFileWizard
+          open={wizardOpen}
+          onOpenChange={setWizardOpen}
+          inventoryItemId={item.id}
+          itemName={item.item_name}
+          onUploaded={async () => { if (pendingAvail) { await applyAvail(pendingAvail); setPendingAvail(null); } }}
+        />
       </td>
       <td className="p-3">
         <Select value={item.live_sale_status} onValueChange={changeLive}>

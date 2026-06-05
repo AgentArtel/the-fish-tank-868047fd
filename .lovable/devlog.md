@@ -4,6 +4,42 @@ Living record of what's been built, what was extra/unplanned, and what's still a
 
 ---
 
+## 2026-06-05 (Sprint 3) — Photo-on-file wizard
+
+When someone tries to flip an item to Available without a photo on file, a modal now intercepts the change, captures a single photo (camera on mobile, file on desktop), uploads it, and then completes the availability change automatically. Works from both the inventory list row and the item detail page; the existing DB trigger (`guard_inventory_photo_required`) remains the source of truth.
+
+### Planned vs shipped
+
+| Plan item | Status |
+|---|---|
+| Reusable `PhotoOnFileWizard` dialog (camera capture, preview, retake, has-price-tag flag) | Done |
+| `inventoryHasPhoto(id)` helper (single round-trip check) | Done |
+| Intercept Availability → "Available" on inventory detail `ControlsCard` | Done |
+| Intercept Availability → "Available" on inventory list row | Done |
+| Auto-clear `needs_photo` + best-effort OCR on upload | Done |
+| Apply pending availability change after successful upload | Done |
+
+### Migrations
+
+- None. Storage bucket + RLS + photo-required trigger were already in place.
+
+### Files
+
+- created `src/components/photo-on-file-wizard.tsx` — modal + `inventoryHasPhoto` helper.
+- edited `src/routes/_app/inventory.$id.tsx` — `ControlsCard` gates availability changes through the wizard.
+- edited `src/routes/_app/inventory.index.tsx` — `InventoryRow` gates availability changes through the wizard.
+
+### What's next (mirrors roadmap)
+
+1. Sprint 4 — Missing-price-tag export (CSV / printable sheet).
+2. Filter Inventory page by `?location=:id` so QR labels actually deep-link.
+3. Full audit pass via browser automation, tracked in an audit doc.
+4. Own-API-key option for AI parsing.
+5. Barcode scan on receive (getUserMedia + ZXing).
+6. Customer-facing inventory search.
+
+---
+
 ## 2026-06-05 (Sprint 2.5) — Roles + location mapping polish
 
 Extended the role system so invites/role-assignment cover staff and viewers, and rebuilt the Store Locations page into a visual map: thumbnails, photo gallery per location, breadcrumb path, item counts, inline rename, reorder, and printable QR labels.
