@@ -54,6 +54,7 @@ export const ITEM_TYPE_SCHEMA: Record<ItemType, AttrGroup[]> = {
     {
       label: "Coral details",
       fields: [
+        { key: "inventory_role", label: "Inventory role", type: "select", options: ["for_sale", "growout", "mother_colony", "frag_source", "hold"], help: "Operational role of this coral. Availability to customers is controlled by Availability status." },
         { key: "coral_type", label: "Type", type: "select", options: ["SPS", "LPS", "soft", "zoanthid", "mushroom", "anemone"] },
         { key: "lighting", label: "Lighting", type: "select", options: ["low", "medium", "high"] },
         { key: "flow", label: "Flow", type: "select", options: ["low", "medium", "high"] },
