@@ -509,3 +509,92 @@ Keys live in `workspace_ai_settings`, RLS = admin-only. The Data API never retur
 - Per-feature provider override (e.g. always Gemini Pro for invoices regardless of default provider)
 - Persisted AI usage log (per call: feature, provider, model, tokens, latency, cost estimate)
 - Show fallback warnings inline in the UI when an intake call quietly fell back to Lovable
+
+## Facility Mapping — LOCKED (2026-06-06)
+
+The `store_locations` tree is now the **source of truth** for the physical shop. No further structural changes without a new mapping cycle.
+
+| Item | Status |
+|---|---|
+| Facility map seeded (Migration B + correction migration) | Done |
+| Official names / kinds / aliases corrected | Done |
+| Parent/child hierarchy verified (Migration C unnecessary — already wired) | Done |
+| Zones mapped: Retail Floor, Showroom (Support / Fish Systems / Coral Systems / Display Systems), Quarantine, Warehouse/Storage | Done |
+| Fish-system towers (S-2000/3000/4000/5000 → T1..T4) parented correctly | Done |
+| Coral growout (C-40100..40400) as leaves under Coral Systems | Done |
+| Planned QT towers (Q-30400, Q-30500) remain `planned=true, is_active=false` | Done |
+| 3 original seed rows untouched | Done |
+| 8 existing inventory assignments unchanged | Done |
+| `system_group_id` correct on fish systems | Done |
+
+**Standing rule:** no Clover sync, no storage-unit work, no bulk automation until the next phase explicitly approves it.
+
+---
+
+## Next phase — Coral Inventory Discovery (manual)
+
+First target system: **C-40100 — LPS Growout Tank** (alias: Big Frag Tank).
+
+Workflow (manual, no automation yet):
+
+1. Identify coral system (start with C-40100)
+2. Capture photos / short videos
+3. Record coral name if known (common + scientific)
+4. Record **sale status**: `for_sale | not_for_sale | growout | mother_colony | frag_source | hold`
+5. Record price if known
+6. Record quantity / frag count if applicable
+7. Assign `location_id` from the existing `store_locations` tree
+8. Prepare a clean review batch — **no inserts** until reviewed
+
+**Out of scope for this phase:** Clover sync, bulk import automation, dry goods, fish, storage units.
+
+---
+
+## Coral Inventory Intake — current-state field audit
+
+Question: can a coral item be entered cleanly **today** via the Workspace, without schema or UI changes?
+
+### What is already covered by `inventory_items`
+
+| Need | Field today | OK? |
+|---|---|---|
+| Coral common name | `item_name` | ✅ |
+| Scientific name | `scientific_name` | ✅ |
+| Item type = coral | `item_type` enum includes `coral` | ✅ |
+| Location | `location_id` → `store_locations` (C-40100 exists) | ✅ |
+| Price | `retail_price` + `pricing_status` (admin-approved) | ✅ |
+| Quantity / frag count | `quantity_received` / `quantity_available` (numeric) | ✅ |
+| Photos / video | `inventory_media` table + Photo-on-File wizard | ✅ |
+| Notes | `notes` | ✅ |
+| Vendor / lineage source | `vendor_id`, `source_vendor_line_item_id`, `source_vendor_batch_id` | ✅ |
+| Per-type coral attrs (type/lighting/flow/placement/aggression/frag size/aquacultured) | `attrs` JSONB + `coral` schema in `src/lib/item-type-attrs.ts` | ✅ |
+| Receive metadata | `received_at`, `received_by` | ✅ |
+
+### Sale-status mapping — partial gap
+
+The requested sale-status vocabulary maps onto **two** existing dimensions:
+
+| Requested value | Maps to today | Notes |
+|---|---|---|
+| `for_sale` | `availability_status = 'available'` | Requires photo + approved price + location (existing guards) |
+| `not_for_sale` | `availability_status = 'not_for_sale'` | ✅ |
+| `hold` | `availability_status = 'on_hold'` | ✅ |
+| `growout` | ❌ no enum value | Could be stored as `availability_status='not_for_sale'` + `attrs.inventory_role='growout'` |
+| `mother_colony` | ❌ no enum value | Same — needs an inventory-role concept |
+| `frag_source` | ❌ no enum value | Same — needs an inventory-role concept |
+
+**Inventory role** is the missing concept. `availability_status` answers "can a customer buy it?" but the coral-discovery workflow also needs to record **why** a non-saleable colony is in the system (growout vs mother vs frag source).
+
+### Recommendation
+
+**Coral inventory CAN be entered today**, with one small caveat:
+
+- For `for_sale` / `not_for_sale` / `hold` → use existing `availability_status` directly.
+- For `growout` / `mother_colony` / `frag_source` → record under `attrs.inventory_role` (free text) until a dedicated UI is built. The coral attrs editor (`PerTypeCard` on `/inventory/:id`) already renders arbitrary attr fields, so we can extend the coral schema in `src/lib/item-type-attrs.ts` with a single select field — **code-only change, no migration**.
+
+**Tiny pre-work proposed before discovery starts (≤30 min):**
+
+1. Add `inventory_role` select to `coral` schema in `src/lib/item-type-attrs.ts` with options `for_sale | growout | mother_colony | frag_source | hold` (mirrors the workflow vocabulary; `availability_status` handles the customer-facing toggle).
+2. Optional: surface `inventory_role` as a column on `/inventory` when `type=coral` is filtered.
+
+No DB migration. No Clover. No bulk import. Discovery can begin on C-40100 immediately after step 1.
