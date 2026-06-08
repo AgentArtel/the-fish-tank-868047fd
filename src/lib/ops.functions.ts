@@ -811,6 +811,7 @@ export const quickAddInventoryItem = createServerFn({ method: "POST" })
     has_price_tag: z.boolean().default(true),
     tag_photo_path: z.string().max(500).nullable().optional(),
     set_available: z.boolean().default(true),
+    attrs: z.record(z.string(), z.any()).nullable().optional(),
   }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
@@ -865,6 +866,7 @@ export const quickAddInventoryItem = createServerFn({ method: "POST" })
       live_sale_status: "not_eligible",
       needs_photo: false,
       notes: data.notes ?? null,
+      attrs: data.attrs && Object.keys(data.attrs).length > 0 ? data.attrs : null,
       received_at: nowIso,
       received_by: userId,
       created_by: userId,
