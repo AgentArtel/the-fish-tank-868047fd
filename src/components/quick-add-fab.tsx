@@ -312,6 +312,38 @@ function ManualForm({
           </Select>
           <p className="text-[10px] text-muted-foreground">No location? It will be saved as <span className="font-medium">Incoming</span>.</p>
         </div>
+        {itemType === "coral" && (
+          <>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Inventory role</Label>
+              <Select value={inventoryRole} onValueChange={setInventoryRole}>
+                <SelectTrigger><SelectValue placeholder="Operational role" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="for_sale">For sale</SelectItem>
+                  <SelectItem value="growout">Growout</SelectItem>
+                  <SelectItem value="mother_colony">Mother colony</SelectItem>
+                  <SelectItem value="frag_source">Frag source</SelectItem>
+                  <SelectItem value="hold">Hold</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground">Customer availability is controlled separately by Availability status.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Coral type</Label>
+              <Select value={coralType} onValueChange={setCoralType}>
+                <SelectTrigger><SelectValue placeholder="SPS / LPS / soft…" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="SPS">SPS</SelectItem>
+                  <SelectItem value="LPS">LPS</SelectItem>
+                  <SelectItem value="soft">Soft</SelectItem>
+                  <SelectItem value="zoanthid">Zoanthid</SelectItem>
+                  <SelectItem value="mushroom">Mushroom</SelectItem>
+                  <SelectItem value="anemone">Anemone</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </>
+        )}
         <div className="space-y-1.5 sm:col-span-2">
           <Label className="text-xs">Notes</Label>
           <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} />
