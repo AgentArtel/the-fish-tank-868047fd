@@ -150,6 +150,8 @@ function ManualForm({
   const [locationId, setLocationId] = useState<string>("");
   const [vendorId, setVendorId] = useState<string>("");
   const [notes, setNotes] = useState("");
+  const [inventoryRole, setInventoryRole] = useState<string>("");
+  const [coralType, setCoralType] = useState<string>("");
 
   const [primaryFile, setPrimaryFile] = useState<File | null>(null);
   const [primaryPreview, setPrimaryPreview] = useState<string>("");
