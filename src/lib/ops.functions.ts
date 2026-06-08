@@ -866,6 +866,7 @@ export const quickAddInventoryItem = createServerFn({ method: "POST" })
       live_sale_status: "not_eligible",
       needs_photo: false,
       notes: data.notes ?? null,
+      attrs: data.attrs && Object.keys(data.attrs).length > 0 ? data.attrs : null,
       received_at: nowIso,
       received_by: userId,
       created_by: userId,
