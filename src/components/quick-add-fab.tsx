@@ -209,6 +209,11 @@ function ManualForm({
         const t = await uploadToInventoryBucket(tagFile);
         tagPath = t.path;
       }
+      const attrs: Record<string, any> = {};
+      if (itemType === "coral") {
+        if (inventoryRole) attrs.inventory_role = inventoryRole;
+        if (coralType) attrs.coral_type = coralType;
+      }
       await quickAdd({ data: {
         item_name: itemName.trim(),
         scientific_name: scientificName.trim() || null,
@@ -224,6 +229,7 @@ function ManualForm({
         has_price_tag: hasPriceTag,
         tag_photo_path: tagPath,
         set_available: true,
+        attrs: Object.keys(attrs).length > 0 ? attrs : null,
       } });
       (window as any).__quickAddTagPath = null;
       toast.success(`Added ${itemName}`);
