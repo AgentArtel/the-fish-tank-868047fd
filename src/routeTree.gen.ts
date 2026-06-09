@@ -34,6 +34,7 @@ import { Route as AppSettingsUsersRouteImport } from './routes/_app/settings.use
 import { Route as AppSettingsMetaRouteImport } from './routes/_app/settings.meta'
 import { Route as AppSettingsAiRouteImport } from './routes/_app/settings.ai'
 import { Route as AppInventoryMissingTagsRouteImport } from './routes/_app/inventory.missing-tags'
+import { Route as AppInventoryCoralDiscoveryRouteImport } from './routes/_app/inventory.coral-discovery'
 import { Route as AppInventoryIdRouteImport } from './routes/_app/inventory.$id'
 import { Route as AppContentNewRouteImport } from './routes/_app/content.new'
 import { Route as AppContentIdRouteImport } from './routes/_app/content.$id'
@@ -163,6 +164,12 @@ const AppInventoryMissingTagsRoute = AppInventoryMissingTagsRouteImport.update({
   path: '/missing-tags',
   getParentRoute: () => AppInventoryRoute,
 } as any)
+const AppInventoryCoralDiscoveryRoute =
+  AppInventoryCoralDiscoveryRouteImport.update({
+    id: '/coral-discovery',
+    path: '/coral-discovery',
+    getParentRoute: () => AppInventoryRoute,
+  } as any)
 const AppInventoryIdRoute = AppInventoryIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -206,6 +213,7 @@ export interface FileRoutesByFullPath {
   '/content/$id': typeof AppContentIdRoute
   '/content/new': typeof AppContentNewRoute
   '/inventory/$id': typeof AppInventoryIdRoute
+  '/inventory/coral-discovery': typeof AppInventoryCoralDiscoveryRoute
   '/inventory/missing-tags': typeof AppInventoryMissingTagsRoute
   '/settings/ai': typeof AppSettingsAiRoute
   '/settings/meta': typeof AppSettingsMetaRoute
@@ -234,6 +242,7 @@ export interface FileRoutesByTo {
   '/content/$id': typeof AppContentIdRoute
   '/content/new': typeof AppContentNewRoute
   '/inventory/$id': typeof AppInventoryIdRoute
+  '/inventory/coral-discovery': typeof AppInventoryCoralDiscoveryRoute
   '/inventory/missing-tags': typeof AppInventoryMissingTagsRoute
   '/settings/ai': typeof AppSettingsAiRoute
   '/settings/meta': typeof AppSettingsMetaRoute
@@ -266,6 +275,7 @@ export interface FileRoutesById {
   '/_app/content/$id': typeof AppContentIdRoute
   '/_app/content/new': typeof AppContentNewRoute
   '/_app/inventory/$id': typeof AppInventoryIdRoute
+  '/_app/inventory/coral-discovery': typeof AppInventoryCoralDiscoveryRoute
   '/_app/inventory/missing-tags': typeof AppInventoryMissingTagsRoute
   '/_app/settings/ai': typeof AppSettingsAiRoute
   '/_app/settings/meta': typeof AppSettingsMetaRoute
@@ -298,6 +308,7 @@ export interface FileRouteTypes {
     | '/content/$id'
     | '/content/new'
     | '/inventory/$id'
+    | '/inventory/coral-discovery'
     | '/inventory/missing-tags'
     | '/settings/ai'
     | '/settings/meta'
@@ -326,6 +337,7 @@ export interface FileRouteTypes {
     | '/content/$id'
     | '/content/new'
     | '/inventory/$id'
+    | '/inventory/coral-discovery'
     | '/inventory/missing-tags'
     | '/settings/ai'
     | '/settings/meta'
@@ -357,6 +369,7 @@ export interface FileRouteTypes {
     | '/_app/content/$id'
     | '/_app/content/new'
     | '/_app/inventory/$id'
+    | '/_app/inventory/coral-discovery'
     | '/_app/inventory/missing-tags'
     | '/_app/settings/ai'
     | '/_app/settings/meta'
@@ -552,6 +565,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppInventoryMissingTagsRouteImport
       parentRoute: typeof AppInventoryRoute
     }
+    '/_app/inventory/coral-discovery': {
+      id: '/_app/inventory/coral-discovery'
+      path: '/coral-discovery'
+      fullPath: '/inventory/coral-discovery'
+      preLoaderRoute: typeof AppInventoryCoralDiscoveryRouteImport
+      parentRoute: typeof AppInventoryRoute
+    }
     '/_app/inventory/$id': {
       id: '/_app/inventory/$id'
       path: '/$id'
@@ -599,12 +619,14 @@ const AppBatchesRouteWithChildren = AppBatchesRoute._addFileChildren(
 
 interface AppInventoryRouteChildren {
   AppInventoryIdRoute: typeof AppInventoryIdRoute
+  AppInventoryCoralDiscoveryRoute: typeof AppInventoryCoralDiscoveryRoute
   AppInventoryMissingTagsRoute: typeof AppInventoryMissingTagsRoute
   AppInventoryIndexRoute: typeof AppInventoryIndexRoute
 }
 
 const AppInventoryRouteChildren: AppInventoryRouteChildren = {
   AppInventoryIdRoute: AppInventoryIdRoute,
+  AppInventoryCoralDiscoveryRoute: AppInventoryCoralDiscoveryRoute,
   AppInventoryMissingTagsRoute: AppInventoryMissingTagsRoute,
   AppInventoryIndexRoute: AppInventoryIndexRoute,
 }

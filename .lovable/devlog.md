@@ -4,6 +4,43 @@ Living record of what's been built, what was extra/unplanned, and what's still a
 
 ---
 
+## 2026-06-09 — Coral Inventory Discovery (capture tool)
+
+Kicks off the "Next phase — Coral Inventory Discovery (manual)" item from below. The field-audit concluded a coral can be entered today with no migration; this turns that into a single purpose-built screen so a tank can be catalogued in one sitting instead of clicking through the generic Quick Add for every frag.
+
+New `/inventory/coral-discovery` page (linked in the Inventory nav group, Waves icon):
+
+- **System picker** lists coral-holding locations first (`coral_system / coral_flat / frag_tank / growout_tank / live_sale_tank / display_tank`), with a "Show all locations" toggle. Defaults to the first coral system (e.g. C-40100). Shows live coral count + per-role breakdown for the selected system.
+- **Capture form** optimised for rapid repeated entry down a rack: optional camera photo, common name (autofocus), **plug / rack tag** (the 3D-printed plug codes — B3, X3, H8 — that mark exactly where a coral sits), scientific name, inventory role, coral type, optional price, quantity / frag count, notes. "Save & next" keeps the role + type set and refocuses the name field; an admin-free Clear resets everything.
+- **Plug tagging** is the headline of the discovery workflow: the tag is normalized to uppercase, stored in `attrs.rack_position` (also added to the coral schema in `item-type-attrs.ts`, so it renders on the item detail page too), and the form warns if a plug is already tagged in the selected system so the same coral isn't logged twice. The system panel shows a live "N plugs tagged" count.
+- **Session log** keeps a running list of what was logged this page-load (with plug codes); **"Already in this system"** shows existing corals in the picked location with their plug codes. Both deep-link to `/inventory/$id`.
+
+### Invariants respected (review before live)
+
+Discovery creates **draft** coral `inventory_items` only — it can never push a coral live on its own:
+
+- `pricing_status` stays `not_priced` (discovery never approves pricing — admin still does).
+- Nothing is set to `available` here. Role → draft availability: `for_sale → incoming`, `hold → on_hold`, `growout / mother_colony / frag_source → not_for_sale`. The intended role is recorded in `attrs.inventory_role` (and `attrs.coral_type`), matching the existing coral schema in `item-type-attrs.ts`.
+- Photo is optional at capture (sets `needs_photo`), but the existing DB trigger still blocks `available` until a photo is on file — so the photo gate is preserved when an admin later promotes the item.
+
+### Migrations
+
+- None. Pure UI + two server fns on existing tables (`inventory_items`, `inventory_media`, `inventory_activity_logs`, `store_locations`).
+
+### Files
+
+- new `src/routes/_app/inventory.coral-discovery.tsx` — page, system picker, capture form (incl. plug/rack tag + duplicate warning), session log.
+- edit `src/lib/ops.functions.ts` — `catalogCoralItem` (editor-gated draft create + plug tag + photo + activity log) and `getCoralDiscoveryOverview` (systems, per-location/role counts, plug positions in use, recent corals).
+- edit `src/lib/item-type-attrs.ts` — `rack_position` field on the coral schema (shows on item detail page).
+- edit `src/routes/_app.tsx` — "Coral Discovery" nav item under Inventory.
+
+### What's next
+
+1. Surface `inventory_role` as a column on `/inventory` when `type=coral` is filtered (small, code-only — the audit's optional step).
+2. A reviewer pass to promote `incoming` for-sale corals (price + photo + availability) — could reuse the pricing queue once it covers inventory items, not just vendor lines.
+
+---
+
 ## 2026-06-05 (Sprint 7) — Intake capture upgrades
 
 Two long-standing intake pain points are closed: receiving a big shipment no longer requires line-by-line typing, and bulk-add no longer forces a single "shared" photo across heterogeneous rows.
