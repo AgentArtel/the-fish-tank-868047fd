@@ -348,6 +348,10 @@ function CoralCaptureForm({
       toast.error("Coral name is required");
       return;
     }
+    if (!normPos) {
+      toast.error("Plug / rack tag is required — it's how we find the coral on the rack");
+      return;
+    }
     setBusy(true);
     try {
       let photoPath: string | undefined;
@@ -363,7 +367,7 @@ function CoralCaptureForm({
           location_id: locationId,
           item_name: name.trim(),
           scientific_name: sci.trim() || null,
-          rack_position: normPos || null,
+          rack_position: normPos,
           inventory_role: role,
           coral_type: (coralType || null) as any,
           retail_price: priceNum != null && !Number.isNaN(priceNum) ? priceNum : null,
@@ -443,7 +447,7 @@ function CoralCaptureForm({
           />
         </div>
         <div className="space-y-1 w-28">
-          <Label className="text-xs">Plug / rack tag</Label>
+          <Label className="text-xs">Plug / rack tag *</Label>
           <Input
             value={rackPos}
             onChange={(e) => setRackPos(e.target.value)}
@@ -545,7 +549,11 @@ function CoralCaptureForm({
       </p>
 
       <div className="flex gap-2 pt-1">
-        <Button onClick={save} disabled={busy || disabled} className="flex-1">
+        <Button
+          onClick={save}
+          disabled={busy || disabled || !name.trim() || !normPos}
+          className="flex-1"
+        >
           {busy ? (
             <>
               <Loader2 className="w-4 h-4 mr-1 animate-spin" /> Saving…

@@ -2032,7 +2032,7 @@ export const catalogCoralItem = createServerFn({ method: "POST" })
         location_id: z.string().uuid(),
         item_name: z.string().trim().min(1).max(200),
         scientific_name: z.string().trim().max(200).nullable().optional(),
-        rack_position: z.string().trim().max(40).nullable().optional(),
+        rack_position: z.string().trim().min(1).max(40),
         inventory_role: CoralRoleEnum.default("for_sale"),
         coral_type: CoralTypeEnum.nullable().optional(),
         retail_price: z.number().nonnegative().max(1000000).nullable().optional(),
@@ -2062,10 +2062,10 @@ export const catalogCoralItem = createServerFn({ method: "POST" })
       inventory_role: data.inventory_role,
     };
     if (data.coral_type) attrs.coral_type = data.coral_type;
-    // Rack position (plug tag, e.g. B3 / X3 / H8) — normalize to uppercase so
-    // it stays consistent across cataloguers.
-    const rackPosition = data.rack_position?.trim().toUpperCase() || null;
-    if (rackPosition) attrs.rack_position = rackPosition;
+    // Rack position (plug tag, e.g. B3 / X3 / H8) — required; normalize to
+    // uppercase so it stays consistent across cataloguers.
+    const rackPosition = data.rack_position.toUpperCase();
+    attrs.rack_position = rackPosition;
 
     const availability = coralRoleToAvailability(data.inventory_role);
     const nowIso = new Date().toISOString();

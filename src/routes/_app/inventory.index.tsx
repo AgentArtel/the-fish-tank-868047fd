@@ -4,15 +4,25 @@ import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/page-header";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { OpsBadge, availabilityTone, liveSaleTone, pricingTone } from "@/components/ops-badge";
 import {
-  INVENTORY_AVAILABILITY, INVENTORY_AVAILABILITY_LABELS,
-  INVENTORY_LIVE_SALE, INVENTORY_LIVE_SALE_LABELS,
+  INVENTORY_AVAILABILITY,
+  INVENTORY_AVAILABILITY_LABELS,
+  INVENTORY_LIVE_SALE,
+  INVENTORY_LIVE_SALE_LABELS,
   INVENTORY_PRICING_LABELS,
-  ITEM_TYPES, ITEM_TYPE_LABELS, type ItemType,
+  ITEM_TYPES,
+  ITEM_TYPE_LABELS,
+  type ItemType,
   fmtMoney,
 } from "@/lib/ops";
 import { setInventoryAvailability, setInventoryLiveSale } from "@/lib/ops.functions";
@@ -25,8 +35,10 @@ import { z } from "zod";
 
 const searchSchema = z.object({
   location: z.string().uuid().optional(),
-  descendants: z.union([z.literal("1"), z.literal("0"), z.boolean()]).optional()
-    .transform((v) => v === "1" || v === true ? true : undefined),
+  descendants: z
+    .union([z.literal("1"), z.literal("0"), z.boolean()])
+    .optional()
+    .transform((v) => (v === "1" || v === true ? true : undefined)),
   type: z.enum(ITEM_TYPES).optional(),
 });
 
@@ -44,7 +56,14 @@ function InventoryPage() {
 
   const { data: allLocations } = useQuery({
     queryKey: ["all-locations"],
-    queryFn: async () => (await supabase.from("store_locations").select("id,name,is_live_sale,parent_location_id").eq("is_active", true).order("name")).data ?? [],
+    queryFn: async () =>
+      (
+        await supabase
+          .from("store_locations")
+          .select("id,name,is_live_sale,parent_location_id")
+          .eq("is_active", true)
+          .order("name")
+      ).data ?? [],
     staleTime: 60_000,
   });
 
@@ -64,7 +83,11 @@ function InventoryPage() {
     const stack = [locationId];
     while (stack.length) {
       const cur = stack.pop()!;
-      for (const c of byParent[cur] ?? []) if (!ids.has(c)) { ids.add(c); stack.push(c); }
+      for (const c of byParent[cur] ?? [])
+        if (!ids.has(c)) {
+          ids.add(c);
+          stack.push(c);
+        }
     }
     return Array.from(ids);
   }, [locationId, descendants, allLocations]);
@@ -72,9 +95,11 @@ function InventoryPage() {
   const { data } = useQuery({
     queryKey: ["inventory", q, statusFilter, locationIds, type],
     queryFn: async () => {
-      let query = supabase.from("inventory_items")
+      let query = supabase
+        .from("inventory_items")
         .select("*, store_locations(name,is_live_sale), vendors(name)")
-        .order("updated_at",{ascending:false}).limit(500);
+        .order("updated_at", { ascending: false })
+        .limit(500);
       if (statusFilter !== "all") query = query.eq("availability_status", statusFilter as any);
       if (q) query = query.ilike("item_name", `%${q}%`);
       if (type) query = query.eq("item_type", type);
@@ -86,27 +111,46 @@ function InventoryPage() {
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["inventory"] });
 
-  const clearLocation = () => nav({ search: (prev: any) => ({ ...prev, location: undefined, descendants: undefined }) });
+  const clearLocation = () =>
+    nav({ search: (prev: any) => ({ ...prev, location: undefined, descendants: undefined }) });
   const clearType = () => nav({ search: (prev: any) => ({ ...prev, type: undefined }) });
-  const toggleDescendants = () => nav({ search: (prev: any) => ({ ...prev, descendants: descendants ? undefined : true }) });
+  const toggleDescendants = () =>
+    nav({ search: (prev: any) => ({ ...prev, descendants: descendants ? undefined : true }) });
 
   const hasActiveFilters = !!locationId || !!type;
+  const showPlug = type === "coral";
 
   return (
     <div className="p-8">
-      <PageHeader title="Inventory" description="Store inventory created from approved vendor line items." />
+      <PageHeader
+        title="Inventory"
+        description="Store inventory created from approved vendor line items."
+      />
       <div className="flex gap-2 mb-4 items-center flex-wrap">
-        <Input placeholder="Search item name…" value={q} onChange={e=>setQ(e.target.value)} className="max-w-xs" />
+        <Input
+          placeholder="Search item name…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          className="max-w-xs"
+        />
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="max-w-[200px]"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="max-w-[200px]">
+            <SelectValue />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All availability</SelectItem>
-            {INVENTORY_AVAILABILITY.map(s => <SelectItem key={s} value={s}>{INVENTORY_AVAILABILITY_LABELS[s]}</SelectItem>)}
+            {INVENTORY_AVAILABILITY.map((s) => (
+              <SelectItem key={s} value={s}>
+                {INVENTORY_AVAILABILITY_LABELS[s]}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <div className="ml-auto flex gap-2">
           <Button asChild size="sm" variant="outline">
-            <Link to="/inventory/missing-tags"><Tag className="w-4 h-4 mr-1" /> Missing tags</Link>
+            <Link to="/inventory/missing-tags">
+              <Tag className="w-4 h-4 mr-1" /> Missing tags
+            </Link>
           </Button>
           <QuickAddButton size="sm">Quick Add</QuickAddButton>
         </div>
@@ -119,7 +163,11 @@ function InventoryPage() {
               <Badge variant="secondary" className="gap-1">
                 Location: {locationName ?? "…"}
                 {descendants && <span className="text-muted-foreground">+ sub-locations</span>}
-                <button onClick={clearLocation} className="ml-1 hover:text-destructive" aria-label="Clear location filter">
+                <button
+                  onClick={clearLocation}
+                  className="ml-1 hover:text-destructive"
+                  aria-label="Clear location filter"
+                >
                   <X className="w-3 h-3" />
                 </button>
               </Badge>
@@ -131,7 +179,11 @@ function InventoryPage() {
           {type && (
             <Badge variant="secondary" className="gap-1">
               Type: {ITEM_TYPE_LABELS[type as ItemType]}
-              <button onClick={clearType} className="ml-1 hover:text-destructive" aria-label="Clear type filter">
+              <button
+                onClick={clearType}
+                className="ml-1 hover:text-destructive"
+                aria-label="Clear type filter"
+              >
                 <X className="w-3 h-3" />
               </button>
             </Badge>
@@ -142,22 +194,37 @@ function InventoryPage() {
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-left">
             <tr>
-              <th className="p-3">Item</th><th className="p-3">Vendor</th>
-              <th className="p-3">Qty</th><th className="p-3">Retail</th>
-              <th className="p-3">Pricing</th><th className="p-3">Location</th>
-              <th className="p-3">Availability</th><th className="p-3">Live sale</th>
+              <th className="p-3">Item</th>
+              {showPlug && <th className="p-3">Plug</th>}
+              <th className="p-3">Vendor</th>
+              <th className="p-3">Qty</th>
+              <th className="p-3">Retail</th>
+              <th className="p-3">Pricing</th>
+              <th className="p-3">Location</th>
+              <th className="p-3">Availability</th>
+              <th className="p-3">Live sale</th>
             </tr>
           </thead>
           <tbody>
-            {(data ?? []).map((i: any) => <InventoryRow key={i.id} item={i} locations={allLocations ?? []} onDone={refresh} />)}
+            {(data ?? []).map((i: any) => (
+              <InventoryRow
+                key={i.id}
+                item={i}
+                locations={allLocations ?? []}
+                showPlug={showPlug}
+                onDone={refresh}
+              />
+            ))}
             {data?.length === 0 && (
               <tr>
-                <td colSpan={8} className="p-10">
+                <td colSpan={showPlug ? 9 : 8} className="p-10">
                   <div className="flex flex-col items-center text-center gap-3">
                     <PackagePlus className="w-8 h-8 text-muted-foreground" />
                     <div>
                       <div className="font-medium">
-                        {hasActiveFilters ? "No items match the current filters" : "No inventory yet"}
+                        {hasActiveFilters
+                          ? "No items match the current filters"
+                          : "No inventory yet"}
                       </div>
                       <div className="text-sm text-muted-foreground max-w-md">
                         {hasActiveFilters
@@ -167,7 +234,9 @@ function InventoryPage() {
                     </div>
                     <div className="flex gap-2">
                       {hasActiveFilters ? (
-                        <Button size="sm" variant="outline" onClick={() => nav({ search: {} })}>Clear filters</Button>
+                        <Button size="sm" variant="outline" onClick={() => nav({ search: {} })}>
+                          Clear filters
+                        </Button>
                       ) : (
                         <>
                           <QuickAddButton size="sm">Quick add an item</QuickAddButton>
@@ -188,75 +257,172 @@ function InventoryPage() {
   );
 }
 
-function InventoryRow({ item, locations, onDone }: { item: any; locations: any[]; onDone: () => void }) {
+function InventoryRow({
+  item,
+  locations,
+  showPlug,
+  onDone,
+}: {
+  item: any;
+  locations: any[];
+  showPlug?: boolean;
+  onDone: () => void;
+}) {
   const setAvail = useServerFn(setInventoryAvailability);
   const setLive = useServerFn(setInventoryLiveSale);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [pendingAvail, setPendingAvail] = useState<string | null>(null);
 
   const setLocation = async (locationId: string) => {
-    const { error } = await supabase.from("inventory_items").update({ location_id: locationId === "none" ? null : locationId }).eq("id", item.id);
-    if (error) toast.error(error.message); else onDone();
+    const { error } = await supabase
+      .from("inventory_items")
+      .update({ location_id: locationId === "none" ? null : locationId })
+      .eq("id", item.id);
+    if (error) toast.error(error.message);
+    else onDone();
   };
   const applyAvail = async (s: string) => {
-    try { await setAvail({ data: { id: item.id, status: s as any } }); onDone(); }
-    catch (e: any) { toast.error(e.message); }
+    try {
+      await setAvail({ data: { id: item.id, status: s as any } });
+      onDone();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
   const changeAvail = async (s: string) => {
     if (s === "available") {
       const hasPhoto = await inventoryHasPhoto(item.id);
-      if (!hasPhoto) { setPendingAvail(s); setWizardOpen(true); return; }
+      if (!hasPhoto) {
+        setPendingAvail(s);
+        setWizardOpen(true);
+        return;
+      }
     }
     applyAvail(s);
   };
   const changeLive = async (s: string) => {
-    try { await setLive({ data: { id: item.id, status: s as any } }); onDone(); }
-    catch (e: any) { toast.error(e.message); }
+    try {
+      await setLive({ data: { id: item.id, status: s as any } });
+      onDone();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
 
   return (
     <tr className="border-t hover:bg-muted/30">
       <td className="p-3">
-        <Link to="/inventory/$id" params={{ id: item.id }} className="font-medium hover:underline">{item.item_name}</Link>
-        {item.scientific_name && <div className="text-xs italic text-muted-foreground">{item.scientific_name}</div>}
+        <Link to="/inventory/$id" params={{ id: item.id }} className="font-medium hover:underline">
+          {item.item_name}
+        </Link>
+        {item.scientific_name && (
+          <div className="text-xs italic text-muted-foreground">{item.scientific_name}</div>
+        )}
         {item.size && <div className="text-xs text-muted-foreground">{item.size}</div>}
       </td>
+      {showPlug && (
+        <td className="p-3">
+          {item.attrs?.rack_position ? (
+            <Badge className="font-mono text-[10px]">{item.attrs.rack_position}</Badge>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+        </td>
+      )}
       <td className="p-3 text-muted-foreground">{item.vendors?.name ?? "—"}</td>
       <td className="p-3 text-xs">
-        <div>Avail: <span className="font-medium">{item.quantity_available}</span></div>
-        <div className="text-muted-foreground">Recv {item.quantity_received} · Hold {item.quantity_on_hold} · Sold {item.quantity_sold} · Lost {item.quantity_lost}</div>
+        <div>
+          Avail: <span className="font-medium">{item.quantity_available}</span>
+        </div>
+        <div className="text-muted-foreground">
+          Recv {item.quantity_received} · Hold {item.quantity_on_hold} · Sold {item.quantity_sold} ·
+          Lost {item.quantity_lost}
+        </div>
       </td>
       <td className="p-3">{fmtMoney(item.retail_price)}</td>
-      <td className="p-3"><OpsBadge label={INVENTORY_PRICING_LABELS[item.pricing_status as keyof typeof INVENTORY_PRICING_LABELS]} tone={pricingTone(item.pricing_status)} /></td>
+      <td className="p-3">
+        <OpsBadge
+          label={
+            INVENTORY_PRICING_LABELS[item.pricing_status as keyof typeof INVENTORY_PRICING_LABELS]
+          }
+          tone={pricingTone(item.pricing_status)}
+        />
+      </td>
       <td className="p-3">
         <Select value={item.location_id ?? "none"} onValueChange={setLocation}>
-          <SelectTrigger className="h-7 text-xs w-[150px]"><SelectValue placeholder="—" /></SelectTrigger>
+          <SelectTrigger className="h-7 text-xs w-[150px]">
+            <SelectValue placeholder="—" />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="none">— None —</SelectItem>
-            {locations.map((l: any) => <SelectItem key={l.id} value={l.id}>{l.name}{l.is_live_sale ? " ★" : ""}</SelectItem>)}
+            {locations.map((l: any) => (
+              <SelectItem key={l.id} value={l.id}>
+                {l.name}
+                {l.is_live_sale ? " ★" : ""}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </td>
       <td className="p-3">
         <Select value={item.availability_status} onValueChange={changeAvail}>
-          <SelectTrigger className="h-7 text-xs w-[130px]"><SelectValue /></SelectTrigger>
-          <SelectContent>{INVENTORY_AVAILABILITY.map(s => <SelectItem key={s} value={s}>{INVENTORY_AVAILABILITY_LABELS[s]}</SelectItem>)}</SelectContent>
+          <SelectTrigger className="h-7 text-xs w-[130px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {INVENTORY_AVAILABILITY.map((s) => (
+              <SelectItem key={s} value={s}>
+                {INVENTORY_AVAILABILITY_LABELS[s]}
+              </SelectItem>
+            ))}
+          </SelectContent>
         </Select>
-        <div className="mt-1"><OpsBadge label={INVENTORY_AVAILABILITY_LABELS[item.availability_status as keyof typeof INVENTORY_AVAILABILITY_LABELS]} tone={availabilityTone(item.availability_status)} /></div>
+        <div className="mt-1">
+          <OpsBadge
+            label={
+              INVENTORY_AVAILABILITY_LABELS[
+                item.availability_status as keyof typeof INVENTORY_AVAILABILITY_LABELS
+              ]
+            }
+            tone={availabilityTone(item.availability_status)}
+          />
+        </div>
         <PhotoOnFileWizard
           open={wizardOpen}
           onOpenChange={setWizardOpen}
           inventoryItemId={item.id}
           itemName={item.item_name}
-          onUploaded={async () => { if (pendingAvail) { await applyAvail(pendingAvail); setPendingAvail(null); } }}
+          onUploaded={async () => {
+            if (pendingAvail) {
+              await applyAvail(pendingAvail);
+              setPendingAvail(null);
+            }
+          }}
         />
       </td>
       <td className="p-3">
         <Select value={item.live_sale_status} onValueChange={changeLive}>
-          <SelectTrigger className="h-7 text-xs w-[120px]"><SelectValue /></SelectTrigger>
-          <SelectContent>{INVENTORY_LIVE_SALE.map(s => <SelectItem key={s} value={s}>{INVENTORY_LIVE_SALE_LABELS[s]}</SelectItem>)}</SelectContent>
+          <SelectTrigger className="h-7 text-xs w-[120px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {INVENTORY_LIVE_SALE.map((s) => (
+              <SelectItem key={s} value={s}>
+                {INVENTORY_LIVE_SALE_LABELS[s]}
+              </SelectItem>
+            ))}
+          </SelectContent>
         </Select>
-        <div className="mt-1"><OpsBadge label={INVENTORY_LIVE_SALE_LABELS[item.live_sale_status as keyof typeof INVENTORY_LIVE_SALE_LABELS]} tone={liveSaleTone(item.live_sale_status)} /></div>
+        <div className="mt-1">
+          <OpsBadge
+            label={
+              INVENTORY_LIVE_SALE_LABELS[
+                item.live_sale_status as keyof typeof INVENTORY_LIVE_SALE_LABELS
+              ]
+            }
+            tone={liveSaleTone(item.live_sale_status)}
+          />
+        </div>
       </td>
     </tr>
   );
