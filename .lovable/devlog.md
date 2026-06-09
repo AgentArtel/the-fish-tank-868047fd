@@ -11,8 +11,9 @@ Kicks off the "Next phase — Coral Inventory Discovery (manual)" item from belo
 New `/inventory/coral-discovery` page (linked in the Inventory nav group, Waves icon):
 
 - **System picker** lists coral-holding locations first (`coral_system / coral_flat / frag_tank / growout_tank / live_sale_tank / display_tank`), with a "Show all locations" toggle. Defaults to the first coral system (e.g. C-40100). Shows live coral count + per-role breakdown for the selected system.
-- **Capture form** optimised for rapid repeated entry down a rack: optional camera photo, common name (autofocus), scientific name, inventory role, coral type, optional price, quantity / frag count, notes. "Save & next" keeps the role + type set and refocuses the name field; an admin-free Clear resets everything.
-- **Session log** keeps a running list of what was logged this page-load; **"Already in this system"** shows existing corals in the picked location. Both deep-link to `/inventory/$id`.
+- **Capture form** optimised for rapid repeated entry down a rack: optional camera photo, common name (autofocus), **plug / rack tag** (the 3D-printed plug codes — B3, X3, H8 — that mark exactly where a coral sits), scientific name, inventory role, coral type, optional price, quantity / frag count, notes. "Save & next" keeps the role + type set and refocuses the name field; an admin-free Clear resets everything.
+- **Plug tagging** is the headline of the discovery workflow: the tag is normalized to uppercase, stored in `attrs.rack_position` (also added to the coral schema in `item-type-attrs.ts`, so it renders on the item detail page too), and the form warns if a plug is already tagged in the selected system so the same coral isn't logged twice. The system panel shows a live "N plugs tagged" count.
+- **Session log** keeps a running list of what was logged this page-load (with plug codes); **"Already in this system"** shows existing corals in the picked location with their plug codes. Both deep-link to `/inventory/$id`.
 
 ### Invariants respected (review before live)
 
@@ -28,8 +29,9 @@ Discovery creates **draft** coral `inventory_items` only — it can never push a
 
 ### Files
 
-- new `src/routes/_app/inventory.coral-discovery.tsx` — page, system picker, capture form, session log.
-- edit `src/lib/ops.functions.ts` — `catalogCoralItem` (editor-gated draft create + photo + activity log) and `getCoralDiscoveryOverview` (systems, per-location/role counts, recent corals).
+- new `src/routes/_app/inventory.coral-discovery.tsx` — page, system picker, capture form (incl. plug/rack tag + duplicate warning), session log.
+- edit `src/lib/ops.functions.ts` — `catalogCoralItem` (editor-gated draft create + plug tag + photo + activity log) and `getCoralDiscoveryOverview` (systems, per-location/role counts, plug positions in use, recent corals).
+- edit `src/lib/item-type-attrs.ts` — `rack_position` field on the coral schema (shows on item detail page).
 - edit `src/routes/_app.tsx` — "Coral Discovery" nav item under Inventory.
 
 ### What's next

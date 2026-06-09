@@ -46,7 +46,15 @@ const ROLE_LABELS: Record<(typeof ROLES)[number], string> = {
 };
 const CORAL_TYPES = ["SPS", "LPS", "soft", "zoanthid", "mushroom", "anemone"] as const;
 
-type SessionEntry = { id: string; name: string; role: string; qty: number; availability: string };
+type SessionEntry = {
+  id: string;
+  locationId: string;
+  name: string;
+  role: string;
+  qty: number;
+  availability: string;
+  position?: string | null;
+};
 
 async function uploadDiscoveryPhoto(file: File) {
   const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
@@ -92,6 +100,19 @@ function CoralDiscoveryPage() {
     () => ((overview?.recent ?? []) as any[]).filter((c) => c.location_id === effectiveLocationId),
     [overview, effectiveLocationId],
   );
+
+  const positionsByLocation = (overview?.positionsByLocation ?? {}) as Record<string, string[]>;
+  // Plugs already used in the selected system (plus anything logged this session)
+  // so the form can flag a double-tagged plug before it happens.
+  const usedPositions = useMemo(() => {
+    const set = new Set<string>(
+      (positionsByLocation[effectiveLocationId] ?? []).map((p) => p.toUpperCase()),
+    );
+    for (const e of session) {
+      if (e.position && e.locationId === effectiveLocationId) set.add(e.position.toUpperCase());
+    }
+    return set;
+  }, [positionsByLocation, effectiveLocationId, session]);
 
   return (
     <div className="p-6 md:p-8 max-w-5xl">
@@ -148,6 +169,11 @@ function CoralDiscoveryPage() {
                 {ROLE_LABELS[role as (typeof ROLES)[number]] ?? role}: {n}
               </Badge>
             ))}
+            {usedPositions.size > 0 && (
+              <Badge variant="outline" className="font-normal">
+                {usedPositions.size} plug{usedPositions.size === 1 ? "" : "s"} tagged
+              </Badge>
+            )}
             <Link
               to="/inventory"
               search={{ location: effectiveLocationId, type: "coral" }}
@@ -164,6 +190,7 @@ function CoralDiscoveryPage() {
         <CoralCaptureForm
           locationId={effectiveLocationId}
           disabled={!effectiveLocationId}
+          usedPositions={usedPositions}
           onSaved={(entry) => {
             setSession((s) => [entry, ...s]);
             qc.invalidateQueries({ queryKey: ["coral-discovery-overview"] });
@@ -187,6 +214,9 @@ function CoralDiscoveryPage() {
                     key={e.id}
                     className="flex items-center gap-2 text-sm border-b last:border-0 pb-2 last:pb-0"
                   >
+                    {e.position && (
+                      <Badge className="font-mono text-[10px] shrink-0">{e.position}</Badge>
+                    )}
                     <Link
                       to="/inventory/$id"
                       params={{ id: e.id }}
@@ -221,6 +251,11 @@ function CoralDiscoveryPage() {
                     key={c.id}
                     className="flex items-center gap-2 text-sm border-b last:border-0 pb-2 last:pb-0"
                   >
+                    {c.attrs?.rack_position && (
+                      <Badge className="font-mono text-[10px] shrink-0">
+                        {c.attrs.rack_position}
+                      </Badge>
+                    )}
                     <Link
                       to="/inventory/$id"
                       params={{ id: c.id }}
@@ -259,16 +294,19 @@ function CoralDiscoveryPage() {
 function CoralCaptureForm({
   locationId,
   disabled,
+  usedPositions,
   onSaved,
   catalogFn,
 }: {
   locationId: string;
   disabled: boolean;
+  usedPositions: Set<string>;
   onSaved: (entry: SessionEntry) => void;
   catalogFn: ReturnType<typeof useServerFn<typeof catalogCoralItem>>;
 }) {
   const [name, setName] = useState("");
   const [sci, setSci] = useState("");
+  const [rackPos, setRackPos] = useState("");
   const [role, setRole] = useState<(typeof ROLES)[number]>("for_sale");
   const [coralType, setCoralType] = useState<string>("");
   const [price, setPrice] = useState("");
@@ -278,6 +316,9 @@ function CoralCaptureForm({
   const [busy, setBusy] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
 
+  const normPos = rackPos.trim().toUpperCase();
+  const positionTaken = normPos.length > 0 && usedPositions.has(normPos);
+
   const pickPhoto = (f: File | undefined | null) => {
     if (!f) return;
     setPhoto({ file: f, preview: URL.createObjectURL(f) });
@@ -286,6 +327,7 @@ function CoralCaptureForm({
   const reset = (keepClassifiers: boolean) => {
     setName("");
     setSci("");
+    setRackPos(""); // each coral gets its own plug — never carry it over
     setPrice("");
     setQty("1");
     setNotes("");
@@ -321,6 +363,7 @@ function CoralCaptureForm({
           location_id: locationId,
           item_name: name.trim(),
           scientific_name: sci.trim() || null,
+          rack_position: normPos || null,
           inventory_role: role,
           coral_type: (coralType || null) as any,
           retail_price: priceNum != null && !Number.isNaN(priceNum) ? priceNum : null,
@@ -332,12 +375,16 @@ function CoralCaptureForm({
       });
       onSaved({
         id: res.inventoryItemId,
+        locationId,
         name: name.trim(),
         role,
         qty: Math.max(1, parseInt(qty || "1", 10) || 1),
         availability: res.availability_status,
+        position: res.rack_position,
       });
-      toast.success(`Saved "${name.trim()}"${res.needs_photo ? " — add a photo later" : ""}`);
+      toast.success(
+        `Saved "${name.trim()}"${res.rack_position ? ` @ ${res.rack_position}` : ""}${res.needs_photo ? " — add a photo later" : ""}`,
+      );
       reset(true); // keep role + type for fast repeated entry down a rack
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to save");
@@ -384,16 +431,33 @@ function CoralCaptureForm({
         </label>
       )}
 
-      <div className="space-y-1">
-        <Label className="text-xs">Coral name *</Label>
-        <Input
-          ref={nameRef}
-          autoFocus
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="e.g. Rainbow Hornet Acan"
-        />
+      <div className="grid grid-cols-[1fr_auto] gap-3">
+        <div className="space-y-1">
+          <Label className="text-xs">Coral name *</Label>
+          <Input
+            ref={nameRef}
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Rainbow Hornet Acan"
+          />
+        </div>
+        <div className="space-y-1 w-28">
+          <Label className="text-xs">Plug / rack tag</Label>
+          <Input
+            value={rackPos}
+            onChange={(e) => setRackPos(e.target.value)}
+            placeholder="B3"
+            className={`font-mono uppercase ${positionTaken ? "border-amber-500 focus-visible:ring-amber-500" : ""}`}
+          />
+        </div>
       </div>
+      {positionTaken && (
+        <p className="text-[11px] text-amber-600 dark:text-amber-400 -mt-1">
+          Plug <span className="font-mono font-semibold">{normPos}</span> is already tagged in this
+          system. Double-check you're not logging the same coral twice.
+        </p>
+      )}
       <div className="space-y-1">
         <Label className="text-xs">Scientific name</Label>
         <Input

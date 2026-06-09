@@ -2032,6 +2032,7 @@ export const catalogCoralItem = createServerFn({ method: "POST" })
         location_id: z.string().uuid(),
         item_name: z.string().trim().min(1).max(200),
         scientific_name: z.string().trim().max(200).nullable().optional(),
+        rack_position: z.string().trim().max(40).nullable().optional(),
         inventory_role: CoralRoleEnum.default("for_sale"),
         coral_type: CoralTypeEnum.nullable().optional(),
         retail_price: z.number().nonnegative().max(1000000).nullable().optional(),
@@ -2061,6 +2062,10 @@ export const catalogCoralItem = createServerFn({ method: "POST" })
       inventory_role: data.inventory_role,
     };
     if (data.coral_type) attrs.coral_type = data.coral_type;
+    // Rack position (plug tag, e.g. B3 / X3 / H8) — normalize to uppercase so
+    // it stays consistent across cataloguers.
+    const rackPosition = data.rack_position?.trim().toUpperCase() || null;
+    if (rackPosition) attrs.rack_position = rackPosition;
 
     const availability = coralRoleToAvailability(data.inventory_role);
     const nowIso = new Date().toISOString();
@@ -2107,10 +2112,11 @@ export const catalogCoralItem = createServerFn({ method: "POST" })
       inventory_item_id: inv.id,
       actor_id: userId,
       action: "created",
-      summary: `Coral discovery: "${data.item_name}" (${data.inventory_role}) in ${loc.name}`,
+      summary: `Coral discovery: "${data.item_name}" (${data.inventory_role})${rackPosition ? ` @ ${rackPosition}` : ""} in ${loc.name}`,
       detail: {
         source: "coral_discovery",
         inventory_role: data.inventory_role,
+        rack_position: rackPosition,
         location_id: data.location_id,
       },
     });
@@ -2118,6 +2124,7 @@ export const catalogCoralItem = createServerFn({ method: "POST" })
     return {
       inventoryItemId: inv.id,
       availability_status: availability,
+      rack_position: rackPosition,
       needs_photo: !data.photo_path,
     };
   });
@@ -2147,12 +2154,19 @@ export const getCoralDiscoveryOverview = createServerFn({ method: "POST" })
     if (cErr) throw new Error(cErr.message);
 
     const countsByLocation: Record<string, { total: number; roles: Record<string, number> }> = {};
+    // Plug/rack positions already in use per location — lets the capture form
+    // warn before two corals get tagged to the same plug.
+    const positionsByLocation: Record<string, string[]> = {};
     for (const c of corals ?? []) {
       if (!c.location_id) continue;
       const bucket = (countsByLocation[c.location_id] ??= { total: 0, roles: {} });
       bucket.total += 1;
       const role = (c.attrs as any)?.inventory_role ?? "unspecified";
       bucket.roles[role] = (bucket.roles[role] ?? 0) + 1;
+      const pos = (c.attrs as any)?.rack_position;
+      if (typeof pos === "string" && pos.trim()) {
+        (positionsByLocation[c.location_id] ??= []).push(pos.trim().toUpperCase());
+      }
     }
 
     const recent = (corals ?? []).slice(0, 15);
@@ -2160,6 +2174,7 @@ export const getCoralDiscoveryOverview = createServerFn({ method: "POST" })
     return {
       locations: locations ?? [],
       countsByLocation,
+      positionsByLocation,
       totalCoral: (corals ?? []).length,
       recent,
     };

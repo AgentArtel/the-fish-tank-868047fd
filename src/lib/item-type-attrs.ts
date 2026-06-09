@@ -30,8 +30,18 @@ export interface AttrGroup {
 const SHARED_LIVESTOCK: AttrGroup = {
   label: "Care",
   fields: [
-    { key: "care_level", label: "Care level", type: "select", options: ["beginner", "intermediate", "expert"] },
-    { key: "temperament", label: "Temperament", type: "select", options: ["peaceful", "semi-aggressive", "aggressive", "reef-safe", "not reef-safe"] },
+    {
+      key: "care_level",
+      label: "Care level",
+      type: "select",
+      options: ["beginner", "intermediate", "expert"],
+    },
+    {
+      key: "temperament",
+      label: "Temperament",
+      type: "select",
+      options: ["peaceful", "semi-aggressive", "aggressive", "reef-safe", "not reef-safe"],
+    },
     { key: "diet", label: "Diet", type: "text", placeholder: "e.g. frozen mysis, pellets, algae" },
     { key: "min_tank_size_gal", label: "Min tank size (gal)", type: "number" },
     { key: "captive_bred", label: "Captive bred", type: "boolean" },
@@ -45,8 +55,18 @@ export const ITEM_TYPE_SCHEMA: Record<ItemType, AttrGroup[]> = {
       label: "Fish-specific",
       fields: [
         { key: "max_size_in", label: "Adult size (in)", type: "number" },
-        { key: "swim_zone", label: "Swim zone", type: "select", options: ["top", "mid", "bottom", "all"] },
-        { key: "reef_safe", label: "Reef safe", type: "select", options: ["yes", "with caution", "no"] },
+        {
+          key: "swim_zone",
+          label: "Swim zone",
+          type: "select",
+          options: ["top", "mid", "bottom", "all"],
+        },
+        {
+          key: "reef_safe",
+          label: "Reef safe",
+          type: "select",
+          options: ["yes", "with caution", "no"],
+        },
       ],
     },
   ],
@@ -54,13 +74,46 @@ export const ITEM_TYPE_SCHEMA: Record<ItemType, AttrGroup[]> = {
     {
       label: "Coral details",
       fields: [
-        { key: "inventory_role", label: "Inventory role", type: "select", options: ["for_sale", "growout", "mother_colony", "frag_source", "hold"], help: "Operational role of this coral. Availability to customers is controlled by Availability status." },
-        { key: "coral_type", label: "Type", type: "select", options: ["SPS", "LPS", "soft", "zoanthid", "mushroom", "anemone"] },
+        {
+          key: "rack_position",
+          label: "Rack position (plug)",
+          type: "text",
+          placeholder: "e.g. B3, X3, H8",
+          help: "Plug / frag-tag code marking exactly where this coral sits on the rack.",
+        },
+        {
+          key: "inventory_role",
+          label: "Inventory role",
+          type: "select",
+          options: ["for_sale", "growout", "mother_colony", "frag_source", "hold"],
+          help: "Operational role of this coral. Availability to customers is controlled by Availability status.",
+        },
+        {
+          key: "coral_type",
+          label: "Type",
+          type: "select",
+          options: ["SPS", "LPS", "soft", "zoanthid", "mushroom", "anemone"],
+        },
         { key: "lighting", label: "Lighting", type: "select", options: ["low", "medium", "high"] },
         { key: "flow", label: "Flow", type: "select", options: ["low", "medium", "high"] },
-        { key: "placement", label: "Placement", type: "select", options: ["bottom", "mid", "top", "any"] },
-        { key: "aggression", label: "Aggression", type: "select", options: ["low", "medium", "high"] },
-        { key: "frag_size", label: "Frag / colony size", type: "text", placeholder: "e.g. 1in frag, mini-colony" },
+        {
+          key: "placement",
+          label: "Placement",
+          type: "select",
+          options: ["bottom", "mid", "top", "any"],
+        },
+        {
+          key: "aggression",
+          label: "Aggression",
+          type: "select",
+          options: ["low", "medium", "high"],
+        },
+        {
+          key: "frag_size",
+          label: "Frag / colony size",
+          type: "text",
+          placeholder: "e.g. 1in frag, mini-colony",
+        },
         { key: "aquacultured", label: "Aquacultured", type: "boolean" },
       ],
     },
@@ -70,8 +123,18 @@ export const ITEM_TYPE_SCHEMA: Record<ItemType, AttrGroup[]> = {
     {
       label: "Invert-specific",
       fields: [
-        { key: "invert_kind", label: "Kind", type: "select", options: ["shrimp", "snail", "crab", "starfish", "urchin", "clam", "other"] },
-        { key: "reef_safe", label: "Reef safe", type: "select", options: ["yes", "with caution", "no"] },
+        {
+          key: "invert_kind",
+          label: "Kind",
+          type: "select",
+          options: ["shrimp", "snail", "crab", "starfish", "urchin", "clam", "other"],
+        },
+        {
+          key: "reef_safe",
+          label: "Reef safe",
+          type: "select",
+          options: ["yes", "with caution", "no"],
+        },
       ],
     },
   ],
@@ -79,7 +142,12 @@ export const ITEM_TYPE_SCHEMA: Record<ItemType, AttrGroup[]> = {
     {
       label: "Live rock",
       fields: [
-        { key: "rock_type", label: "Type", type: "select", options: ["base", "shelf", "branch", "dry", "cured live"] },
+        {
+          key: "rock_type",
+          label: "Type",
+          type: "select",
+          options: ["base", "shelf", "branch", "dry", "cured live"],
+        },
         { key: "weight_lb", label: "Weight (lb)", type: "number" },
         { key: "cured", label: "Cured", type: "boolean" },
       ],
@@ -107,16 +175,19 @@ export const ITEM_TYPE_SCHEMA: Record<ItemType, AttrGroup[]> = {
         { key: "wattage", label: "Wattage", type: "number" },
         { key: "voltage", label: "Voltage", type: "number" },
         { key: "warranty_months", label: "Warranty (months)", type: "number" },
-        { key: "condition", label: "Condition", type: "select", options: ["new", "open box", "used", "refurbished"] },
+        {
+          key: "condition",
+          label: "Condition",
+          type: "select",
+          options: ["new", "open box", "used", "refurbished"],
+        },
       ],
     },
   ],
   other: [
     {
       label: "Notes",
-      fields: [
-        { key: "notes", label: "Free-form notes", type: "text" },
-      ],
+      fields: [{ key: "notes", label: "Free-form notes", type: "text" }],
     },
   ],
 };
