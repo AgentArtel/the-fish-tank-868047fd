@@ -1,4 +1,11 @@
-import { createFileRoute, Outlet, redirect, Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Outlet,
+  redirect,
+  Link,
+  useNavigate,
+  useRouterState,
+} from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,10 +16,27 @@ import { QuickAddFab } from "@/components/quick-add-fab";
 import { getWorkload } from "@/lib/workload.functions";
 import { useState, useEffect } from "react";
 import {
-  LayoutDashboard, Calendar, FileText, Image, Package,
-  Megaphone, CheckSquare, Settings, Users, LogOut,
-  PackageOpen, Truck, MapPin, ListChecks, DollarSign, Boxes, Menu,
-  ChevronDown, ChevronRight, Store,
+  LayoutDashboard,
+  Calendar,
+  FileText,
+  Image,
+  Package,
+  Megaphone,
+  CheckSquare,
+  Settings,
+  Users,
+  LogOut,
+  PackageOpen,
+  Truck,
+  MapPin,
+  ListChecks,
+  DollarSign,
+  Boxes,
+  Menu,
+  ChevronDown,
+  ChevronRight,
+  Store,
+  Waves,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_app")({
@@ -24,7 +48,14 @@ export const Route = createFileRoute("/_app")({
 });
 
 type BadgeKey = "intakeAwaitingReview" | "pricingPending" | "missingTags";
-type NavItem = { to: string; label: string; icon: any; soon?: boolean; adminOnly?: boolean; badge?: BadgeKey };
+type NavItem = {
+  to: string;
+  label: string;
+  icon: any;
+  soon?: boolean;
+  adminOnly?: boolean;
+  badge?: BadgeKey;
+};
 type NavGroup = { label: string; items: NavItem[] };
 
 const GROUPS: NavGroup[] = [
@@ -40,8 +71,14 @@ const GROUPS: NavGroup[] = [
     label: "Inventory",
     items: [
       { to: "/batches", label: "Intake", icon: PackageOpen, badge: "intakeAwaitingReview" },
-      { to: "/pricing-approval", label: "Pricing Queue", icon: DollarSign, badge: "pricingPending" },
+      {
+        to: "/pricing-approval",
+        label: "Pricing Queue",
+        icon: DollarSign,
+        badge: "pricingPending",
+      },
       { to: "/inventory", label: "Stock", icon: Boxes, badge: "missingTags" },
+      { to: "/inventory/coral-discovery", label: "Coral Discovery", icon: Waves },
       { to: "/store-locations", label: "Locations", icon: MapPin },
       { to: "/vendors", label: "Vendors", icon: Truck },
     ],
@@ -69,9 +106,10 @@ const GROUPS: NavGroup[] = [
 
 function NavBadge({ count, tone = "default" }: { count: number; tone?: "default" | "warn" }) {
   if (!count) return null;
-  const cls = tone === "warn"
-    ? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
-    : "bg-primary/15 text-primary";
+  const cls =
+    tone === "warn"
+      ? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+      : "bg-primary/15 text-primary";
   return (
     <span className={`text-[10px] font-semibold rounded px-1.5 py-0.5 ${cls}`}>
       {count > 99 ? "99+" : count}
@@ -80,10 +118,17 @@ function NavBadge({ count, tone = "default" }: { count: number; tone?: "default"
 }
 
 function SidebarBody({
-  me, isAdmin, pathname, onNavigate, onSignOut,
+  me,
+  isAdmin,
+  pathname,
+  onNavigate,
+  onSignOut,
 }: {
-  me: any; isAdmin: boolean; pathname: string;
-  onNavigate?: () => void; onSignOut: () => void;
+  me: any;
+  isAdmin: boolean;
+  pathname: string;
+  onNavigate?: () => void;
+  onSignOut: () => void;
 }) {
   const fn = useServerFn(getWorkload);
   const { data: workload } = useQuery({
@@ -95,7 +140,11 @@ function SidebarBody({
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
     if (typeof window === "undefined") return {};
-    try { return JSON.parse(localStorage.getItem("nav.collapsed") ?? "{}"); } catch { return {}; }
+    try {
+      return JSON.parse(localStorage.getItem("nav.collapsed") ?? "{}");
+    } catch {
+      return {};
+    }
   });
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -113,10 +162,12 @@ function SidebarBody({
         </div>
       </div>
       <nav className="flex-1 p-2 space-y-2 overflow-y-auto">
-        {GROUPS.map(group => {
-          const visibleItems = group.items.filter(i => !i.adminOnly || isAdmin);
+        {GROUPS.map((group) => {
+          const visibleItems = group.items.filter((i) => !i.adminOnly || isAdmin);
           if (visibleItems.length === 0) return null;
-          const hasActive = visibleItems.some(i => pathname === i.to || (i.to !== "/dashboard" && pathname.startsWith(i.to + "/")));
+          const hasActive = visibleItems.some(
+            (i) => pathname === i.to || (i.to !== "/dashboard" && pathname.startsWith(i.to + "/")),
+          );
           const isCollapsed = !!collapsed[group.label] && !hasActive;
           const groupBadge = visibleItems.reduce((sum, i) => {
             if (!i.badge || !workload) return sum;
@@ -127,18 +178,24 @@ function SidebarBody({
             <div key={group.label}>
               <button
                 type="button"
-                onClick={() => setCollapsed(c => ({ ...c, [group.label]: !c[group.label] }))}
+                onClick={() => setCollapsed((c) => ({ ...c, [group.label]: !c[group.label] }))}
                 className="w-full flex items-center gap-1 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
               >
-                {isCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                {isCollapsed ? (
+                  <ChevronRight className="w-3 h-3" />
+                ) : (
+                  <ChevronDown className="w-3 h-3" />
+                )}
                 <span className="flex-1 text-left">{group.label}</span>
                 {isCollapsed && groupBadge > 0 && <NavBadge count={groupBadge} tone="warn" />}
               </button>
               {!isCollapsed && (
                 <div className="space-y-0.5 mt-0.5">
-                  {visibleItems.map(item => {
+                  {visibleItems.map((item) => {
                     const Icon = item.icon;
-                    const active = pathname === item.to || (item.to !== "/dashboard" && pathname.startsWith(item.to + "/"));
+                    const active =
+                      pathname === item.to ||
+                      (item.to !== "/dashboard" && pathname.startsWith(item.to + "/"));
                     const count = item.badge && workload ? ((workload as any)[item.badge] ?? 0) : 0;
                     if (item.soon && item.to !== "/tasks") {
                       return (
@@ -176,7 +233,10 @@ function SidebarBody({
                           </span>
                         )}
                         {!item.soon && count > 0 && (
-                          <NavBadge count={count} tone={item.badge === "pricingPending" ? "warn" : "default"} />
+                          <NavBadge
+                            count={count}
+                            tone={item.badge === "pricingPending" ? "warn" : "default"}
+                          />
                         )}
                       </Link>
                     );
@@ -200,24 +260,34 @@ function SidebarBody({
 function AppLayout() {
   const nav = useNavigate();
   const { data: me, isLoading } = useMe();
-  const pathname = useRouterState({ select: s => s.location.pathname });
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  useEffect(() => { setMobileOpen(false); }, [pathname]);
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Loading…</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center text-muted-foreground">
+        Loading…
+      </div>
+    );
   }
   if (me && !me.isActive) {
     throw redirect({ to: "/pending-approval" });
   }
 
   const isAdmin = !!me?.roles.includes("admin");
-  const signOut = async () => { await supabase.auth.signOut(); nav({ to: "/login" }); };
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    nav({ to: "/login" });
+  };
 
   const activeLabel =
-    GROUPS.flatMap(g => g.items).find(i => pathname === i.to || (i.to !== "/dashboard" && pathname.startsWith(i.to + "/")))?.label
-    ?? "The Fish Tank";
+    GROUPS.flatMap((g) => g.items).find(
+      (i) => pathname === i.to || (i.to !== "/dashboard" && pathname.startsWith(i.to + "/")),
+    )?.label ?? "The Fish Tank";
 
   return (
     <div className="min-h-screen flex bg-muted/20">
@@ -247,7 +317,9 @@ function AppLayout() {
           <div className="font-semibold text-sm truncate">{activeLabel}</div>
         </header>
 
-        <main className="flex-1 overflow-auto"><Outlet /></main>
+        <main className="flex-1 overflow-auto">
+          <Outlet />
+        </main>
       </div>
 
       <QuickAddFab />
