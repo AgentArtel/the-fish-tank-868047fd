@@ -4,6 +4,27 @@ Living record of what's been built, what was extra/unplanned, and what's still a
 
 ---
 
+## 2026-06-10 — DB hardening: admin-only inventory pricing approval (Lovable / DB lane)
+
+Hand-off `handoff-coral-review.md` item 1 — shipped.
+
+- New migration adds `public.guard_inventory_pricing_approval()` + `inv_guard_pricing_approval` trigger on `inventory_items`.
+- **`BEFORE UPDATE OF pricing_status` only.** Fires when pricing is being changed *to* `approved` from a non-approved value by a non-admin → `RAISE EXCEPTION` (`check_violation`, "Only admins can approve inventory pricing"). INSERT path is intentionally untouched so Quick Add / bulk-import (non-admin editor restock that inserts items already `pricing_status='approved'`) keeps working.
+- Function is `SECURITY DEFINER`, `search_path = public`, `EXECUTE` revoked from PUBLIC/anon/authenticated — trigger context only.
+- Mirrors the existing `guard_vli_pricing_approval` pattern on vendor lines.
+
+Hand-off item 2 — **confirmed, no change needed.** `inventory-media` bucket RLS (migration `20260526235115`) is path-agnostic: editor INSERT/SELECT/UPDATE policies only check `bucket_id` + `can_edit_content(auth.uid())`, so `coral-discovery/` (and any future prefix) is already covered, same as the working `quick-add/` prefix.
+
+### Frontend review (PR #4, no DB dependency)
+- `approveInventoryPricing` admin-gated in the server fn (`isAdmin` + `requireActive`) — consistent with the new DB trigger; trigger is defence-in-depth.
+- "Take live" path goes through `setInventoryAvailability` → `available`, which still hits `inv_guard_gates` (price + retail + location + qty) and `guard_inventory_photo_required` (photo). Invariants intact.
+
+### Linter / out-of-scope
+- Migration introduced 0 new lint findings (new function is `EXECUTE`-revoked).
+- 11 pre-existing warns remain (10× SECURITY DEFINER `EXECUTE` exposure on `has_role`, `is_active_user`, `can_edit_content`, `handle_new_user`, `log_inventory_activity`, `touch_updated_at`, and the four existing `guard_*` triggers; 1× `pg_trgm` in `public`). Not part of this hand-off — flag if you want a hardening pass.
+
+---
+
 ## 2026-06-09 — Coral Inventory Discovery (capture tool)
 
 Kicks off the "Next phase — Coral Inventory Discovery (manual)" item from below. The field-audit concluded a coral can be entered today with no migration; this turns that into a single purpose-built screen so a tank can be catalogued in one sitting instead of clicking through the generic Quick Add for every frag.
