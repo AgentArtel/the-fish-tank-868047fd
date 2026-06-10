@@ -368,7 +368,9 @@ export const importScrapeItems = createServerFn({ method: "POST" })
 
     // Map back to scrape_items: status=imported + FK
     const byExtId = new Map<string, string>();
-    for (const l of insertedLines ?? []) byExtId.set(l.vendor_item_id, l.id);
+    for (const l of insertedLines ?? []) {
+      if (l.vendor_item_id) byExtId.set(l.vendor_item_id, l.id);
+    }
     const nowIso = new Date().toISOString();
     for (const it of items as any[]) {
       await context.supabase
