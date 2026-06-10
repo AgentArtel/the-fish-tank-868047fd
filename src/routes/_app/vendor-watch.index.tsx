@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { listScrapeSources } from "@/lib/scrape.functions";
 import { Globe, ArrowRight, RefreshCw } from "lucide-react";
 
-export const Route = createFileRoute("/_app/vendors/scrape/")({
+export const Route = createFileRoute("/_app/vendor-watch/")({
   component: ScrapeSourcesPage,
 });
 
@@ -57,7 +57,7 @@ function ScrapeSourcesPage() {
           return (
             <Link
               key={s.id}
-              to="/vendors/scrape/$sourceId"
+              to="/vendor-watch/$sourceId"
               params={{ sourceId: s.id }}
               className="block rounded-lg border bg-card p-4 hover:bg-muted/30 transition-colors"
             >

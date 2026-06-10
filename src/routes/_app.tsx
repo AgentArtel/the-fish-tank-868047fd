@@ -82,7 +82,12 @@ const GROUPS: NavGroup[] = [
       { to: "/inventory/coral-discovery", label: "Coral Discovery", icon: Waves },
       { to: "/store-locations", label: "Locations", icon: MapPin },
       { to: "/vendors", label: "Vendors", icon: Truck },
-      { to: "/vendors/scrape", label: "Vendor Scrapes", icon: Globe },
+    ],
+  },
+  {
+    label: "Vendor Watch",
+    items: [
+      { to: "/vendor-watch", label: "Watch Sources", icon: Globe },
     ],
   },
   {
