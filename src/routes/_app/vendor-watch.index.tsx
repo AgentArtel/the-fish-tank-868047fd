@@ -57,7 +57,7 @@ function ScrapeSourcesPage() {
           return (
             <Link
               key={s.id}
-              to="/vendors/scrape/$sourceId"
+              to="/vendor-watch/$sourceId"
               params={{ sourceId: s.id }}
               className="block rounded-lg border bg-card p-4 hover:bg-muted/30 transition-colors"
             >

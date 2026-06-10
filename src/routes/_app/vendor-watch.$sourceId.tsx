@@ -152,7 +152,7 @@ function ScrapeSourceDetail() {
   return (
     <div className="p-6 md:p-8 max-w-6xl">
       <Link
-        to="/vendors/scrape"
+        to="/vendor-watch"
         className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 mb-2"
       >
         <ArrowLeft className="w-3 h-3" /> All scrape sources
