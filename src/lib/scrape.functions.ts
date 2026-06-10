@@ -280,7 +280,8 @@ export const refreshScrapeSource = createServerFn({ method: "POST" })
   });
 
 // ---------- import selected items into a draft vendor batch ----------
-function guessItemType(p: { product_type?: string; tags?: string[]; title?: string }): string {
+type ItemType = "coral" | "fish" | "invert" | "live_rock" | "dry_good" | "equipment" | "other";
+function guessItemType(p: { product_type?: string; tags?: string[]; title?: string }): ItemType {
   const hay = `${p.product_type ?? ""} ${(p.tags ?? []).join(" ")} ${p.title ?? ""}`.toLowerCase();
   if (/(fish|wrasse|tang|angel|clown|goby|blenny)/.test(hay)) return "fish";
   if (/(shrimp|crab|snail|urchin|starfish|cuc|nass|hermit|invert)/.test(hay)) return "invert";
