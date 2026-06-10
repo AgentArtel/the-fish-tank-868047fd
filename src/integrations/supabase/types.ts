@@ -1045,6 +1045,51 @@ export type Database = {
           },
         ]
       }
+      vendor_line_item_photos: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          storage_path: string
+          uploaded_by: string | null
+          vendor_batch_id: string
+          vendor_line_item_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind: string
+          storage_path: string
+          uploaded_by?: string | null
+          vendor_batch_id: string
+          vendor_line_item_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          storage_path?: string
+          uploaded_by?: string | null
+          vendor_batch_id?: string
+          vendor_line_item_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_line_item_photos_vendor_batch_id_fkey"
+            columns: ["vendor_batch_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_line_item_photos_vendor_line_item_id_fkey"
+            columns: ["vendor_line_item_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_line_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vendor_line_items: {
         Row: {
           approved_at: string | null
