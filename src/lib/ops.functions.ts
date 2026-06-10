@@ -77,6 +77,38 @@ export const approveLinePricing = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const approveInventoryPricing = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        inventoryItemId: z.string().uuid(),
+        approvedRetailPrice: z.number().nonnegative().max(1000000),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    if (!(await isAdmin(supabase, userId))) throw new Error("Only admins can approve pricing");
+    await requireActive(supabase, userId);
+    const { error } = await supabase
+      .from("inventory_items")
+      .update({
+        retail_price: data.approvedRetailPrice,
+        pricing_status: "approved",
+      })
+      .eq("id", data.inventoryItemId);
+    if (error) throw new Error(error.message);
+    await supabase.from("inventory_activity_logs").insert({
+      inventory_item_id: data.inventoryItemId,
+      actor_id: userId,
+      action: "pricing_change",
+      summary: `Pricing approved at ${data.approvedRetailPrice}`,
+      detail: { source: "coral_review", approved_retail_price: data.approvedRetailPrice },
+    });
+    return { ok: true };
+  });
+
 export const convertLineItemsToInventory = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
