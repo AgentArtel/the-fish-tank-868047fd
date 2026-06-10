@@ -37,6 +37,7 @@ import {
   ChevronRight,
   Store,
   Waves,
+  Globe,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_app")({
