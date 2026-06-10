@@ -39,6 +39,8 @@ import { Route as AppInventoryIdRouteImport } from './routes/_app/inventory.$id'
 import { Route as AppContentNewRouteImport } from './routes/_app/content.new'
 import { Route as AppContentIdRouteImport } from './routes/_app/content.$id'
 import { Route as AppBatchesIdRouteImport } from './routes/_app/batches.$id'
+import { Route as AppVendorsScrapeIndexRouteImport } from './routes/_app/vendors.scrape.index'
+import { Route as AppVendorsScrapeSourceIdRouteImport } from './routes/_app/vendors.scrape.$sourceId'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -190,6 +192,17 @@ const AppBatchesIdRoute = AppBatchesIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AppBatchesRoute,
 } as any)
+const AppVendorsScrapeIndexRoute = AppVendorsScrapeIndexRouteImport.update({
+  id: '/scrape/',
+  path: '/scrape/',
+  getParentRoute: () => AppVendorsRoute,
+} as any)
+const AppVendorsScrapeSourceIdRoute =
+  AppVendorsScrapeSourceIdRouteImport.update({
+    id: '/scrape/$sourceId',
+    path: '/scrape/$sourceId',
+    getParentRoute: () => AppVendorsRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -208,7 +221,7 @@ export interface FileRoutesByFullPath {
   '/publishing': typeof AppPublishingRoute
   '/store-locations': typeof AppStoreLocationsRoute
   '/tasks': typeof AppTasksRoute
-  '/vendors': typeof AppVendorsRoute
+  '/vendors': typeof AppVendorsRouteWithChildren
   '/batches/$id': typeof AppBatchesIdRoute
   '/content/$id': typeof AppContentIdRoute
   '/content/new': typeof AppContentNewRoute
@@ -221,6 +234,8 @@ export interface FileRoutesByFullPath {
   '/batches/': typeof AppBatchesIndexRoute
   '/content/': typeof AppContentIndexRoute
   '/inventory/': typeof AppInventoryIndexRoute
+  '/vendors/scrape/$sourceId': typeof AppVendorsScrapeSourceIdRoute
+  '/vendors/scrape/': typeof AppVendorsScrapeIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -237,7 +252,7 @@ export interface FileRoutesByTo {
   '/publishing': typeof AppPublishingRoute
   '/store-locations': typeof AppStoreLocationsRoute
   '/tasks': typeof AppTasksRoute
-  '/vendors': typeof AppVendorsRoute
+  '/vendors': typeof AppVendorsRouteWithChildren
   '/batches/$id': typeof AppBatchesIdRoute
   '/content/$id': typeof AppContentIdRoute
   '/content/new': typeof AppContentNewRoute
@@ -250,6 +265,8 @@ export interface FileRoutesByTo {
   '/batches': typeof AppBatchesIndexRoute
   '/content': typeof AppContentIndexRoute
   '/inventory': typeof AppInventoryIndexRoute
+  '/vendors/scrape/$sourceId': typeof AppVendorsScrapeSourceIdRoute
+  '/vendors/scrape': typeof AppVendorsScrapeIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -270,7 +287,7 @@ export interface FileRoutesById {
   '/_app/publishing': typeof AppPublishingRoute
   '/_app/store-locations': typeof AppStoreLocationsRoute
   '/_app/tasks': typeof AppTasksRoute
-  '/_app/vendors': typeof AppVendorsRoute
+  '/_app/vendors': typeof AppVendorsRouteWithChildren
   '/_app/batches/$id': typeof AppBatchesIdRoute
   '/_app/content/$id': typeof AppContentIdRoute
   '/_app/content/new': typeof AppContentNewRoute
@@ -283,6 +300,8 @@ export interface FileRoutesById {
   '/_app/batches/': typeof AppBatchesIndexRoute
   '/_app/content/': typeof AppContentIndexRoute
   '/_app/inventory/': typeof AppInventoryIndexRoute
+  '/_app/vendors/scrape/$sourceId': typeof AppVendorsScrapeSourceIdRoute
+  '/_app/vendors/scrape/': typeof AppVendorsScrapeIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -316,6 +335,8 @@ export interface FileRouteTypes {
     | '/batches/'
     | '/content/'
     | '/inventory/'
+    | '/vendors/scrape/$sourceId'
+    | '/vendors/scrape/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -345,6 +366,8 @@ export interface FileRouteTypes {
     | '/batches'
     | '/content'
     | '/inventory'
+    | '/vendors/scrape/$sourceId'
+    | '/vendors/scrape'
   id:
     | '__root__'
     | '/'
@@ -377,6 +400,8 @@ export interface FileRouteTypes {
     | '/_app/batches/'
     | '/_app/content/'
     | '/_app/inventory/'
+    | '/_app/vendors/scrape/$sourceId'
+    | '/_app/vendors/scrape/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -600,6 +625,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppBatchesIdRouteImport
       parentRoute: typeof AppBatchesRoute
     }
+    '/_app/vendors/scrape/': {
+      id: '/_app/vendors/scrape/'
+      path: '/scrape'
+      fullPath: '/vendors/scrape/'
+      preLoaderRoute: typeof AppVendorsScrapeIndexRouteImport
+      parentRoute: typeof AppVendorsRoute
+    }
+    '/_app/vendors/scrape/$sourceId': {
+      id: '/_app/vendors/scrape/$sourceId'
+      path: '/scrape/$sourceId'
+      fullPath: '/vendors/scrape/$sourceId'
+      preLoaderRoute: typeof AppVendorsScrapeSourceIdRouteImport
+      parentRoute: typeof AppVendorsRoute
+    }
   }
 }
 
@@ -635,6 +674,20 @@ const AppInventoryRouteWithChildren = AppInventoryRoute._addFileChildren(
   AppInventoryRouteChildren,
 )
 
+interface AppVendorsRouteChildren {
+  AppVendorsScrapeSourceIdRoute: typeof AppVendorsScrapeSourceIdRoute
+  AppVendorsScrapeIndexRoute: typeof AppVendorsScrapeIndexRoute
+}
+
+const AppVendorsRouteChildren: AppVendorsRouteChildren = {
+  AppVendorsScrapeSourceIdRoute: AppVendorsScrapeSourceIdRoute,
+  AppVendorsScrapeIndexRoute: AppVendorsScrapeIndexRoute,
+}
+
+const AppVendorsRouteWithChildren = AppVendorsRoute._addFileChildren(
+  AppVendorsRouteChildren,
+)
+
 interface AppRouteChildren {
   AppBatchesRoute: typeof AppBatchesRouteWithChildren
   AppCalendarRoute: typeof AppCalendarRoute
@@ -647,7 +700,7 @@ interface AppRouteChildren {
   AppPublishingRoute: typeof AppPublishingRoute
   AppStoreLocationsRoute: typeof AppStoreLocationsRoute
   AppTasksRoute: typeof AppTasksRoute
-  AppVendorsRoute: typeof AppVendorsRoute
+  AppVendorsRoute: typeof AppVendorsRouteWithChildren
   AppContentIdRoute: typeof AppContentIdRoute
   AppContentNewRoute: typeof AppContentNewRoute
   AppSettingsAiRoute: typeof AppSettingsAiRoute
@@ -668,7 +721,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppPublishingRoute: AppPublishingRoute,
   AppStoreLocationsRoute: AppStoreLocationsRoute,
   AppTasksRoute: AppTasksRoute,
-  AppVendorsRoute: AppVendorsRoute,
+  AppVendorsRoute: AppVendorsRouteWithChildren,
   AppContentIdRoute: AppContentIdRoute,
   AppContentNewRoute: AppContentNewRoute,
   AppSettingsAiRoute: AppSettingsAiRoute,
@@ -690,3 +743,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
