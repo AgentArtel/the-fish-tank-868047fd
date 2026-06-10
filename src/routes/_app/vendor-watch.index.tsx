@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { listScrapeSources } from "@/lib/scrape.functions";
 import { Globe, ArrowRight, RefreshCw } from "lucide-react";
 
-export const Route = createFileRoute("/_app/vendors/scrape/")({
+export const Route = createFileRoute("/_app/vendor-watch/")({
   component: ScrapeSourcesPage,
 });
 

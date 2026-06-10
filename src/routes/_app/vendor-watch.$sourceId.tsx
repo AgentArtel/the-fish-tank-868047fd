@@ -32,7 +32,7 @@ import {
   PackagePlus,
 } from "lucide-react";
 
-export const Route = createFileRoute("/_app/vendors/scrape/$sourceId")({
+export const Route = createFileRoute("/_app/vendor-watch/$sourceId")({
   component: ScrapeSourceDetail,
 });
 
