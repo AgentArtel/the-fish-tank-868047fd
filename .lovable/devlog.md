@@ -690,3 +690,41 @@ The requested sale-status vocabulary maps onto **two** existing dimensions:
 2. Optional: surface `inventory_role` as a column on `/inventory` when `type=coral` is filtered.
 
 No DB migration. No Clover. No bulk import. Discovery can begin on C-40100 immediately after step 1.
+
+---
+## 2026-06-10 — Vendor scrape system, Phase 1 (Lovable)
+
+Shipped the multi-vendor scraping foundation. Sea Dwelling's "Furnace" is wired up end-to-end.
+
+**Migration** (`20260610_vendor_scrapes`)
+- Added `'scrape'` to `vendor_batch_source_document_type` enum.
+- New tables `vendor_scrape_sources` (admin-managed) + `vendor_scrape_items` (editor-managed). RLS + grants in same migration. 0 new lint findings.
+- Seeded `Sea Dwelling Creatures` vendor + Furnace source (`shop.seadwelling.com/collections/the-furnace/products.json`, cadence `friday_night` — informational only in Phase 1).
+
+**Server fns** (`src/lib/scrape.functions.ts`)
+- `listScrapeSources` (editor) — sources + counts (new / available / imported).
+- `getScrapeSource` (editor) — source + items, status-filtered.
+- `refreshScrapeSource` (**admin**) — paginates Shopify products.json, upserts items keyed on variant SKU, downloads photos to `inventory-media/scraped/<vendor-slug>/<sku>.<ext>` via `supabaseAdmin` (loaded inside handler, never at module scope), marks no-longer-seen items `available_at_source=false`.
+- `importScrapeItems` (editor) — creates draft `vendor_batch` (`source_document_type='scrape'`, `intake_status='review'`) + `vendor_line_item` per pick with `wholesale_cost`, `item_type` (guessed from tags, default `coral`), `pricing_status='not_priced'`, and `attrs.{scrape_source_id, scrape_item_id, photo_path, photo_source_url, product_url, vendor_tags}`. Suggested 3× retail comes from the existing generated column. Lands in Pricing Queue; admin still approves.
+- `setScrapeItemStatus` (editor) — ignore/unignore. Refuses to overwrite `imported`.
+
+**UI**
+- `/vendors/scrape` — sources list with counts + last-scrape time.
+- `/vendors/scrape/$sourceId` — picker: filter by status (new/imported/ignored/unavailable/all), thumbnails via short-lived signed URLs, bulk Import → navigates to the new batch in `/batches/$id`, bulk Ignore/Restore. "Refresh now" button is admin-only at the server layer.
+- Sidebar link "Vendor Scrapes" under Inventory.
+
+**Invariants preserved**
+- AI/scrape is draft-only ✅ — lines land `not_priced`, batch starts `review`.
+- Admin-only pricing approval ✅ — flows through existing `guard_vli_pricing_approval` trigger.
+- Photo gate ✅ — photo stored at scrape time on `vendor_scrape_items.photo_path`; conversion to inventory still has to attach it for go-live.
+- Mutating fns gated on `is_active` + role ✅.
+
+**Deferred to Phase 2-4** (separate hand-offs)
+- Phase 2: per-source `pg_cron` (Furnace = Friday 22:00). Route stub will live at `/api/public/hooks/scrape-vendor`.
+- Phase 3: `vendor_source_watches` table + alerts when a name pattern goes available.
+- Phase 4: authed vendors (cookie/basic/bearer auth_method already in schema), Firecrawl fallback for non-Shopify, per-vendor secret slots.
+
+**For Claude Code (review checklist)**
+- Verify `attrs.photo_path` on scraped vendor_line_items is picked up by the existing convert-to-inventory flow (or wire it in if the inventory side expects a different location).
+- Double-check item_type guesser before we run on a non-coral vendor.
+- Sidebar link placement — Stock vs Vendors group — happy to move it.

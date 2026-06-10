@@ -37,6 +37,7 @@ import {
   ChevronRight,
   Store,
   Waves,
+  Globe,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_app")({
@@ -81,6 +82,7 @@ const GROUPS: NavGroup[] = [
       { to: "/inventory/coral-discovery", label: "Coral Discovery", icon: Waves },
       { to: "/store-locations", label: "Locations", icon: MapPin },
       { to: "/vendors", label: "Vendors", icon: Truck },
+      { to: "/vendors/scrape", label: "Vendor Scrapes", icon: Globe },
     ],
   },
   {

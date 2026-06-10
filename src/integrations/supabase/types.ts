@@ -1301,6 +1301,165 @@ export type Database = {
           },
         ]
       }
+      vendor_scrape_items: {
+        Row: {
+          available_at_source: boolean
+          created_at: string
+          external_handle: string | null
+          external_id: string
+          first_seen_at: string
+          id: string
+          imported_at: string | null
+          imported_by: string | null
+          imported_vendor_batch_id: string | null
+          imported_vendor_line_item_id: string | null
+          last_available_at: string | null
+          last_seen_at: string
+          photo_path: string | null
+          photo_source_url: string | null
+          product_url: string | null
+          raw_payload: Json
+          source_id: string
+          status: string
+          title: string
+          updated_at: string
+          vendor_currency: string | null
+          wholesale_cost: number | null
+        }
+        Insert: {
+          available_at_source?: boolean
+          created_at?: string
+          external_handle?: string | null
+          external_id: string
+          first_seen_at?: string
+          id?: string
+          imported_at?: string | null
+          imported_by?: string | null
+          imported_vendor_batch_id?: string | null
+          imported_vendor_line_item_id?: string | null
+          last_available_at?: string | null
+          last_seen_at?: string
+          photo_path?: string | null
+          photo_source_url?: string | null
+          product_url?: string | null
+          raw_payload?: Json
+          source_id: string
+          status?: string
+          title: string
+          updated_at?: string
+          vendor_currency?: string | null
+          wholesale_cost?: number | null
+        }
+        Update: {
+          available_at_source?: boolean
+          created_at?: string
+          external_handle?: string | null
+          external_id?: string
+          first_seen_at?: string
+          id?: string
+          imported_at?: string | null
+          imported_by?: string | null
+          imported_vendor_batch_id?: string | null
+          imported_vendor_line_item_id?: string | null
+          last_available_at?: string | null
+          last_seen_at?: string
+          photo_path?: string | null
+          photo_source_url?: string | null
+          product_url?: string | null
+          raw_payload?: Json
+          source_id?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          vendor_currency?: string | null
+          wholesale_cost?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_scrape_items_imported_vendor_batch_id_fkey"
+            columns: ["imported_vendor_batch_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_scrape_items_imported_vendor_line_item_id_fkey"
+            columns: ["imported_vendor_line_item_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_line_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_scrape_items_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_scrape_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vendor_scrape_sources: {
+        Row: {
+          auth_method: string
+          cadence: string
+          created_at: string
+          id: string
+          is_active: boolean
+          kind: string
+          last_item_count: number | null
+          last_scrape_error: string | null
+          last_scrape_status: string | null
+          last_scraped_at: string | null
+          name: string
+          notes: string | null
+          source_url: string
+          updated_at: string
+          vendor_id: string
+        }
+        Insert: {
+          auth_method?: string
+          cadence?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          kind?: string
+          last_item_count?: number | null
+          last_scrape_error?: string | null
+          last_scrape_status?: string | null
+          last_scraped_at?: string | null
+          name: string
+          notes?: string | null
+          source_url: string
+          updated_at?: string
+          vendor_id: string
+        }
+        Update: {
+          auth_method?: string
+          cadence?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          kind?: string
+          last_item_count?: number | null
+          last_scrape_error?: string | null
+          last_scrape_status?: string | null
+          last_scraped_at?: string | null
+          name?: string
+          notes?: string | null
+          source_url?: string
+          updated_at?: string
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_scrape_sources_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vendors: {
         Row: {
           address: string | null
@@ -1567,6 +1726,7 @@ export type Database = {
         | "packing_list"
         | "manual_entry"
         | "other"
+        | "scrape"
       vendor_line_kind: "sellable" | "charge"
       vendor_line_pricing_status: "not_priced" | "suggested" | "approved"
       vendor_line_review_status:
@@ -1855,6 +2015,7 @@ export const Constants = {
         "packing_list",
         "manual_entry",
         "other",
+        "scrape",
       ],
       vendor_line_kind: ["sellable", "charge"],
       vendor_line_pricing_status: ["not_priced", "suggested", "approved"],
