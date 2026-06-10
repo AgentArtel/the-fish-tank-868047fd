@@ -4,6 +4,40 @@ Living record of what's been built, what was extra/unplanned, and what's still a
 
 ---
 
+## 2026-06-10 — Coral loop E2E (browser automation lane)
+
+Ran `handoff-coral-e2e.md` against the preview as admin `mbs.artel@gmail.com`. Test row: `ZZ E2E TEST CORAL 20260610T154255Z` @ plug `ZE9`, location **Live Sale Tank Test**, qty 1, no photo at capture (Variant B path forced by tooling — see note).
+
+### Per-step results
+
+- **0. Log in** — PASS. `/login` → `/dashboard`, no error toast. Minor: the email `<input>` ignores Playwright's `fill` (React-controlled input — value reverts to `''` and submit triggers HTML5 "Please fill out this field"). `type` (keystrokes) works. Not a product bug, but worth a `defaultValue` / uncontrolled fallback or a `data-testid` if we want this scriptable cleanly.
+- **1. Discover + plug-tag** — PASS. Toast read **`Saved "ZZ E2E TEST CORAL 20260610T154255Z" @ ZE9 — add a photo later`** (matches the "no photo" variant string exactly). "Logged this session (1)" row shows `ZE9ʹ ×1 / For sale / Incoming`. Header counter flipped to **`1 plug tagged`**. No "already tagged" warning.
+- **2. Verify safe draft** — PASS on the gates, **FAIL on the doc assertion that "the Plug column shows ZE9"**. `/inventory` (filtered `ZZ E2E`) shows columns Item / Vendor / Qty / Retail / Pricing / Location / Availability / Live sale. There is **no "Plug" column** on `routes/_app/inventory.index.tsx` at any viewport — `attrs.rack_position` is stored (proven by Step 3 below surfacing the `ZE9` badge in the Pricing Queue) but never rendered in the stock list. Other assertions held: Availability=**Incoming**, Pricing=**Not priced**, Retail=`—`, Live sale=**Not eligible**. → Decide: add a Plug column to `/inventory` for coral rows, or strike that bullet from the hand-off doc.
+- **3. Approve pricing** — PASS. "Coral drafts — from Coral Discovery" section, ZE9 row, typed `45`, clicked **Approve**. Toast **`Pricing approved`**. Row flipped to **`$45.00 / Priced / Take live`**.
+- **4. Take live (photo gate)** — Variant B PASS. **Take live** opened the `PhotoOnFileWizard` ("**Snap a photo on file**" — `ZZ E2E TEST CORAL … — Items must have at least one photo before they can be marked Available.`). This is exactly the take-live photo gate firing as designed (the trigger is `guard_inventory_photo_required` + the wizard guard). **Step did not complete** — see tooling note.
+- **5. Public catalog** — **NOT RUN.** Requires the item to be `available`, which requires a photo upload, which the browser tool can't do (see note).
+- **6. Teardown** — **N/A.** The test row never reached `available`, so it is not on `/catalog`. It still exists as an `incoming` draft named `ZZ E2E TEST CORAL 20260610T154255Z` (id discoverable by that exact name) and can be hard-deleted via DB cleanup if desired; no customer-visible exposure.
+- **Variant A** — **NOT RUN.** Same tooling reason — Variant A's distinguishing step is uploading the photo at capture.
+
+### Tooling limitation (root cause for the partial run)
+
+Browser automation rejects file-input writes with `InvalidArgumentError: Failed to fill element (unsupported-input-type:file)` against both the coral-discovery capture input (`Tap to photograph the coral`) and the `PhotoOnFileWizard` input (`Tap to take a photo or choose a file`). I tried both label inputs after `observe()`-ing them — same error. This is a documented limitation ("complex file upload widgets may fail"), not a product bug. To finish Steps 4-final, 5, 6 and Variant A end-to-end, a human needs to drive the upload, or we add a server-fn shortcut (e.g. admin-only `attachInventoryPhotoFromUrl`) the test can call to seed a photo row.
+
+### What a green-so-far run still proves
+
+- Discovery captures + persists plug tags (`attrs.rack_position` → ZE9 badge in Pricing Queue).
+- Discovery drafts are **never** auto-`available` — landed `incoming`, `Not priced`, retail null.
+- Admin `approveInventoryPricing` works end-to-end (toast + row flip), gated by the new `guard_inventory_pricing_approval` trigger.
+- The photo gate **fires** on take-live (wizard opens instead of completing) — Variant B's assertion.
+
+### Action items for the team
+
+1. **Decide on the Plug column** on `/inventory` (add, or update the hand-off doc).
+2. **Human or scripted upload** to complete Steps 4-final → 6 and Variant A; ping when ready and I'll resume from Take live.
+3. Optional DX: small login affordance so the email field is reliably scriptable (uncontrolled fallback, `name="email"`/autocomplete, or a `data-testid`).
+
+---
+
 ## 2026-06-10 — DB hardening: admin-only inventory pricing approval (Lovable / DB lane)
 
 Hand-off `handoff-coral-review.md` item 1 — shipped.
