@@ -618,6 +618,9 @@ function ReceiveSection({ batchId, vendorId, lines, onDone }: { batchId: string;
           <p className="text-xs text-muted-foreground">Every save is recorded in the receive audit trail with timestamp + user. DOA lines require an in-bag and on-lid photo per wholesaler policy.</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => exportTagsCsv(sellable, drafts, getDraft)} disabled={sellable.length === 0}>
+            <Tags className="w-4 h-4 mr-1" /> Export tag CSV
+          </Button>
           <Button variant="outline" onClick={() => setPhotoOpen(true)}>
             <Camera className="w-4 h-4 mr-1" /> Photo → receive
           </Button>
