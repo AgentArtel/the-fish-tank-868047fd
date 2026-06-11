@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Plus, Upload, ArrowLeft, Sparkles, Camera, History, AlertTriangle, ScanBarcode } from "lucide-react";
 import { BarcodeScanDialog } from "@/components/barcode-scan-dialog";
+import { PhotoReceiveDialog } from "@/components/photo-receive-dialog";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useMe } from "@/hooks/use-me";
@@ -82,7 +83,7 @@ function BatchDetail() {
       <BatchHeaderForm batch={batch} onDone={refreshAll} />
       <ReconcileSection batch={batch} onDone={refreshAll} />
       <LineItemsSection batchId={id} vendorId={batch.vendor_id} lines={lines ?? []} onDone={refreshAll} />
-      <ReceiveSection batchId={id} lines={lines ?? []} onDone={refreshAll} />
+      <ReceiveSection batchId={id} vendorId={batch.vendor_id} lines={lines ?? []} onDone={refreshAll} />
       <ChargesSection batchId={id} charges={charges ?? []} onDone={refreshAll} />
 
     </div>
@@ -509,7 +510,7 @@ function ExtractAiButton({ batchId, hasPdf, extractionStatus, onDone }:
   );
 }
 
-function ReceiveSection({ batchId, lines, onDone }: { batchId: string; lines: any[]; onDone: () => void }) {
+function ReceiveSection({ batchId, vendorId, lines, onDone }: { batchId: string; vendorId: string; lines: any[]; onDone: () => void }) {
   const receive = useServerFn(receiveBatchLines);
   const qc = useQueryClient();
   const { data: locs } = useQuery({
@@ -528,6 +529,7 @@ function ReceiveSection({ batchId, lines, onDone }: { batchId: string; lines: an
   const [historyTarget, setHistoryTarget] = useState<any | null>(null);
   const [scanOpen, setScanOpen] = useState(false);
   const [scanAutoInc, setScanAutoInc] = useState(true);
+  const [photoOpen, setPhotoOpen] = useState(false);
 
   const photoCountsByLine = (() => {
     const m: Record<string, Set<string>> = {};
@@ -616,6 +618,9 @@ function ReceiveSection({ batchId, lines, onDone }: { batchId: string; lines: an
           <p className="text-xs text-muted-foreground">Every save is recorded in the receive audit trail with timestamp + user. DOA lines require an in-bag and on-lid photo per wholesaler policy.</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setPhotoOpen(true)}>
+            <Camera className="w-4 h-4 mr-1" /> Photo → receive
+          </Button>
           <Button variant="outline" onClick={() => setScanOpen(true)} disabled={sellable.length === 0}>
             <ScanBarcode className="w-4 h-4 mr-1" /> Scan
           </Button>
@@ -743,6 +748,29 @@ function ReceiveSection({ batchId, lines, onDone }: { batchId: string; lines: an
             const el = document.getElementById(`receive-row-${line.id}`);
             if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
           }, 50);
+        }}
+      />
+      <PhotoReceiveDialog
+        open={photoOpen}
+        onOpenChange={setPhotoOpen}
+        batchId={batchId}
+        vendorId={vendorId}
+        lines={sellable}
+        onMatch={(line) => {
+          const d = getDraft(line);
+          const next = Number(d.received_quantity ?? 0) + 1;
+          setDraft(line.id, { received_quantity: next });
+          setTimeout(() => {
+            const el = document.getElementById(`receive-row-${line.id}`);
+            if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+          }, 50);
+        }}
+        onCreated={(newLineId) => {
+          onDone();
+          setTimeout(() => {
+            const el = document.getElementById(`receive-row-${newLineId}`);
+            if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+          }, 400);
         }}
       />
     </div>

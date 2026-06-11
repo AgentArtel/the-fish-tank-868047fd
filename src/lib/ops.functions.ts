@@ -1290,6 +1290,11 @@ export const parseTagPhoto = createServerFn({ method: "POST" })
           properties: {
             item_name: { type: "string", description: "Common/trade name" },
             scientific_name: { type: "string" },
+            vendor_item_code: {
+              type: "string",
+              description: "Vendor SKU / item code printed on the bag/tag, e.g. Quality Marine or SDC code. Omit if not clearly visible.",
+            },
+            size: { type: "string", description: "Size grade if shown (S/M/L, 'Sm', '2-3\"', etc.)" },
             item_type: {
               type: "string",
               enum: ["fish", "coral", "invert", "dry_good", "live_rock", "equipment", "other"],
@@ -1320,7 +1325,7 @@ export const parseTagPhoto = createServerFn({ method: "POST" })
           {
             role: "system",
             content:
-              "You parse aquarium store price tags / livestock bag labels. Extract trade/common name, scientific name if shown, item type (fish/coral/invert/dry_good/live_rock/equipment/other), retail price (USD number, no symbols), all raw readable text, and whether a price tag is clearly visible. If a field isn't visible, omit it.",
+              "You parse aquarium wholesaler livestock bag labels (Quality Marine, Sea Dwelling Creatures) and retail price tags. Extract trade/common name, scientific name if shown, any vendor SKU/code printed on the bag/tag, size grade, item type (fish/coral/invert/dry_good/live_rock/equipment/other), retail price (USD number, no symbols), all raw readable text, and whether a price tag is clearly visible. If a field isn't visible, omit it — never guess a vendor code or price.",
           },
           {
             role: "user",
@@ -1351,6 +1356,8 @@ export const parseTagPhoto = createServerFn({ method: "POST" })
     const parsed = JSON.parse(call.function.arguments) as {
       item_name: string;
       scientific_name?: string;
+      vendor_item_code?: string;
+      size?: string;
       item_type?: string;
       retail_price?: number;
       has_price_tag?: boolean;
