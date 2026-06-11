@@ -25,7 +25,7 @@ import {
   VENDOR_CHARGE_TYPES, VENDOR_CHARGE_LABELS,
   ITEM_TYPES, ITEM_TYPE_LABELS,
   LOSS_REASONS, LOSS_REASON_LABELS,
-  fmtMoney,
+  fmtMoney, suggestRetail,
   type VendorLineReview,
 } from "@/lib/ops";
 import { convertLineItemsToInventory, getSignedVendorInvoiceUrl, extractBatchWithAI, receiveBatchLines, uploadDoaPhoto, getSignedInventoryMediaUrl, promoteQuickAddBatchVendor, computeQuickAddReconciliation, confirmReconciliation } from "@/lib/ops.functions";
@@ -246,7 +246,7 @@ function LineRow({ line, onDone }: { line: any; onDone: () => void }) {
         </td>
         <td className="p-2">{line.quantity} {line.size && <span className="text-xs text-muted-foreground">{line.size}</span>}</td>
         <td className="p-2">{fmtMoney(line.wholesale_cost)}</td>
-        <td className="p-2">{fmtMoney(line.suggested_retail_price)}</td>
+        <td className="p-2">{fmtMoney(line.suggested_retail_price ?? suggestRetail(line.wholesale_cost))}</td>
         <td className="p-2 font-medium">{fmtMoney(line.approved_retail_price)}</td>
         <td className="p-2">
           <div className="flex items-center gap-1.5">
@@ -273,9 +273,11 @@ function NewLineDialog({ batchId, vendorId, onDone }: { batchId: string; vendorI
   const [open, setOpen] = useState(false);
   const [f, setF] = useState<any>({ kind: "sellable", quantity: 1 });
   const submit = async () => {
-    const { error } = await supabase.from("vendor_line_items").insert({
-      ...f, vendor_batch_id: batchId, vendor_id: vendorId,
-    });
+    const payload: any = { ...f, vendor_batch_id: batchId, vendor_id: vendorId };
+    if (payload.suggested_retail_price == null && payload.wholesale_cost != null) {
+      payload.suggested_retail_price = suggestRetail(payload.wholesale_cost);
+    }
+    const { error } = await supabase.from("vendor_line_items").insert(payload);
     if (error) { toast.error(error.message); return; }
     toast.success("Line added"); setOpen(false); setF({ kind: "sellable", quantity: 1 }); onDone();
   };
@@ -641,7 +643,7 @@ function ReceiveSection({ batchId, lines, onDone }: { batchId: string; lines: an
             <tbody>
               {sellable.map(l => {
                 const d = getDraft(l);
-                const suggested = l.wholesale_cost != null ? Number(l.wholesale_cost) * 3 : null;
+                const suggested = l.suggested_retail_price ?? suggestRetail(l.wholesale_cost);
                 const have = photoCountsByLine[l.id] ?? new Set();
                 const doaActive = d.loss_reason === "dead_on_arrival" && Number(d.lost_quantity ?? 0) > 0;
                 const doaComplete = have.has("in_bag") && have.has("on_lid");

@@ -916,6 +916,7 @@ export const extractBatchWithAI = createServerFn({ method: "POST" })
           extraction_warning: l.extraction_warning ?? null,
           review_status: review,
           pricing_status: "not_priced" as const,
+          suggested_retail_price: suggestRetail(wholesale),
         };
       });
 
