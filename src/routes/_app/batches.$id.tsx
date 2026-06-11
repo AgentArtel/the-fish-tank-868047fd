@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Plus, Upload, ArrowLeft, Sparkles, Camera, History, AlertTriangle, ScanBarcode } from "lucide-react";
 import { BarcodeScanDialog } from "@/components/barcode-scan-dialog";
+import { PhotoReceiveDialog } from "@/components/photo-receive-dialog";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useMe } from "@/hooks/use-me";
