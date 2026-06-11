@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, Upload, ArrowLeft, Sparkles, Camera, History, AlertTriangle, ScanBarcode } from "lucide-react";
+import { Plus, Upload, ArrowLeft, Sparkles, Camera, History, AlertTriangle, ScanBarcode, Tags } from "lucide-react";
 import { BarcodeScanDialog } from "@/components/barcode-scan-dialog";
 import { PhotoReceiveDialog } from "@/components/photo-receive-dialog";
 import { useState } from "react";
@@ -510,6 +510,36 @@ function ExtractAiButton({ batchId, hasPdf, extractionStatus, onDone }:
   );
 }
 
+function exportTagsCsv(sellable: any[], drafts: Record<string, any>, getDraft: (l: any) => any) {
+  const rows: { name: string; price: string }[] = [];
+  for (const l of sellable) {
+    const d = getDraft(l);
+    const qty = Math.max(0, Math.floor(Number(d.received_quantity ?? 0)));
+    if (qty <= 0) continue;
+    const name = (d.clean_item_name ?? l.clean_item_name ?? l.raw_description ?? "").toString().trim() || "Unnamed item";
+    const priceNum =
+      (d.override_retail_price != null && d.override_retail_price !== "" ? Number(d.override_retail_price) : null) ??
+      (l.approved_retail_price != null ? Number(l.approved_retail_price) : null) ??
+      (l.override_retail_price != null ? Number(l.override_retail_price) : null) ??
+      (l.suggested_retail_price != null ? Number(l.suggested_retail_price) : null) ??
+      (l.wholesale_cost != null ? suggestRetail(l.wholesale_cost) : null);
+    const price = priceNum != null ? `$${Number(priceNum).toFixed(2)}` : "";
+    for (let i = 0; i < qty; i++) rows.push({ name, price });
+  }
+  if (rows.length === 0) { toast.error("No received quantities to export"); return; }
+  const esc = (s: string) => `"${s.replace(/"/g, '""')}"`;
+  const csv = "Name,Price\n" + rows.map(r => `${esc(r.name)},${esc(r.price)}`).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `tags-${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  toast.success(`Exported ${rows.length} tag${rows.length === 1 ? "" : "s"}`);
+}
+
+
 function ReceiveSection({ batchId, vendorId, lines, onDone }: { batchId: string; vendorId: string; lines: any[]; onDone: () => void }) {
   const receive = useServerFn(receiveBatchLines);
   const qc = useQueryClient();
@@ -618,6 +648,9 @@ function ReceiveSection({ batchId, vendorId, lines, onDone }: { batchId: string;
           <p className="text-xs text-muted-foreground">Every save is recorded in the receive audit trail with timestamp + user. DOA lines require an in-bag and on-lid photo per wholesaler policy.</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => exportTagsCsv(sellable, drafts, getDraft)} disabled={sellable.length === 0}>
+            <Tags className="w-4 h-4 mr-1" /> Export tag CSV
+          </Button>
           <Button variant="outline" onClick={() => setPhotoOpen(true)}>
             <Camera className="w-4 h-4 mr-1" /> Photo → receive
           </Button>
