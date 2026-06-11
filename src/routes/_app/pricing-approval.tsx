@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useMe } from "@/hooks/use-me";
-import { fmtMoney, INVENTORY_AVAILABILITY_LABELS } from "@/lib/ops";
+import { fmtMoney, INVENTORY_AVAILABILITY_LABELS, suggestRetail } from "@/lib/ops";
 import { OpsBadge, availabilityTone } from "@/components/ops-badge";
 import {
   approveLinePricing,
@@ -31,7 +31,7 @@ function PricingApprovalPage() {
         await supabase
           .from("vendor_line_items")
           .select(
-            "id, vendor_batch_id, clean_item_name, raw_description, scientific_name, quantity, size, wholesale_cost, vendor_sell_price, suggested_retail_price, approved_retail_price, pricing_status, review_status, kind, vendors(name)",
+            "id, vendor_batch_id, clean_item_name, raw_description, scientific_name, quantity, size, wholesale_cost, vendor_sell_price, suggested_retail_price, override_retail_price, approved_retail_price, pricing_status, review_status, kind, vendors(name)",
           )
           .eq("kind", "sellable")
           .neq("pricing_status", "approved")
@@ -300,7 +300,9 @@ function PricingRow({
   isAdmin: boolean;
   onDone: () => void;
 }) {
-  const [price, setPrice] = useState<string>(line.suggested_retail_price?.toString() ?? "");
+  const suggested = line.suggested_retail_price ?? suggestRetail(line.wholesale_cost);
+  const preset = line.override_retail_price ?? line.suggested_retail_price ?? suggestRetail(line.wholesale_cost);
+  const [price, setPrice] = useState<string>(preset != null ? String(preset) : "");
   const [busy, setBusy] = useState(false);
   const approve = useServerFn(approveLinePricing);
   const run = async () => {
@@ -336,7 +338,7 @@ function PricingRow({
         {line.size && <span className="text-xs text-muted-foreground">{line.size}</span>}
       </td>
       <td className="p-3">{fmtMoney(line.wholesale_cost)}</td>
-      <td className="p-3">{fmtMoney(line.suggested_retail_price)}</td>
+      <td className="p-3">{fmtMoney(suggested)}</td>
       <td className="p-3">
         <div className="flex gap-2">
           <Input

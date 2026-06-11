@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { callAIChat } from "@/lib/ai-call.server";
+import { suggestRetail } from "@/lib/ops";
 
 async function isAdmin(supabase: any, userId: string) {
   const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
@@ -916,6 +917,7 @@ export const extractBatchWithAI = createServerFn({ method: "POST" })
           extraction_warning: l.extraction_warning ?? null,
           review_status: review,
           pricing_status: "not_priced" as const,
+          suggested_retail_price: suggestRetail(wholesale),
         };
       });
 

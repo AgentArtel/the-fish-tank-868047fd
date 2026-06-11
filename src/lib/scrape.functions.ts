@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { suggestRetail } from "@/lib/ops";
 
 // ---------- guards (mirrors ops.functions.ts) ----------
 async function isAdmin(supabase: any, userId: string) {
@@ -349,6 +350,7 @@ export const importScrapeItems = createServerFn({ method: "POST" })
       clean_item_name: it.title,
       item_type: guessItemType(it.raw_payload ?? {}),
       wholesale_cost: it.wholesale_cost,
+      suggested_retail_price: suggestRetail(it.wholesale_cost),
       review_status: "pending" as const,
       pricing_status: "not_priced" as const,
       attrs: {
