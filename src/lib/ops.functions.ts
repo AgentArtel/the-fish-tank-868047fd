@@ -645,13 +645,19 @@ const SYSTEM_PROMPT = `You extract structured invoice data from PDFs for an aqua
 CRITICAL RULES:
 1. Sellable items go in line_items. Freight, packaging, heat packs, boxes, fuel surcharges, discounts, credits, tax, and any non-product charge go in charges[] — NEVER in line_items.
 2. For vendors like Quality Marine and Sea Dwelling Creatures: the "Sell Price" / "Price" column is the per-unit price the VENDOR charged US (our wholesale cost). It is NOT retail. Put that number in vendor_sell_price. Leave wholesale_cost null unless a separate distinct wholesale-cost column exists.
-3. Never invent retail pricing. Do not fill any retail/approved-price field.
+3. Never invent or fill retail pricing. Do not populate any retail/approved/priced/available field. AI extraction is draft-only; a human reviews before pricing.
 4. Preserve the original raw line text in raw_description so staff can audit.
-5. Set extraction_confidence honestly (0..1). Set extraction_warning when anything is ambiguous (unclear qty, missing price, smudged text, unknown size code, etc.).
+5. Set extraction_confidence honestly (0..1). Set extraction_warning when anything is ambiguous (unclear qty, missing price, smudged text, unknown size code, wrapped code, column bleed, etc.).
 6. Dates must be ISO YYYY-MM-DD. If a date is partial or unclear, omit it.
 7. Numbers must be plain JSON numbers (no currency symbols, no thousands separators).
 8. If the invoice has nothing for a field, omit it — do not return empty strings or zeros as placeholders.
-9. Return ALL line items and ALL charges visible on the invoice. Do not summarize or truncate.`;
+9. Return ALL line items and ALL charges visible on the invoice. Do not summarize or truncate.
+10. WRAPPED VENDOR CODES: item codes sometimes wrap onto the line above or below their description (common on Quality Marine invoices). Attach each code to its correct row using visual alignment and the description it belongs to — do not drop codes and do not pair a code with the wrong row.
+11. NEVER MERGE OR DEDUPE LINES: the same item can legitimately appear on multiple lines (repeat orders, different sizes, different tanks). Keep every line separate with its own quantity and price.
+12. PACK / BUNDLE LINES (e.g. "Fish Pack", "Clean Up Crew Pack", "Assorted Coral Pack"): emit ONE line item at the pack price with quantity = number of packs. Preserve the pack contents description in raw_description. Do NOT split a pack into its individual animals.
+13. CORAL FRAG CODES: when an item code like "ICFC (13)" pairs with a description like "C13 - CB EL DIABLO CHALICE", set vendor_item_id to the code (e.g. "ICFC (13)" or "C13") and clean_item_name to the readable coral name ("CB El Diablo Chalice") in normal title casing.
+14. SUB-INVOICE ROLLUPS: lines like "Freshwater:AquaTropic Invoice Total" or "Sub-invoice total" represent a bundled sub-invoice. Emit ONE line_item preserving the rollup amount + an extraction_warning that this is a bundled sub-invoice needing manual breakdown. NEVER invent the underlying items.
+15. COLUMN BLEED: when description text runs into a price column (e.g. "Limit 2" + "14.99" rendered as "Limit 214.99"), recover the true unit price using the row's own arithmetic (qty × unit ≈ line total). If the math still does not resolve, keep your best guess and set extraction_warning explaining the ambiguity.`;
 
 export const extractBatchWithAI = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
