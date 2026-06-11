@@ -627,6 +627,28 @@ function ReceiveSection({ batchId, vendorId, lines, onDone }: { batchId: string;
           <Button onClick={submit} disabled={busy || sellable.length === 0}>{busy ? "Saving…" : "Save received"}</Button>
         </div>
       </div>
+      {sellable.length > 0 && (() => {
+        const totals = sellable.reduce((acc, l) => {
+          const d = getDraft(l);
+          const ordered = Number(l.quantity ?? 0);
+          const received = Number(d.received_quantity ?? 0);
+          const lost = Number(d.lost_quantity ?? 0);
+          acc.ordered += ordered;
+          acc.received += received;
+          acc.lost += lost;
+          if (received !== ordered) acc.diffLines += 1;
+          return acc;
+        }, { ordered: 0, received: 0, lost: 0, diffLines: 0 });
+        const matches = totals.diffLines === 0;
+        return (
+          <div className={`flex flex-wrap items-center gap-3 rounded-md border px-3 py-2 text-xs ${matches ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-amber-300 bg-amber-50 text-amber-900"}`}>
+            <span className="font-semibold">{matches ? "✓ Matches PO" : `⚠ ${totals.diffLines} line${totals.diffLines === 1 ? "" : "s"} differ from PO`}</span>
+            <span>Ordered: <b>{totals.ordered}</b></span>
+            <span>Received: <b>{totals.received}</b></span>
+            <span>Lost: <b>{totals.lost}</b></span>
+          </div>
+        );
+      })()}
       {sellable.length === 0 && <p className="text-sm text-muted-foreground p-4 text-center">No unconverted sellable lines. Add a draft line or run AI extraction first.</p>}
       <div className="overflow-x-auto">
         {sellable.length > 0 && (
@@ -674,7 +696,12 @@ function ReceiveSection({ batchId, vendorId, lines, onDone }: { batchId: string;
                       </Select>
                     </td>
                     <td className="p-2 text-muted-foreground">{l.quantity ?? "—"} {l.size && <span className="text-xs">{l.size}</span>}</td>
-                    <td className="p-2"><Input className="h-8 w-20" type="number" step="0.01" value={d.received_quantity ?? ""} onChange={e=>setDraft(l.id, { received_quantity: e.target.value === "" ? 0 : Number(e.target.value) })} /></td>
+                    <td className={`p-2 ${Number(d.received_quantity ?? 0) !== Number(l.quantity ?? 0) ? "bg-amber-50" : ""}`}>
+                      <Input className="h-8 w-20" type="number" step="0.01" value={d.received_quantity ?? ""} onChange={e=>setDraft(l.id, { received_quantity: e.target.value === "" ? 0 : Number(e.target.value) })} />
+                      {Number(d.received_quantity ?? 0) !== Number(l.quantity ?? 0) && (
+                        <div className="text-[10px] text-amber-700 mt-0.5">PO: {l.quantity ?? "—"}</div>
+                      )}
+                    </td>
                     <td className="p-2"><Input className="h-8 w-20" type="number" step="0.01" value={d.lost_quantity ?? 0} onChange={e=>setDraft(l.id, { lost_quantity: e.target.value === "" ? 0 : Number(e.target.value) })} /></td>
                     <td className="p-2">
                       <Select value={d.loss_reason ?? "_none"} onValueChange={(v)=>onLossReasonChange(l, v === "_none" ? null : v)}>

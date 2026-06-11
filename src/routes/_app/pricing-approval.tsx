@@ -338,7 +338,12 @@ function PricingRow({
         {line.size && <span className="text-xs text-muted-foreground">{line.size}</span>}
       </td>
       <td className="p-3">{fmtMoney(line.wholesale_cost)}</td>
-      <td className="p-3">{fmtMoney(suggested)}</td>
+      <td className="p-3">
+        {fmtMoney(suggested)}
+        {line.override_retail_price != null && (
+          <div className="text-[11px] text-amber-700 mt-0.5">Receiver: {fmtMoney(line.override_retail_price)}</div>
+        )}
+      </td>
       <td className="p-3">
         <div className="flex gap-2">
           <Input
