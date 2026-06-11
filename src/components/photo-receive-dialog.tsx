@@ -139,8 +139,11 @@ export function PhotoReceiveDialog({
     if (!parsed) return;
     setBusy(true);
     try {
-      const itemType = ["fish","coral","invert","dry_good","live_rock","equipment","other"]
-        .includes(parsed.item_type ?? "") ? parsed.item_type : null;
+      const ITEM_TYPES = ["fish","coral","invert","dry_good","live_rock","equipment","other"] as const;
+      type ItemType = typeof ITEM_TYPES[number];
+      const itemType: ItemType | null = (ITEM_TYPES as readonly string[]).includes(parsed.item_type ?? "")
+        ? (parsed.item_type as ItemType)
+        : null;
       const notesLines = [
         "Created from bag photo during receiving.",
         photoPath ? `bag_photo: ${photoPath}` : null,
