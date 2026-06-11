@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, Upload, ArrowLeft, Sparkles, Camera, History, AlertTriangle, ScanBarcode } from "lucide-react";
+import { Plus, Upload, ArrowLeft, Sparkles, Camera, History, AlertTriangle, ScanBarcode, Tags } from "lucide-react";
 import { BarcodeScanDialog } from "@/components/barcode-scan-dialog";
 import { PhotoReceiveDialog } from "@/components/photo-receive-dialog";
 import { useState } from "react";
