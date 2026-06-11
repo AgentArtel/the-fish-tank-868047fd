@@ -119,6 +119,16 @@ export function fmtMoney(n: number | null | undefined): string {
   return new Intl.NumberFormat("en-US",{ style:"currency", currency:"USD" }).format(Number(n));
 }
 
+// Store pricing rule: retail = wholesale cost × 3, rounded UP to the next X.99.
+// e.g. 6.99 → 20.97 → 20.99 · 7.00 → 21.00 → 21.99 · 0.54 → 1.62 → 1.99
+// Integer-cent math so float drift can't round a price the wrong way.
+export function suggestRetail(cost: number | null | undefined): number | null {
+  const c = Number(cost);
+  if (cost === null || cost === undefined || !Number.isFinite(c) || c <= 0) return null;
+  const tripleCents = Math.round(c * 300);
+  return Math.ceil((tripleCents + 1) / 100) - 0.01;
+}
+
 export function slugify(s: string): string {
   return s.toLowerCase().trim().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"") || `id-${Date.now()}`;
 }
