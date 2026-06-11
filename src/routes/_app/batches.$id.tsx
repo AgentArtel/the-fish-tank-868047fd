@@ -627,6 +627,28 @@ function ReceiveSection({ batchId, vendorId, lines, onDone }: { batchId: string;
           <Button onClick={submit} disabled={busy || sellable.length === 0}>{busy ? "Saving…" : "Save received"}</Button>
         </div>
       </div>
+      {sellable.length > 0 && (() => {
+        const totals = sellable.reduce((acc, l) => {
+          const d = getDraft(l);
+          const ordered = Number(l.quantity ?? 0);
+          const received = Number(d.received_quantity ?? 0);
+          const lost = Number(d.lost_quantity ?? 0);
+          acc.ordered += ordered;
+          acc.received += received;
+          acc.lost += lost;
+          if (received !== ordered) acc.diffLines += 1;
+          return acc;
+        }, { ordered: 0, received: 0, lost: 0, diffLines: 0 });
+        const matches = totals.diffLines === 0;
+        return (
+          <div className={`flex flex-wrap items-center gap-3 rounded-md border px-3 py-2 text-xs ${matches ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-amber-300 bg-amber-50 text-amber-900"}`}>
+            <span className="font-semibold">{matches ? "✓ Matches PO" : `⚠ ${totals.diffLines} line${totals.diffLines === 1 ? "" : "s"} differ from PO`}</span>
+            <span>Ordered: <b>{totals.ordered}</b></span>
+            <span>Received: <b>{totals.received}</b></span>
+            <span>Lost: <b>{totals.lost}</b></span>
+          </div>
+        );
+      })()}
       {sellable.length === 0 && <p className="text-sm text-muted-foreground p-4 text-center">No unconverted sellable lines. Add a draft line or run AI extraction first.</p>}
       <div className="overflow-x-auto">
         {sellable.length > 0 && (
