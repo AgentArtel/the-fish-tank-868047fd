@@ -21,7 +21,7 @@ export const Route = createFileRoute("/_app/content/")({
 });
 
 function ContentList() {
-  const nav = useNavigate({ from: "/content" });
+  const nav = useNavigate({ from: "/content/" });
   const { status, q } = Route.useSearch();
   const { data, isLoading } = useQuery({
     queryKey: ["content", status, q],
