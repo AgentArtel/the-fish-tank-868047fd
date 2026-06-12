@@ -41,6 +41,7 @@ import { Route as AppInventoryIdRouteImport } from './routes/_app/inventory.$id'
 import { Route as AppContentNewRouteImport } from './routes/_app/content.new'
 import { Route as AppContentIdRouteImport } from './routes/_app/content.$id'
 import { Route as AppBatchesIdRouteImport } from './routes/_app/batches.$id'
+import { Route as ApiPublicHooksRefreshScrapeSourcesRouteImport } from './routes/api/public/hooks/refresh-scrape-sources'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -202,6 +203,12 @@ const AppBatchesIdRoute = AppBatchesIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AppBatchesRoute,
 } as any)
+const ApiPublicHooksRefreshScrapeSourcesRoute =
+  ApiPublicHooksRefreshScrapeSourcesRouteImport.update({
+    id: '/api/public/hooks/refresh-scrape-sources',
+    path: '/api/public/hooks/refresh-scrape-sources',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -235,6 +242,7 @@ export interface FileRoutesByFullPath {
   '/content/': typeof AppContentIndexRoute
   '/inventory/': typeof AppInventoryIndexRoute
   '/vendor-watch/': typeof AppVendorWatchIndexRoute
+  '/api/public/hooks/refresh-scrape-sources': typeof ApiPublicHooksRefreshScrapeSourcesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -266,6 +274,7 @@ export interface FileRoutesByTo {
   '/content': typeof AppContentIndexRoute
   '/inventory': typeof AppInventoryIndexRoute
   '/vendor-watch': typeof AppVendorWatchIndexRoute
+  '/api/public/hooks/refresh-scrape-sources': typeof ApiPublicHooksRefreshScrapeSourcesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -301,6 +310,7 @@ export interface FileRoutesById {
   '/_app/content/': typeof AppContentIndexRoute
   '/_app/inventory/': typeof AppInventoryIndexRoute
   '/_app/vendor-watch/': typeof AppVendorWatchIndexRoute
+  '/api/public/hooks/refresh-scrape-sources': typeof ApiPublicHooksRefreshScrapeSourcesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -336,6 +346,7 @@ export interface FileRouteTypes {
     | '/content/'
     | '/inventory/'
     | '/vendor-watch/'
+    | '/api/public/hooks/refresh-scrape-sources'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -367,6 +378,7 @@ export interface FileRouteTypes {
     | '/content'
     | '/inventory'
     | '/vendor-watch'
+    | '/api/public/hooks/refresh-scrape-sources'
   id:
     | '__root__'
     | '/'
@@ -401,6 +413,7 @@ export interface FileRouteTypes {
     | '/_app/content/'
     | '/_app/inventory/'
     | '/_app/vendor-watch/'
+    | '/api/public/hooks/refresh-scrape-sources'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -410,6 +423,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   PendingApprovalRoute: typeof PendingApprovalRoute
   SignupRoute: typeof SignupRoute
+  ApiPublicHooksRefreshScrapeSourcesRoute: typeof ApiPublicHooksRefreshScrapeSourcesRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -638,6 +652,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppBatchesIdRouteImport
       parentRoute: typeof AppBatchesRoute
     }
+    '/api/public/hooks/refresh-scrape-sources': {
+      id: '/api/public/hooks/refresh-scrape-sources'
+      path: '/api/public/hooks/refresh-scrape-sources'
+      fullPath: '/api/public/hooks/refresh-scrape-sources'
+      preLoaderRoute: typeof ApiPublicHooksRefreshScrapeSourcesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -728,6 +749,8 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   PendingApprovalRoute: PendingApprovalRoute,
   SignupRoute: SignupRoute,
+  ApiPublicHooksRefreshScrapeSourcesRoute:
+    ApiPublicHooksRefreshScrapeSourcesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
