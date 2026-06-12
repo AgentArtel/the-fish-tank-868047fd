@@ -189,6 +189,32 @@ function ScrapeSourceDetail() {
               <Eye className="w-4 h-4 mr-1" /> Restore
             </Button>
           )}
+          <div className="flex border rounded-md overflow-hidden">
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode("list");
+                localStorage.setItem("vendor-watch.view", "list");
+              }}
+              className={`px-2 py-1.5 ${viewMode === "list" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
+              title="List view"
+              aria-label="List view"
+            >
+              <List className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode("grid");
+                localStorage.setItem("vendor-watch.view", "grid");
+              }}
+              className={`px-2 py-1.5 ${viewMode === "grid" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
+              title="Grid view"
+              aria-label="Grid view"
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
