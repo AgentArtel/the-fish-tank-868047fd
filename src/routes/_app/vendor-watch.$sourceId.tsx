@@ -37,6 +37,10 @@ function ScrapeSourceDetail() {
   const setStatusFn = useServerFn(setScrapeItemStatus);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("new");
+  const [viewMode, setViewMode] = useState<"list" | "grid">(() => {
+    if (typeof window === "undefined") return "list";
+    return (localStorage.getItem("vendor-watch.view") as "list" | "grid") || "list";
+  });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
