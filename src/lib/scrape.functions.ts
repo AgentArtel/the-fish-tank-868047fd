@@ -133,8 +133,31 @@ function deriveProductUrl(sourceUrl: string, handle: string): string {
   }
 }
 
+// Shopify storefronts are Cloudflare/Fastly-fronted and will 403 server egress
+// that looks bot-like (no/blank User-Agent). Send a real browser UA + standard
+// Accept headers, and retry transient blocks (403/429/5xx) a couple of times.
+const SCRAPE_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+const SCRAPE_HEADERS = {
+  "User-Agent": SCRAPE_UA,
+  Accept: "application/json, text/plain, */*",
+  "Accept-Language": "en-US,en;q=0.9",
+};
+
+async function fetchWithRetry(url: string, attempts = 3): Promise<Response> {
+  let res: Response | null = null;
+  for (let i = 0; i < attempts; i++) {
+    res = await fetch(url, { headers: SCRAPE_HEADERS });
+    if (res.ok) return res;
+    // Only retry transient / bot-block statuses; anything else, return as-is.
+    if (![403, 429, 500, 502, 503, 504].includes(res.status)) return res;
+    if (i < attempts - 1) await new Promise((r) => setTimeout(r, 500 * (i + 1)));
+  }
+  return res as Response;
+}
+
 async function downloadImage(supabaseAdmin: any, opts: { url: string; bucketPath: string }) {
-  const res = await fetch(opts.url);
+  const res = await fetch(opts.url, { headers: { "User-Agent": SCRAPE_UA, Accept: "image/*,*/*" } });
   if (!res.ok) throw new Error(`Image fetch ${res.status} for ${opts.url}`);
   const buf = new Uint8Array(await res.arrayBuffer());
   const contentType = res.headers.get("content-type") || "image/jpeg";
@@ -198,7 +221,7 @@ export async function runScrapeForSource(
   const sep = baseUrl.includes("?") ? "&" : "?";
   while (page < 20) {
     const url = `${baseUrl}${sep}limit=250&page=${page}`;
-    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    const res = await fetchWithRetry(url);
     if (!res.ok) {
       await db
         .from("vendor_scrape_sources")
