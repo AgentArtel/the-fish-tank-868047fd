@@ -21,7 +21,7 @@ import {
   setScrapeItemStatus,
 } from "@/lib/scrape.functions";
 import { fmtMoney } from "@/lib/ops";
-import { RefreshCw, Loader2, ArrowLeft, ExternalLink, EyeOff, Eye } from "lucide-react";
+import { RefreshCw, Loader2, ArrowLeft, ExternalLink, EyeOff, Eye, LayoutGrid, List } from "lucide-react";
 
 export const Route = createFileRoute("/_app/vendor-watch/$sourceId")({
   component: ScrapeSourceDetail,
@@ -37,6 +37,10 @@ function ScrapeSourceDetail() {
   const setStatusFn = useServerFn(setScrapeItemStatus);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("new");
+  const [viewMode, setViewMode] = useState<"list" | "grid">(() => {
+    if (typeof window === "undefined") return "list";
+    return (localStorage.getItem("vendor-watch.view") as "list" | "grid") || "list";
+  });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
@@ -185,6 +189,32 @@ function ScrapeSourceDetail() {
               <Eye className="w-4 h-4 mr-1" /> Restore
             </Button>
           )}
+          <div className="flex border rounded-md overflow-hidden">
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode("list");
+                localStorage.setItem("vendor-watch.view", "list");
+              }}
+              className={`px-2 py-1.5 ${viewMode === "list" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
+              title="List view"
+              aria-label="List view"
+            >
+              <List className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode("grid");
+                localStorage.setItem("vendor-watch.view", "grid");
+              }}
+              className={`px-2 py-1.5 ${viewMode === "grid" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
+              title="Grid view"
+              aria-label="Grid view"
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -198,8 +228,8 @@ function ScrapeSourceDetail() {
         </div>
       )}
 
-      {/* Header row */}
-      {items.length > 0 && (
+      {/* Header row — list only */}
+      {items.length > 0 && viewMode === "list" && (
         <div className="grid grid-cols-[auto_64px_1fr_120px_120px] gap-3 items-center px-3 py-2 text-[10px] uppercase font-semibold tracking-wider text-muted-foreground border-b">
           <Checkbox
             checked={allSelected}
@@ -215,7 +245,8 @@ function ScrapeSourceDetail() {
         </div>
       )}
 
-      {items.map((it: any) => {
+      {/* List view */}
+      {viewMode === "list" && items.map((it: any) => {
         const isSel = selected.has(it.id);
         return (
           <div
@@ -270,6 +301,77 @@ function ScrapeSourceDetail() {
           </div>
         );
       })}
+
+      {/* Grid view */}
+      {viewMode === "grid" && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          {items.map((it: any) => {
+            const isSel = selected.has(it.id);
+            return (
+              <div
+                key={it.id}
+                onClick={() => statusFilter !== "imported" && toggle(it.id)}
+                className={`rounded-lg border bg-card overflow-hidden cursor-pointer transition-shadow hover:shadow-sm ${
+                  isSel ? "ring-2 ring-primary" : ""
+                }`}
+              >
+                <div className="relative aspect-square bg-muted overflow-hidden">
+                  {thumbs[it.id] ? (
+                    <img src={thumbs[it.id]} alt={it.title} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <span className="text-xs text-muted-foreground">no photo</span>
+                    </div>
+                  )}
+                  {statusFilter !== "imported" && (
+                    <div className="absolute top-2 left-2">
+                      <Checkbox
+                        checked={isSel}
+                        onCheckedChange={() => toggle(it.id)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                  )}
+                  {!it.available_at_source && (
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                      <Badge variant="secondary" className="text-xs">Gone</Badge>
+                    </div>
+                  )}
+                </div>
+                <div className="p-3 space-y-1.5">
+                  <div className="font-medium text-sm line-clamp-2 leading-snug">{it.title}</div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold">{fmtMoney(it.wholesale_cost)}</span>
+                    {it.available_at_source ? (
+                      <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-0 text-[10px]">
+                        Available
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-muted-foreground text-[10px]">
+                        Gone
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+                    <span className="font-mono">{it.external_id}</span>
+                    {it.product_url && (
+                      <a
+                        href={it.product_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="hover:text-foreground inline-flex items-center gap-0.5"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
