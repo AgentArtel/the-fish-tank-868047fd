@@ -1349,6 +1349,7 @@ export type Database = {
       vendor_scrape_items: {
         Row: {
           available_at_source: boolean
+          compare_at_price: number | null
           created_at: string
           external_handle: string | null
           external_id: string
@@ -1359,6 +1360,7 @@ export type Database = {
           imported_vendor_batch_id: string | null
           imported_vendor_line_item_id: string | null
           last_available_at: string | null
+          last_price_change_at: string | null
           last_seen_at: string
           photo_path: string | null
           photo_source_url: string | null
@@ -1373,6 +1375,7 @@ export type Database = {
         }
         Insert: {
           available_at_source?: boolean
+          compare_at_price?: number | null
           created_at?: string
           external_handle?: string | null
           external_id: string
@@ -1383,6 +1386,7 @@ export type Database = {
           imported_vendor_batch_id?: string | null
           imported_vendor_line_item_id?: string | null
           last_available_at?: string | null
+          last_price_change_at?: string | null
           last_seen_at?: string
           photo_path?: string | null
           photo_source_url?: string | null
@@ -1397,6 +1401,7 @@ export type Database = {
         }
         Update: {
           available_at_source?: boolean
+          compare_at_price?: number | null
           created_at?: string
           external_handle?: string | null
           external_id?: string
@@ -1407,6 +1412,7 @@ export type Database = {
           imported_vendor_batch_id?: string | null
           imported_vendor_line_item_id?: string | null
           last_available_at?: string | null
+          last_price_change_at?: string | null
           last_seen_at?: string
           photo_path?: string | null
           photo_source_url?: string | null
@@ -1436,6 +1442,60 @@ export type Database = {
           },
           {
             foreignKeyName: "vendor_scrape_items_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_scrape_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vendor_scrape_snapshots: {
+        Row: {
+          available: boolean
+          compare_at_price: number | null
+          created_at: string
+          id: string
+          observed_at: string
+          raw_json: Json
+          scrape_item_id: string
+          source_id: string
+          vendor_currency: string | null
+          wholesale_cost: number | null
+        }
+        Insert: {
+          available: boolean
+          compare_at_price?: number | null
+          created_at?: string
+          id?: string
+          observed_at?: string
+          raw_json?: Json
+          scrape_item_id: string
+          source_id: string
+          vendor_currency?: string | null
+          wholesale_cost?: number | null
+        }
+        Update: {
+          available?: boolean
+          compare_at_price?: number | null
+          created_at?: string
+          id?: string
+          observed_at?: string
+          raw_json?: Json
+          scrape_item_id?: string
+          source_id?: string
+          vendor_currency?: string | null
+          wholesale_cost?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_scrape_snapshots_scrape_item_id_fkey"
+            columns: ["scrape_item_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_scrape_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_scrape_snapshots_source_id_fkey"
             columns: ["source_id"]
             isOneToOne: false
             referencedRelation: "vendor_scrape_sources"
