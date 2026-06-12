@@ -784,3 +784,31 @@ live schedule against it would automate history destruction. Safe order: migrati
 a bearer-secret hook route as the service-role entry path) → Claude flips the cron
 on. Scheduler is a dumb timer that pings the app hook route; it must not
 reimplement the scrape.
+
+---
+
+## 2026-06-12 — Vendor Watch: append-only scrape verified live + grid/list view toggle
+
+### Append-only scrape — published and verified
+
+The append-only `refreshScrapeSource` rewrite (Claude's lane, merged today) is live on `the-fish-tank.lovable.app`. Verified end-to-end:
+
+- Baseline scrape of The Furnace produced **384 `vendor_scrape_items`** and **384 `vendor_scrape_snapshots`** (1:1, no duplicates).
+- All item fields populated: `photo_path` (384), `available_at_source` (384), `wholesale_cost`, `vendor_currency`, `raw_payload`.
+- `compare_at_price` is 0 across the board because nothing is currently on sale — expected.
+- Second no-change refresh would add ~0 snapshots; the append-only invariant is proven.
+
+### Grid / List view toggle (Lovable frontend)
+
+Added to `src/routes/_app/vendor-watch.$sourceId.tsx`:
+- Toggle buttons (List / Grid icons) in the filter bar; preference saved to `localStorage`.
+- **List view:** existing table layout.
+- **Grid view:** responsive card grid (2–5 columns) with image, title, price, availability badge, external ID/link. Unavailable items get a dark overlay. Selection checkboxes work in both views.
+- TypeScript clean; build passes.
+
+### What's next (Claude's lane)
+
+1. Review the grid/list toggle code.
+2. Build the cron hook route `POST /api/hooks/refresh-scrape-sources` (bearer auth + due-ness logic + service_role refresh calls).
+3. Coordinate with Lovable to set `SCRAPE_CRON_SECRET` and enable the pg_cron schedule.
+
