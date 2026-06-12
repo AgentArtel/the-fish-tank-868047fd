@@ -812,3 +812,20 @@ Added to `src/routes/_app/vendor-watch.$sourceId.tsx`:
 2. Build the cron hook route `POST /api/hooks/refresh-scrape-sources` (bearer auth + due-ness logic + service_role refresh calls).
 3. Coordinate with Lovable to set `SCRAPE_CRON_SECRET` and enable the pg_cron schedule.
 
+
+---
+## 2026-06-12 — Vendor Watch: append-only live + enable-cron queued (Claude Code)
+
+- Reviewed Lovable's grid/list toggle on `vendor-watch.$sourceId.tsx` — builds
+  clean, layered correctly on the monitor pivot (no import button / no ×3 column;
+  append-only snapshot toast intact). One copy nit to fold in later: empty state
+  still reads "Nothing new to import."
+- Confirmed Lovable did NOT fork the scrape logic — "append-only verified, 384
+  baselined" was Lovable testing Claude's merged `runScrapeForSource` in preview.
+  Single scrape implementation intact.
+- Clarification: the cron hook route already exists and is on main at
+  **`/api/public/hooks/refresh-scrape-sources`** (matches the migration's cron
+  URL). Nothing to build; do not add a `/api/hooks/...` duplicate.
+- Wrote `.lovable/handoff-vendor-watch-enable-cron.md`: smoke-test the deployed
+  endpoint → add `SCRAPE_CRON_SECRET` to Vault → uncomment `cron.schedule(...)`
+  as a new migration. Gated on the smoke-test; kill-switch documented.
