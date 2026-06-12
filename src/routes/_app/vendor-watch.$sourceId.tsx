@@ -21,7 +21,7 @@ import {
   setScrapeItemStatus,
 } from "@/lib/scrape.functions";
 import { fmtMoney } from "@/lib/ops";
-import { RefreshCw, Loader2, ArrowLeft, ExternalLink, EyeOff, Eye } from "lucide-react";
+import { RefreshCw, Loader2, ArrowLeft, ExternalLink, EyeOff, Eye, LayoutGrid, List } from "lucide-react";
 
 export const Route = createFileRoute("/_app/vendor-watch/$sourceId")({
   component: ScrapeSourceDetail,
