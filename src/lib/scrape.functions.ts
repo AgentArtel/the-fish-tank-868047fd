@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { suggestRetail } from "@/lib/ops";
 
 // ---------- guards (mirrors ops.functions.ts) ----------
 async function isAdmin(supabase: any, userId: string) {
@@ -89,7 +88,11 @@ export const getScrapeSource = createServerFn({ method: "POST" })
       .eq("source_id", data.sourceId)
       .order("last_seen_at", { ascending: false })
       .limit(500);
-    if (data.statusFilter !== "all") q = q.eq("status", data.statusFilter);
+    // "unavailable" is an availability filter, not a workflow status — nothing
+    // ever sets status='unavailable'; gone-at-vendor is tracked by the
+    // available_at_source flag.
+    if (data.statusFilter === "unavailable") q = q.eq("available_at_source", false);
+    else if (data.statusFilter !== "all") q = q.eq("status", data.statusFilter);
     const { data: items, error: ie } = await q;
     if (ie) throw new Error(ie.message);
 
@@ -278,116 +281,6 @@ export const refreshScrapeSource = createServerFn({ method: "POST" })
       .eq("id", data.sourceId);
 
     return { fetched: all.length, added, updated, imagesDownloaded };
-  });
-
-// ---------- import selected items into a draft vendor batch ----------
-type ItemType = "coral" | "fish" | "invert" | "live_rock" | "dry_good" | "equipment" | "other";
-function guessItemType(p: { product_type?: string; tags?: string[]; title?: string }): ItemType {
-  const hay = `${p.product_type ?? ""} ${(p.tags ?? []).join(" ")} ${p.title ?? ""}`.toLowerCase();
-  if (/(fish|wrasse|tang|angel|clown|goby|blenny)/.test(hay)) return "fish";
-  if (/(shrimp|crab|snail|urchin|starfish|cuc|nass|hermit|invert)/.test(hay)) return "invert";
-  if (/(rock)/.test(hay)) return "live_rock";
-  // Default — Furnace is overwhelmingly corals
-  return "coral";
-}
-
-export const importScrapeItems = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d) =>
-    z
-      .object({
-        sourceId: z.string().uuid(),
-        itemIds: z.array(z.string().uuid()).min(1).max(200),
-      })
-      .parse(d),
-  )
-  .handler(async ({ data, context }) => {
-    await requireEditor(context.supabase, context.userId);
-
-    // Load source + items
-    const { data: source } = await context.supabase
-      .from("vendor_scrape_sources")
-      .select("id, vendor_id, source_url, vendors:vendor_id(id, name, slug)")
-      .eq("id", data.sourceId)
-      .maybeSingle();
-    if (!source) throw new Error("Source not found");
-
-    const { data: items, error: ie } = await context.supabase
-      .from("vendor_scrape_items")
-      .select("*")
-      .eq("source_id", data.sourceId)
-      .in("id", data.itemIds);
-    if (ie) throw new Error(ie.message);
-    if (!items?.length) throw new Error("No items selected");
-
-    // Create draft batch
-    const today = new Date().toISOString().slice(0, 10);
-    const vendorName = (source as any).vendors?.name ?? "Vendor";
-    const { data: batch, error: be } = await context.supabase
-      .from("vendor_batches")
-      .insert({
-        vendor_id: source.vendor_id,
-        source_document_type: "scrape",
-        intake_status: "review",
-        extraction_status: "ai_done",
-        notes: `Scraped from ${source.source_url} on ${today}. ${items.length} item(s) selected — ${vendorName}.`,
-        created_by: context.userId,
-      })
-      .select("id")
-      .maybeSingle();
-    if (be) throw new Error(be.message);
-    if (!batch) throw new Error("Failed to create batch");
-
-    // Insert lines
-    const rowsToInsert = items.map((it: any, idx: number) => ({
-      vendor_batch_id: batch.id,
-      vendor_id: source.vendor_id,
-      kind: "sellable" as const,
-      vendor_item_id: it.external_id,
-      line_number: idx + 1,
-      quantity: 1,
-      raw_description: it.title,
-      clean_item_name: it.title,
-      item_type: guessItemType(it.raw_payload ?? {}),
-      wholesale_cost: it.wholesale_cost,
-      suggested_retail_price: suggestRetail(it.wholesale_cost),
-      review_status: "pending" as const,
-      pricing_status: "not_priced" as const,
-      attrs: {
-        scrape_source_id: data.sourceId,
-        scrape_item_id: it.id,
-        product_url: it.product_url,
-        photo_path: it.photo_path,
-        photo_source_url: it.photo_source_url,
-        vendor_tags: it.raw_payload?.tags ?? [],
-      },
-    }));
-    const { data: insertedLines, error: ile } = await context.supabase
-      .from("vendor_line_items")
-      .insert(rowsToInsert)
-      .select("id, vendor_item_id");
-    if (ile) throw new Error(ile.message);
-
-    // Map back to scrape_items: status=imported + FK
-    const byExtId = new Map<string, string>();
-    for (const l of insertedLines ?? []) {
-      if (l.vendor_item_id) byExtId.set(l.vendor_item_id, l.id);
-    }
-    const nowIso = new Date().toISOString();
-    for (const it of items as any[]) {
-      await context.supabase
-        .from("vendor_scrape_items")
-        .update({
-          status: "imported",
-          imported_at: nowIso,
-          imported_by: context.userId,
-          imported_vendor_line_item_id: byExtId.get(it.external_id) ?? null,
-          imported_vendor_batch_id: batch.id,
-        })
-        .eq("id", it.id);
-    }
-
-    return { batchId: batch.id, lineCount: insertedLines?.length ?? 0 };
   });
 
 // ---------- ignore / unignore ----------

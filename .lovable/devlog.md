@@ -728,3 +728,49 @@ Shipped the multi-vendor scraping foundation. Sea Dwelling's "Furnace" is wired 
 - Verify `attrs.photo_path` on scraped vendor_line_items is picked up by the existing convert-to-inventory flow (or wire it in if the inventory side expects a different location).
 - Double-check item_type guesser before we run on a non-coral vendor.
 - Sidebar link placement — Stock vs Vendors group — happy to move it.
+
+---
+## 2026-06-12 — Vendor Watch audit + pivot to monitor (not importer) (Claude Code)
+
+Picked up the Phase-1 vendor-scrape work against the **canonical** repo
+(`the-fish-tank-868047fd`). Reviewed it against the locked Vendor Watch brief.
+No open PR existed — started from `main`.
+
+**Verified the four ported features — all wired clean** (no fixes needed):
+1. `suggestRetail` 3×→.99 (`ops.ts:125`) consumed in Pricing Approval + Intake
+   draft lines via `suggested_retail_price ?? suggestRetail(...)`, pre-fills the
+   approve input.
+2. `PhotoReceiveDialog` + `parseTagPhoto` on batch detail (match → +1 received,
+   else `needs_info` draft line).
+3. Receive QC — PO variance strip, per-line amber on qty mismatch,
+   `override_retail_price` surfaced to admin in Pricing Approval.
+4. Invoice-parser hardening — all QM/SDC rules present in the extraction
+   SYSTEM_PROMPT (`ops.functions.ts`).
+
+**Make-or-break finding: `refreshScrapeSource` OVERWRITES, it does not append.**
+Each refresh `UPDATE`s the item row (price/availability/raw), destroying history.
+No snapshots table; `compare_at_price` never captured. This breaks the "data
+asset first / never overwrite" invariant — **fixing it is job #1.**
+
+**Boss decisions (this session):**
+- Vendor Watch is a **monitor, not an importer** → rip out the import-to-batch
+  path + the ×3 retail logic (out of scope here).
+- Notify-only now, but **design toward tagging** (to-order shortlist, "watch this
+  type").
+- **Shop-wide** watch rules; priority alerts to the boss to start.
+- Design for **10+ vendors** → real scheduled-refresh infra, Firecrawl tier sooner.
+
+**App-side changes shipped this branch (`claude/fish-tank-vendor-watch-audit`):**
+- Removed `importScrapeItems` (+ `guessItemType`, unused `suggestRetail` import)
+  from `scrape.functions.ts`; removed the Import button/flow and the
+  "Suggested 3×" column from `vendor-watch.$sourceId.tsx`. Vendor Watch no longer
+  creates batches/inventory/pricing.
+- Fixed the dead **"Unavailable at vendor"** filter — now filters
+  `available_at_source=false` instead of the never-set `status='unavailable'`.
+- Typecheck clean.
+
+**Hand-off to Lovable:** `.lovable/handoff-vendor-watch-history.md` — the
+append-only `vendor_scrape_snapshots` migration + `compare_at_price` /
+`last_price_change_at` columns on the item row. This unblocks the snapshot-write
+rewrite of `refreshScrapeSource`. Scheduled-refresh edge fn + tagging scaffold
+specced as follow-ups.
