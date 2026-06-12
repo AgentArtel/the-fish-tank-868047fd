@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
@@ -18,19 +18,10 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   getScrapeSource,
   refreshScrapeSource,
-  importScrapeItems,
   setScrapeItemStatus,
 } from "@/lib/scrape.functions";
 import { fmtMoney } from "@/lib/ops";
-import {
-  RefreshCw,
-  Loader2,
-  ArrowLeft,
-  ExternalLink,
-  EyeOff,
-  Eye,
-  PackagePlus,
-} from "lucide-react";
+import { RefreshCw, Loader2, ArrowLeft, ExternalLink, EyeOff, Eye } from "lucide-react";
 
 export const Route = createFileRoute("/_app/vendor-watch/$sourceId")({
   component: ScrapeSourceDetail,
@@ -41,16 +32,13 @@ type StatusFilter = "new" | "imported" | "ignored" | "unavailable" | "all";
 function ScrapeSourceDetail() {
   const { sourceId } = Route.useParams();
   const qc = useQueryClient();
-  const nav = useNavigate();
   const getFn = useServerFn(getScrapeSource);
   const refreshFn = useServerFn(refreshScrapeSource);
-  const importFn = useServerFn(importScrapeItems);
   const setStatusFn = useServerFn(setScrapeItemStatus);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("new");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
-  const [importing, setImporting] = useState(false);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
 
   const { data, isLoading } = useQuery({
@@ -102,26 +90,6 @@ function ScrapeSourceDetail() {
       toast.error(e?.message ?? "Refresh failed");
     } finally {
       setRefreshing(false);
-    }
-  };
-
-  const importSelected = async () => {
-    if (selected.size === 0) return;
-    setImporting(true);
-    try {
-      const res = await importFn({
-        data: { sourceId, itemIds: Array.from(selected) },
-      });
-      toast.success(`Created draft batch with ${res.lineCount} line${res.lineCount === 1 ? "" : "s"}`);
-      qc.invalidateQueries({ queryKey: ["scrape-source", sourceId] });
-      qc.invalidateQueries({ queryKey: ["scrape-sources"] });
-      qc.invalidateQueries({ queryKey: ["workload"] });
-      setSelected(new Set());
-      nav({ to: "/batches/$id", params: { id: res.batchId } });
-    } catch (e: any) {
-      toast.error(e?.message ?? "Import failed");
-    } finally {
-      setImporting(false);
     }
   };
 
@@ -198,24 +166,14 @@ function ScrapeSourceDetail() {
 
         <div className="ml-auto flex gap-2">
           {statusFilter === "new" && (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={ignoreSelected}
-                disabled={selected.size === 0}
-              >
-                <EyeOff className="w-4 h-4 mr-1" /> Ignore
-              </Button>
-              <Button onClick={importSelected} disabled={selected.size === 0 || importing} size="sm">
-                {importing ? (
-                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                ) : (
-                  <PackagePlus className="w-4 h-4 mr-1" />
-                )}
-                Import {selected.size > 0 ? `(${selected.size})` : ""}
-              </Button>
-            </>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={ignoreSelected}
+              disabled={selected.size === 0}
+            >
+              <EyeOff className="w-4 h-4 mr-1" /> Ignore
+            </Button>
           )}
           {statusFilter === "ignored" && (
             <Button
@@ -242,7 +200,7 @@ function ScrapeSourceDetail() {
 
       {/* Header row */}
       {items.length > 0 && (
-        <div className="grid grid-cols-[auto_64px_1fr_120px_120px_120px] gap-3 items-center px-3 py-2 text-[10px] uppercase font-semibold tracking-wider text-muted-foreground border-b">
+        <div className="grid grid-cols-[auto_64px_1fr_120px_120px] gap-3 items-center px-3 py-2 text-[10px] uppercase font-semibold tracking-wider text-muted-foreground border-b">
           <Checkbox
             checked={allSelected}
             onCheckedChange={(c) => {
@@ -253,19 +211,17 @@ function ScrapeSourceDetail() {
           <span />
           <span>Coral</span>
           <span>Wholesale</span>
-          <span>Suggested 3×</span>
           <span>At vendor</span>
         </div>
       )}
 
       {items.map((it: any) => {
         const isSel = selected.has(it.id);
-        const suggested = it.wholesale_cost != null ? Number(it.wholesale_cost) * 3 : null;
         return (
           <div
             key={it.id}
             onClick={() => statusFilter !== "imported" && toggle(it.id)}
-            className={`grid grid-cols-[auto_64px_1fr_120px_120px_120px] gap-3 items-center px-3 py-3 border-b text-sm cursor-pointer hover:bg-muted/30 ${
+            className={`grid grid-cols-[auto_64px_1fr_120px_120px] gap-3 items-center px-3 py-3 border-b text-sm cursor-pointer hover:bg-muted/30 ${
               isSel ? "bg-primary/5" : ""
             }`}
           >
@@ -300,7 +256,6 @@ function ScrapeSourceDetail() {
               </div>
             </div>
             <div className="font-medium">{fmtMoney(it.wholesale_cost)}</div>
-            <div className="text-muted-foreground">{suggested != null ? fmtMoney(suggested) : "—"}</div>
             <div>
               {it.available_at_source ? (
                 <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-0">
