@@ -774,3 +774,13 @@ append-only `vendor_scrape_snapshots` migration + `compare_at_price` /
 `last_price_change_at` columns on the item row. This unblocks the snapshot-write
 rewrite of `refreshScrapeSource`. Scheduled-refresh edge fn + tagging scaffold
 specced as follow-ups.
+
+**Update (2026-06-12, later):** Bundled the scheduled-refresh infra into the same
+hand-off (`handoff-vendor-watch-history.md`) so Lovable ships both DB/infra pieces
+in one pass. Critical guardrail spelled out for Lovable: **ship the cron/edge
+scaffold but leave it DISABLED** — `refreshScrapeSource` still overwrites, so a
+live schedule against it would automate history destruction. Safe order: migration
++ scaffold-OFF → Claude's append-only rewrite (incl. `compare_at_price` capture +
+a bearer-secret hook route as the service-role entry path) → Claude flips the cron
+on. Scheduler is a dumb timer that pings the app hook route; it must not
+reimplement the scrape.

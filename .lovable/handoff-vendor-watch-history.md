@@ -1,33 +1,49 @@
-# Hand-off — Vendor Watch: append-only price/availability history (for Lovable / DB owner)
+# Hand-off — Vendor Watch: append-only history **+ scheduled refresh** (BUNDLED, for Lovable / DB owner)
 
-Date: 2026-06-12 · **This is job #1 for Vendor Watch and it needs a migration.**
-Author: Claude Code (frontend/server-fn lane). DB schema is your lane — this note is the spec.
+Date: 2026-06-12 · **Job #1 for Vendor Watch.** Bundled so you can knock out both
+DB/infra pieces in one pass (round-trips are our most expensive resource).
+Author: Claude Code (frontend/server-fn lane). DB schema + cron/edge infra is your
+lane — this note is the spec.
 
-## Why (the make-or-break problem)
+---
 
-Vendor Watch's whole point is a **data asset**: capture vendor listings as
-**append-only snapshots** so we can see price/availability/on-sale **over time**
-and alert before limited/seasonal items sell out. Locked decision: *"Never
-overwrite — we can't backfill history we don't capture."*
+## ⚠️ READ FIRST — the one guardrail that must not be violated
 
-The Phase-1 starting point **violates this**. `refreshScrapeSource`
-(`src/lib/scrape.functions.ts`) does an `UPDATE` on the existing
-`vendor_scrape_items` row each refresh (price, availability, raw payload), so
-**every refresh destroys the prior price and availability**. There is no
-snapshots table. `compare_at_price` (the on-sale signal) is never captured at
-all. Once a refresh runs, that history is gone for good.
+`refreshScrapeSource` **still OVERWRITES history today** (it `UPDATE`s the item
+row each refresh, destroying the prior price/availability). Claude is rewriting it
+to be append-only, but **that rewrite is not merged yet.**
 
-We cannot compute *any* of the reliable signals the product needs —
-"price dropped vs history", "available→gone", "on sale" — without a history
-table. Hence this migration.
+> **If you ship the migration AND turn on a schedule that drives the current
+> refresh, you've automated the destruction of history on a timer — strictly
+> worse than manual.**
 
-## What I need you to build (the migration)
+So, concretely:
 
-### 1. New table: `vendor_scrape_snapshots` (append-only, the data asset)
+- **Ship both pieces in this pass**, BUT **leave the schedule DISABLED /
+  unscheduled.** Build the cron + edge scaffold, deploy it, but **do not enable
+  the cron job.**
+- **Claude enables the schedule** — only **after** the append-only
+  `refreshScrapeSource` rewrite is merged.
 
-One row per item **per observed change** (see write policy below — that part is
-my lane in `refreshScrapeSource`; the table just has to accept appends and never
-be updated in place).
+**Safe order, keep to it:**
+1. Migration lands (Part 1) + scheduling scaffold deployed-but-OFF (Part 2).
+2. Claude merges the append-only `refreshScrapeSource` rewrite (snapshot inserts,
+   captures `compare_at_price`, signals computed as diffs over snapshots).
+3. **Then** Claude flips the cron on.
+
+**Never enable the schedule against the overwrite logic.** This is the whole
+reason the bundle is safe to ship at once.
+
+---
+
+# Part 1 — Migration: append-only snapshots (the data asset)
+
+### 1a. New table: `vendor_scrape_snapshots` (append-only)
+
+One row per item **per observed change**. The *write policy* (snapshot on first
+sight + whenever price / availability / `compare_at_price` differs from the most
+recent snapshot) is Claude's lane in the refresh rewrite — the table just has to
+accept appends and **never be updated in place**.
 
 ```sql
 CREATE TABLE public.vendor_scrape_snapshots (
@@ -60,10 +76,12 @@ CREATE POLICY "vss_snap insert editor" ON public.vendor_scrape_snapshots
 **Append-only is the invariant.** Please do not add an `ON UPDATE` trigger or
 `updated_at` here — these rows are immutable observations.
 
-### 2. Add two columns to `vendor_scrape_items` (the "latest / current state" row)
+### 1b. Add two columns to `vendor_scrape_items` (the "latest / current state" row)
 
-We keep `vendor_scrape_items` as the fast current-state row for listing/filtering
-(latest price, current availability). History lives in snapshots. Add:
+We keep `vendor_scrape_items` as the fast current-state row for listing/filtering;
+history lives in snapshots. **`compare_at_price` here is non-optional — without it
+the on-sale signal is impossible** (it's in the Shopify variant payload and is
+currently dropped on the floor; Claude wires the capture app-side).
 
 ```sql
 ALTER TABLE public.vendor_scrape_items
@@ -71,63 +89,121 @@ ALTER TABLE public.vendor_scrape_items
   ADD COLUMN IF NOT EXISTS last_price_change_at timestamptz; -- when wholesale_cost last changed (drives "price dropped" feed)
 ```
 
-(We already have `available_at_source`, `last_available_at`, `first_seen_at`,
-`last_seen_at` — keep all of them. `raw_payload` on the item can stay as the
-"latest" blob; the historical blobs live in snapshots.)
+(Keep the existing `available_at_source`, `last_available_at`, `first_seen_at`,
+`last_seen_at`. `raw_payload` on the item stays as the "latest" blob; historical
+blobs live in snapshots.)
 
-### 3. Scope note on the `status` enum (no change needed, just FYI)
+### 1c. Scope note on the `status` enum (no change needed, FYI)
 
-The boss has decided **Vendor Watch is a monitor, not an importer** — we're
-ripping out the import-to-batch flow on the app side (`importScrapeItems`, the
-Import buttons, the ×3 "Suggested" column). That means the `'imported'` value of
-`vendor_scrape_items.status` will go unused going forward, and the
-`imported_*` FK columns become dormant. **Leave them in place** for now — no
-migration to drop them, no data loss, and we may repurpose toward the tagging /
-"to-order" feature (next). Don't remove the `'scrape'` value added to
-`vendor_batch_source_document_type` either.
+Vendor Watch is now a **monitor, not an importer** — we ripped out the
+import-to-batch flow app-side. The `'imported'` value of
+`vendor_scrape_items.status` and the `imported_*` FK columns go dormant. **Leave
+them in place** (no data loss; may repurpose toward the tagging / "to-order"
+feature). Don't drop the `'scrape'` value on `vendor_batch_source_document_type`
+either.
+
+---
+
+# Part 2 — Scheduled refresh infra (BUILD IT, BUT LEAVE IT OFF)
+
+Designed for **10+ vendors** — manual refresh won't scale. The linchpin is a timer
+that drives the **append-only** refresh. To avoid two diverging copies of the
+scrape logic, **the scheduler does NOT reimplement the scrape** — it just pings a
+stable app endpoint that runs the single source-of-truth refresh.
+
+### 2a. Lane split (important)
+
+| Piece | Owner | Status after this pass |
+|---|---|---|
+| Stable hook route `POST /api/hooks/refresh-scrape-sources` (auth via bearer secret; iterates **due** active sources; runs the **append-only** refresh) | **Claude** (app, `src/`) | Built during the refresh rewrite (step 2 of the safe order) |
+| `vendor_scrape_snapshots` migration + item columns + grant (Part 1) | **Lovable** | Shipped now |
+| pg_cron / edge scheduler that POSTs that hook route on a cadence | **Lovable** | **Deployed but DISABLED** now |
+| `SCRAPE_CRON_SECRET` in Vault **and** in the deployed app's runtime env | **Lovable** (you own app hosting on `*.lovable.app`) | Set now |
+
+### 2b. The caller contract (so both sides agree)
+
+- The scheduler authenticates to the hook route with header:
+  `Authorization: Bearer ${SCRAPE_CRON_SECRET}`.
+- Claude's hook route validates that bearer against `SCRAPE_CRON_SECRET` from the
+  app env, and on match runs as service_role — **this is the "service-role entry
+  path so the cron caller doesn't trip `requireAdmin`."** (Manual "Refresh now"
+  in the UI keeps its existing authenticated-admin path; the bearer path is only
+  for the machine caller.)
+- Body: empty → refresh **all active, due** sources. Optional `{ "sourceId": "…" }`
+  → refresh one. Returns a per-source summary.
+- **Due-ness lives in the app route** (Claude's lane) so all scrape logic stays in
+  one place — the scheduler is a dumb timer. Reference cadence rules the route
+  will apply: `manual` never auto-runs; `daily` = `last_scraped_at` older than
+  ~20h; `weekly` = older than ~6.5d; `friday_night` = it's Fri ≥ 22:00 ET and not
+  scraped since the prior Fri 22:00.
+
+### 2c. What to build (Lovable) — pick whichever fits the stack, leave it OFF
+
+**Option A (preferred, fewest moving parts):** `pg_cron` + `pg_net`.
+```sql
+-- Requires pg_cron + pg_net. DO NOT run cron.schedule() yet — ship the function
+-- and the secret, but leave the job UNSCHEDULED. Claude schedules it post-rewrite.
+--
+-- Reference job (keep COMMENTED OUT / do not execute in this migration):
+--   SELECT cron.schedule(
+--     'vendor-watch-refresh', '0 * * * *',  -- hourly; the app route decides which sources are due
+--     $$ SELECT net.http_post(
+--          url    := <APP_BASE_URL> || '/api/hooks/refresh-scrape-sources',
+--          headers:= jsonb_build_object(
+--            'Content-Type','application/json',
+--            'Authorization','Bearer ' || <SCRAPE_CRON_SECRET from Vault>),
+--          body   := '{}'::jsonb
+--        ); $$
+--   );
+```
+
+**Option B:** an edge function `scrape-scheduler` (Deno) that does the same
+`http_post` to the hook route, with pg_cron invoking the function. Same rule:
+deploy it, **do not schedule it.** Either way the function/job must **not** scrape
+directly — it only calls the app hook route.
+
+### 2d. Secret + URL
+
+- Generate `SCRAPE_CRON_SECRET` once. Store it in **Vault** (for the cron/edge
+  caller) **and** set it as a runtime env var on the deployed app
+  (`the-fish-tank.lovable.app`) so Claude's hook route can validate it. The app
+  reads it server-side only (never shipped to the client).
+- Confirm the app base URL the scheduler should hit (prod:
+  `https://the-fish-tank.lovable.app`).
+
+---
+
+## Safe enablement checklist (the contract between us)
+
+- [ ] **Lovable:** Part 1 migration merged (snapshots table + item columns + grant).
+- [ ] **Lovable:** Part 2 scheduler deployed **OFF** + `SCRAPE_CRON_SECRET` in Vault
+      and in app env + app URL confirmed.
+- [ ] **Claude:** append-only `refreshScrapeSource` rewrite merged (snapshot
+      inserts, `compare_at_price` captured, signals as diffs) + hook route built.
+- [ ] **Claude:** flip the cron ON (or hand you a one-line "schedule it now").
+- [ ] ❌ **Never** enable the schedule before the rewrite is merged.
 
 ## Please confirm / decide (your call)
 
-1. **(Confirm) `can_edit_content` / `service_role` split.** The manual "Refresh
-   now" button runs as the authenticated editor (RLS path above). The
-   **scheduled** refresh (next phase) must run as `service_role` via an edge
-   function / pg_cron — that's why snapshots get a `service_role` grant. Flag if
-   your cron pattern differs.
+1. **(Confirm)** You can set `SCRAPE_CRON_SECRET` in **both** Vault and the
+   deployed app's runtime env (you own `*.lovable.app` hosting). If the app env is
+   managed elsewhere, flag it — that's the one thing that blocks the bearer path.
+2. **(Confirm)** `pg_net` is available for Option A; if not, we go Option B (edge
+   function). Either is fine.
+3. **(Confirm)** Hourly cron tick is acceptable (the app route throttles by
+   cadence, so most ticks are cheap no-ops). Friday-night Furnace drops will be
+   caught within the hour.
 
-2. **(Decide, next phase) Scheduled-refresh infra — the linchpin.** Designing for
-   **10+ vendors** (boss's call), manual refresh won't cut it. Proposed shape, to
-   spec in a follow-up hand-off once this table lands:
-   - a Supabase **edge function** `refresh-scrape-sources` that selects active
-     sources due by `cadence`, fetches Shopify `products.json`, and inserts
-     snapshots + updates the latest row, all as `service_role`;
-   - **pg_cron** invoking it (e.g. hourly; the function decides which sources are
-     due — `friday_night`, `daily`, `weekly`, `manual`).
-   I'll draft the exact edge-function spec separately. Calling it out now so the
-   table + grants above are built with that caller in mind.
+## Planned fast-follow (not this pass — noted so we don't paint into a corner)
 
-3. **(Decide, later) Tagging / "to-order" scaffold.** Boss wants notify-only now
-   but to **build toward** tags ("add to order shortlist", "watch this type of
-   item"). When we get there I'll spec a small `vendor_scrape_item_flags` table
-   (item_id, flag, created_by) rather than overloading `status`. **Not in this
-   migration** — noted so we don't paint ourselves into a corner.
-
-## What I'm doing on the app side in parallel (my lane)
-
-- Rewriting `refreshScrapeSource` to **insert a snapshot** (change-log policy:
-  write a snapshot on first sight and whenever price / availability /
-  compare_at_price differs from the most recent snapshot) **instead of**
-  overwriting history; capture `compare_at_price` from the Shopify variant.
-- **Ripping out** the importer path (`importScrapeItems`, Import UI, the ×3
-  "Suggested" column) per the boss's decision — Vendor Watch never creates
-  batches/inventory/pricing.
-- Fixing the dead **"Unavailable at vendor"** filter (today it queries
-  `status='unavailable'`, which nothing ever sets; it should filter
-  `available_at_source=false`).
-- These app-side changes that **write** snapshots are gated on this table
-  existing — so this migration unblocks me.
+Tagging / "to-order" shortlist: we're **notify-only** now but designing toward it.
+When we get there Claude will spec a small `vendor_scrape_item_flags`
+(item_id, flag, created_by) table rather than overloading `status`. **Not in this
+migration.**
 
 ## Not in scope (per standing rules)
 
 No retail/×3 logic in Vendor Watch (scraped price = our wholesale cost). No
 batch/inventory/pricing creation. No Firecrawl spend on Shopify sources. No live
-stock counts — only the signals above.
+stock counts — only the signals (just-appeared, available→gone, price-dropped,
+on-sale).
