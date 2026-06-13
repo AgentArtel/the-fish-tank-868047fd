@@ -1517,6 +1517,7 @@ export type Database = {
           last_scraped_at: string | null
           name: string
           notes: string | null
+          prefer_firecrawl: boolean
           source_url: string
           updated_at: string
           vendor_id: string
@@ -1534,6 +1535,7 @@ export type Database = {
           last_scraped_at?: string | null
           name: string
           notes?: string | null
+          prefer_firecrawl?: boolean
           source_url: string
           updated_at?: string
           vendor_id: string
@@ -1551,6 +1553,7 @@ export type Database = {
           last_scraped_at?: string | null
           name?: string
           notes?: string | null
+          prefer_firecrawl?: boolean
           source_url?: string
           updated_at?: string
           vendor_id?: string
