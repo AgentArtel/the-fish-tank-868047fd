@@ -828,6 +828,24 @@ export type Database = {
           },
         ]
       }
+      tracked_coral_types: {
+        Row: {
+          coral_type: string
+          created_at: string
+          created_by: string | null
+        }
+        Insert: {
+          coral_type: string
+          created_at?: string
+          created_by?: string | null
+        }
+        Update: {
+          coral_type?: string
+          created_at?: string
+          created_by?: string | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
