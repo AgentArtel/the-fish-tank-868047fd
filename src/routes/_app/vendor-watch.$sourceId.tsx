@@ -21,6 +21,7 @@ import {
   refreshScrapeSource,
   setScrapeItemStatus,
   updateScrapeSource,
+  backfillScrapeImages,
 } from "@/lib/scrape.functions";
 import { fmtMoney } from "@/lib/ops";
 import { Switch } from "@/components/ui/switch";
@@ -36,6 +37,7 @@ import {
   Clock,
   AlertTriangle,
   CheckCircle2,
+  Download,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_app/vendor-watch/$sourceId")({
@@ -78,7 +80,9 @@ function ScrapeSourceDetail() {
   const progressFn = useServerFn(getScrapeProgress);
   const setStatusFn = useServerFn(setScrapeItemStatus);
   const updateFn = useServerFn(updateScrapeSource);
+  const backfillFn = useServerFn(backfillScrapeImages);
   const [savingCfg, setSavingCfg] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("new");
   const [viewMode, setViewMode] = useState<"list" | "grid">(() => {
@@ -158,6 +162,7 @@ function ScrapeSourceDetail() {
 
   const source = data?.source;
   const items = data?.items ?? [];
+  const photoStats = (data as any)?.photoStats as { total: number; missing: number } | undefined;
   const allSelected = items.length > 0 && items.every((it: any) => selected.has(it.id));
 
   // Vendor CDN image first (always present), stored signed thumb as fallback.
@@ -186,6 +191,31 @@ function ScrapeSourceDetail() {
       toast.error(e?.message ?? "Update failed");
     } finally {
       setSavingCfg(false);
+    }
+  };
+
+  // Drain un-captured images to storage in safe chunks until none remain.
+  const backfillImages = async () => {
+    setBackfilling(true);
+    let stored = 0;
+    let remaining = 0;
+    try {
+      for (let i = 0; i < 40; i++) {
+        const res = await backfillFn({ data: { sourceId, limit: 50 } });
+        stored += res.downloaded;
+        remaining = res.remaining;
+        toast.loading(`Downloading images… ${remaining} left`, { id: "backfill" });
+        if (remaining === 0 || res.downloaded === 0) break; // done, or no progress
+      }
+      toast.success(
+        `Stored ${stored} image${stored === 1 ? "" : "s"}${remaining > 0 ? ` · ${remaining} still pending` : " · all captured"}`,
+        { id: "backfill" },
+      );
+      qc.invalidateQueries({ queryKey: ["scrape-source", sourceId] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Back-fill failed", { id: "backfill" });
+    } finally {
+      setBackfilling(false);
     }
   };
 
@@ -304,6 +334,31 @@ function ScrapeSourceDetail() {
               {(source as any).is_active ? "Active" : "Paused"}
             </span>
           </div>
+
+          {photoStats && photoStats.total > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Images</span>
+              <span className="font-medium">
+                {photoStats.total - photoStats.missing}/{photoStats.total} stored
+              </span>
+              {photoStats.missing > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7"
+                  onClick={backfillImages}
+                  disabled={backfilling}
+                >
+                  {backfilling ? (
+                    <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                  ) : (
+                    <Download className="w-3.5 h-3.5 mr-1" />
+                  )}
+                  Back-fill {photoStats.missing}
+                </Button>
+              )}
+            </div>
+          )}
 
           {(source as any).last_scrape_status === "error" && (source as any).last_scrape_error && (
             <div className="w-full text-xs text-destructive bg-destructive/10 rounded px-2 py-1.5 break-words">

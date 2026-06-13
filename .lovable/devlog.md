@@ -923,3 +923,21 @@ the fallback end-to-end.
 - Touched: `scrape.functions.ts` (additive only), `vendor-watch.$sourceId.tsx`,
   `refresh-scrape-sources.ts`. `routeTree.gen.ts` and core scrape body
   untouched.
+
+---
+## 2026-06-13 — Vendor Watch: reliable image capture for the coral data asset (Claude Code)
+
+Boss wants the scraped images kept + fully captured (future AI coral-ID training),
+not just displayed. Two-part fix so capture is complete and verifiable:
+- **Display** already uses the vendor CDN URL (prior change), so all images show
+  regardless of download state.
+- **Capture:** in-scrape image downloads are now **capped per run**
+  (`MAX_IMAGE_DOWNLOADS_PER_RUN = 80`) so a big pass can't blow the Worker
+  subrequest limit and silently drop captures / truncate the scrape. Items beyond
+  the cap keep `photo_path = null` and are drained by a new admin server fn
+  `backfillScrapeImages` (downloads missing images in ≤50 chunks, resumable).
+- **UI:** the source status strip shows `N/Total stored` and a **"Back-fill N"**
+  button that loops the backfill until none remain (progress toast). `getScrapeSource`
+  now returns `photoStats {total, missing}`.
+
+No migration. Storage path/format unchanged (`scraped/<slug>/<sku>.<ext>`).
