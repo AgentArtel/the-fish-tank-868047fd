@@ -1092,3 +1092,16 @@ priced stock, not setting new pricing — the admin-only pricing gate (batches/c
 still governs *new* pricing. No gate change / no migration. UI now states this.
 
 Next (signed off, separate): unify the three add-stock tools into one mental model.
+
+---
+## 2026-06-13 — Intake: unified "Add inventory" launcher (Claude Code)
+
+Per boss sign-off (Option A — clear launcher + naming, not a full merge). The
+global "+" FAB / Quick Add now opens one **Add inventory** chooser that routes by
+intent, so there's a single clear mental model instead of three undiscoverable tools:
+- **Add tagged stock for sale** → the existing Quick Add form (tagged/priced, goes
+  live on location). Primary option.
+- **Catalog corals in a tank** → Coral Discovery (drafts, plug tags).
+- **Receive a vendor order** → Intake/Batches (invoice → AI → admin pricing).
+Intake stays a separate workflow (it's vendor receiving, not "log existing stock").
+Frontend only; no merge of forms, no DB change.
