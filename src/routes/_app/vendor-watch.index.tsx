@@ -263,8 +263,15 @@ function SourcesTab() {
       )}
 
       <div className="space-y-3">
-        {(data?.sources ?? []).map((s: any) => {
+        {[...(data?.sources ?? [])]
+          .sort((a: any, b: any) => {
+            const va = (a.vendors?.name ?? "").localeCompare(b.vendors?.name ?? "", undefined, { sensitivity: "base" });
+            if (va !== 0) return va;
+            return (a.name ?? "").localeCompare(b.name ?? "", undefined, { sensitivity: "base" });
+          })
+          .map((s: any) => {
           const c = data?.counts?.[s.id] ?? { new: 0, available: 0, imported: 0, sold: 0 };
+          const vc = vendorColor(s.vendors?.name);
           return (
             <Link
               key={s.id}
@@ -273,7 +280,7 @@ function SourcesTab() {
               className="block rounded-lg border bg-card p-4 hover:bg-muted/30 transition-colors"
             >
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <div className={`w-10 h-10 rounded-md flex items-center justify-center shrink-0 border ${vc.badge}`}>
                   <Globe className="w-5 h-5" />
                 </div>
                 <div className="flex-1 min-w-0">
