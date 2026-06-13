@@ -829,3 +829,22 @@ Added to `src/routes/_app/vendor-watch.$sourceId.tsx`:
 - Wrote `.lovable/handoff-vendor-watch-enable-cron.md`: smoke-test the deployed
   endpoint → add `SCRAPE_CRON_SECRET` to Vault → uncomment `cron.schedule(...)`
   as a new migration. Gated on the smoke-test; kill-switch documented.
+
+---
+## 2026-06-12 — Vendor Watch linchpin LIVE + Shopify 403 hardening (Claude Code)
+
+- **Scheduled refresh is live.** Lovable created the `SCRAPE_CRON_SECRET` Vault
+  secret (matches app env), smoke-tested via pg_net (HTTP 200), and scheduled
+  `cron.schedule('vendor-watch-refresh', '0 * * * *', …)` (jobid=1, active). The
+  hourly tick hits `/api/public/hooks/refresh-scrape-sources`; the app route
+  throttles by cadence (Furnace `friday_night` fires at 22:00 ET Fri).
+- **Verified end-to-end** that the cron path executes and records cleanly.
+- **Found + fixed:** a forced pass returned HTTP 200 from the hook but the
+  upstream Shopify `products.json` fetch 403'd ("Scrape failed: HTTP 403 at
+  page 1"). Cause: the fetch sent no User-Agent, which Cloudflare/Fastly-fronted
+  Shopify stores intermittently bot-block. Fix in `scrape.functions.ts`: send a
+  real browser UA + Accept/Accept-Language headers on both the products.json and
+  image fetches, plus `fetchWithRetry` (retries 403/429/5xx with backoff). KISS —
+  no Firecrawl needed; still a free direct fetch.
+- Next: re-run a forced pass after this deploys to confirm the 403 is gone, then
+  the in-app feed over the snapshots.
