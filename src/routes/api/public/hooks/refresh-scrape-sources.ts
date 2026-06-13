@@ -75,13 +75,16 @@ export const Route = createFileRoute("/api/public/hooks/refresh-scrape-sources")
 
         // Optional body: { sourceId? } refresh one (ignores cadence);
         // { force?: true } refresh all active now; empty → all active + due.
-        let body: { sourceId?: string; force?: boolean } = {};
+        // { skipImages? } — automated runs are lightweight (availability/price
+        // only, no image downloads) by default; pass false for a full pull.
+        let body: { sourceId?: string; force?: boolean; skipImages?: boolean } = {};
         try {
           const text = await request.text();
           if (text) body = JSON.parse(text);
         } catch {
           return json({ error: "bad json body" }, 400);
         }
+        const skipImages = body.skipImages ?? true;
 
         const { data: sources, error } = await supabaseAdmin
           .from("vendor_scrape_sources")
@@ -100,7 +103,7 @@ export const Route = createFileRoute("/api/public/hooks/refresh-scrape-sources")
         const errors: any[] = [];
         for (const s of targets) {
           try {
-            const summary = await runScrapeForSource(supabaseAdmin, s as any);
+            const summary = await runScrapeForSource(supabaseAdmin, s as any, { skipImages });
             ran.push({ sourceId: s.id, ...summary });
           } catch (e: any) {
             errors.push({ sourceId: s.id, error: e?.message ?? String(e) });

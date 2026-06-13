@@ -332,6 +332,7 @@ export async function runScrapeForSource(
     prefer_firecrawl?: boolean | null;
     vendors?: { slug?: string } | null;
   },
+  opts: { skipImages?: boolean } = {},
 ): Promise<ScrapeSummary> {
   if (source.kind !== "shopify_public") {
     throw new Error(`Only shopify_public sources are supported (got ${source.kind})`);
@@ -428,6 +429,7 @@ export async function runScrapeForSource(
     // (or a later run) — already-downloaded items are skipped before they spend
     // any of the cap, so capture resumes where it left off.
     if (
+      !opts.skipImages &&
       imgUrl &&
       (!photo_path || existing?.photo_source_url !== imgUrl) &&
       imagesDownloaded < MAX_IMAGE_DOWNLOADS_PER_RUN
@@ -571,7 +573,9 @@ export async function runScrapeForSource(
 
 export const refreshScrapeSource = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ sourceId: z.string().uuid() }).parse(d))
+  .inputValidator((d) =>
+    z.object({ sourceId: z.string().uuid(), skipImages: z.boolean().optional() }).parse(d),
+  )
   .handler(async ({ data, context }) => {
     await requireAdmin(context.supabase, context.userId);
     const { data: source, error } = await context.supabase
@@ -581,7 +585,9 @@ export const refreshScrapeSource = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!source) throw new Error("Source not found");
-    return await runScrapeForSource(context.supabase, source as any);
+    return await runScrapeForSource(context.supabase, source as any, {
+      skipImages: !!data.skipImages,
+    });
   });
 
 // ---------- ignore / unignore ----------
