@@ -337,6 +337,10 @@ function FeedTab() {
   const [filter, setFilter] = useState<"all" | FeedType>("all");
   const [coral, setCoral] = useState<string>("all");
   const [watchlistOnly, setWatchlistOnly] = useState(false);
+  const [viewMode, setViewMode] = useState<"list" | "grid">(() => {
+    if (typeof window === "undefined") return "list";
+    return (localStorage.getItem("vendor-watch.view") as "list" | "grid") || "list";
+  });
   const { data, isLoading } = useQuery({
     queryKey: ["vendor-feed", 14],
     queryFn: () => feedFn({ data: { days: 14 } }),
