@@ -201,7 +201,7 @@ function ScrapeSourcesPage() {
 
       <div className="space-y-3">
         {(data?.sources ?? []).map((s: any) => {
-          const c = data?.counts?.[s.id] ?? { new: 0, available: 0, imported: 0 };
+          const c = data?.counts?.[s.id] ?? { new: 0, available: 0, imported: 0, sold: 0 };
           return (
             <Link
               key={s.id}
