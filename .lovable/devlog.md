@@ -1056,3 +1056,17 @@ On Lovable's `tracked_coral_types` table:
   button when a coral type is selected, and a ★ highlight on tracked-type rows.
   Shop-wide list (any editor manages it). One-click "show me new acros/chalices
   anywhere" — the base for loud alerts (SMS/push) later.
+
+---
+## 2026-06-13 — Decisions: loud alerts parked; Rubio's = account-login (Claude Code)
+
+- **Loud alerts (SMS/push): PARKED.** No notification infra exists (no Resend/
+  Twilio/web-push/edge functions). Boss chose to hold until a channel/provider is
+  picked. Resume = pick channel → create account/key → build the integration +
+  a dedup state table. The detection is trivial (tracked-type feed events).
+- **Rubio's (SoFlo) = account-login gated** (customer email+password), not a shop
+  password. Make-or-break unknown before building: does `products.json` return
+  data once authenticated? If yes → cookie-auth tier (store session cookie + attach
+  to direct fetch / Firecrawl headers). If still empty → catalog is HTML-behind-
+  login → needs Firecrawl-with-login + HTML parsing (bigger; weigh for one source).
+  Boss to test products.json while logged in before we build.
