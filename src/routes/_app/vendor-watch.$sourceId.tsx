@@ -17,6 +17,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import {
   getScrapeSource,
+  getScrapeProgress,
   refreshScrapeSource,
   setScrapeItemStatus,
   updateScrapeSource,
