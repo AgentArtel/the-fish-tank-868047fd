@@ -440,7 +440,15 @@ function ScrapeSourceDetail() {
               >
                 <div className="relative aspect-square bg-muted overflow-hidden">
                   {thumbs[it.id] ? (
-                    <img src={thumbs[it.id]} alt={it.title} className="w-full h-full object-cover" />
+                    <img
+                      src={thumbs[it.id]}
+                      alt={it.title}
+                      width={320}
+                      height={320}
+                      loading="lazy"
+                      decoding="async"
+                      className="w-full h-full object-cover"
+                    />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <span className="text-xs text-muted-foreground">no photo</span>
