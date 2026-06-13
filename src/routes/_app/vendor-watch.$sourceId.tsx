@@ -19,9 +19,23 @@ import {
   getScrapeSource,
   refreshScrapeSource,
   setScrapeItemStatus,
+  updateScrapeSource,
 } from "@/lib/scrape.functions";
 import { fmtMoney } from "@/lib/ops";
-import { RefreshCw, Loader2, ArrowLeft, ExternalLink, EyeOff, Eye, LayoutGrid, List } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import {
+  RefreshCw,
+  Loader2,
+  ArrowLeft,
+  ExternalLink,
+  EyeOff,
+  Eye,
+  LayoutGrid,
+  List,
+  Clock,
+  AlertTriangle,
+  CheckCircle2,
+} from "lucide-react";
 
 export const Route = createFileRoute("/_app/vendor-watch/$sourceId")({
   component: ScrapeSourceDetail,
@@ -29,12 +43,24 @@ export const Route = createFileRoute("/_app/vendor-watch/$sourceId")({
 
 type StatusFilter = "new" | "imported" | "ignored" | "unavailable" | "all";
 
+function fmtRelative(iso: string | null | undefined) {
+  if (!iso) return "never";
+  const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 48) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
 function ScrapeSourceDetail() {
   const { sourceId } = Route.useParams();
   const qc = useQueryClient();
   const getFn = useServerFn(getScrapeSource);
   const refreshFn = useServerFn(refreshScrapeSource);
   const setStatusFn = useServerFn(setScrapeItemStatus);
+  const updateFn = useServerFn(updateScrapeSource);
+  const [savingCfg, setSavingCfg] = useState(false);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("new");
   const [viewMode, setViewMode] = useState<"list" | "grid">(() => {
@@ -79,6 +105,23 @@ function ScrapeSourceDetail() {
       n.has(id) ? n.delete(id) : n.add(id);
       return n;
     });
+  };
+
+  const updateConfig = async (patch: {
+    cadence?: "manual" | "daily" | "weekly" | "friday_night";
+    is_active?: boolean;
+  }) => {
+    setSavingCfg(true);
+    try {
+      await updateFn({ data: { sourceId, ...patch } });
+      qc.invalidateQueries({ queryKey: ["scrape-source", sourceId] });
+      qc.invalidateQueries({ queryKey: ["scrape-sources"] });
+      toast.success(patch.is_active === false ? "Paused" : "Saved");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Update failed");
+    } finally {
+      setSavingCfg(false);
+    }
   };
 
   const refresh = async () => {
@@ -147,6 +190,62 @@ function ScrapeSourceDetail() {
           </Button>
         }
       />
+
+      {/* Scrape status + schedule controls */}
+      {source && (
+        <div className="rounded-lg border bg-card p-3 mb-4 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm">
+          <div className="flex items-center gap-2">
+            {(source as any).last_scrape_status === "error" ? (
+              <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
+            ) : (source as any).last_scrape_status === "ok" ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            ) : (
+              <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
+            )}
+            <span className="text-muted-foreground">Last scraped</span>
+            <span className="font-medium">{fmtRelative((source as any).last_scraped_at)}</span>
+            {typeof (source as any).last_item_count === "number" && (
+              <span className="text-muted-foreground">· {(source as any).last_item_count} items</span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground">Runs</span>
+            <Select
+              value={(source as any).cadence}
+              onValueChange={(v) => updateConfig({ cadence: v as any })}
+              disabled={savingCfg}
+            >
+              <SelectTrigger className="h-8 w-36">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="manual">Manual only</SelectItem>
+                <SelectItem value="daily">Daily</SelectItem>
+                <SelectItem value="weekly">Weekly</SelectItem>
+                <SelectItem value="friday_night">Friday night</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={!!(source as any).is_active}
+              onCheckedChange={(c) => updateConfig({ is_active: c })}
+              disabled={savingCfg}
+            />
+            <span className="text-muted-foreground">
+              {(source as any).is_active ? "Active" : "Paused"}
+            </span>
+          </div>
+
+          {(source as any).last_scrape_status === "error" && (source as any).last_scrape_error && (
+            <div className="w-full text-xs text-destructive bg-destructive/10 rounded px-2 py-1.5 break-words">
+              Last run failed: {(source as any).last_scrape_error}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Filter + bulk actions bar */}
       <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -223,7 +322,7 @@ function ScrapeSourceDetail() {
       {!isLoading && items.length === 0 && (
         <div className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">
           {statusFilter === "new"
-            ? "Nothing new to import. Click Refresh to check the vendor for new drops."
+            ? "Nothing new. Click Refresh to check the vendor for new drops."
             : "No items match this filter."}
         </div>
       )}

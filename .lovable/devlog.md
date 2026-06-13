@@ -848,3 +848,20 @@ Added to `src/routes/_app/vendor-watch.$sourceId.tsx`:
   no Firecrawl needed; still a free direct fetch.
 - Next: re-run a forced pass after this deploys to confirm the 403 is gone, then
   the in-app feed over the snapshots.
+
+---
+## 2026-06-13 — Vendor Watch: scrape status + schedule controls; Firecrawl queued (Claude Code)
+
+- **Status + controls on the source detail page.** Added a strip showing last-
+  scraped time, last status (ok/error icon), `last_item_count`, and — on failure —
+  the actual `last_scrape_error` text (so the Shopify 403 is now visible in-app).
+  Plus a **cadence selector** (manual/daily/weekly/friday_night) and an
+  **active/pause** toggle. Backed by a new admin-only `updateScrapeSource` server
+  fn (no DB migration — the `vss update admin` RLS already exists). Also cleaned a
+  stale "Nothing new to import" empty-state string (monitor pivot).
+- **Firecrawl fallback queued:** `.lovable/handoff-vendor-watch-firecrawl.md`.
+  Design is KISS — direct free fetch first, auto-fallback to Firecrawl only when a
+  source is network-blocked (transport swap; parsing/snapshots unchanged). Gated
+  on confirming the Furnace block is real (tonight's single tick / residential
+  curl) rather than self-inflicted test-volume. Lovable provisions
+  `FIRECRAWL_API_KEY` server-side; Claude builds the adapter.
