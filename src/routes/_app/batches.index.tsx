@@ -1,6 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+import { createVendorBatch } from "@/lib/ops.functions";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,13 +71,21 @@ function NewBatchDialog({ onDone }: { onDone: () => void }) {
     queryFn: async () => (await supabase.from("vendors").select("id,name").eq("is_active",true).order("name")).data ?? [],
     enabled: open,
   });
+  const createFn = useServerFn(createVendorBatch);
   const submit = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    const { error } = await supabase.from("vendor_batches").insert({
-      ...f, created_by: user?.id,
-    });
-    if (error) { toast.error(error.message); return; }
-    toast.success("Batch created"); setOpen(false); setF({ source_document_type: "invoice" }); onDone();
+    try {
+      await createFn({
+        data: {
+          vendor_id: f.vendor_id,
+          source_document_type: f.source_document_type,
+          invoice_number: f.invoice_number ?? null,
+          invoice_date: f.invoice_date ?? null,
+        },
+      });
+      toast.success("Batch created"); setOpen(false); setF({ source_document_type: "invoice" }); onDone();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to create batch");
+    }
   };
   return (
     <Dialog open={open} onOpenChange={setOpen}>
