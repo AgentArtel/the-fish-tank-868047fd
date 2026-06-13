@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Plus, Camera, Sparkles, Loader2, Trash2, FileText, Check, ChevronsUpDown } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
+import { Plus, Camera, Sparkles, Loader2, Trash2, FileText, Check, ChevronsUpDown, Tag, Waves, PackageOpen, ChevronLeft } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button, type ButtonProps } from "@/components/ui/button";
@@ -28,8 +29,8 @@ export function QuickAddFab() {
       <button
         onClick={() => setOpen(true)}
         className="fixed bottom-6 right-6 z-40 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:scale-105 transition flex items-center justify-center"
-        aria-label="Quick add inventory"
-        title="Quick add inventory"
+        aria-label="Add inventory"
+        title="Add inventory"
       >
         <Plus className="w-6 h-6" />
       </button>
@@ -61,29 +62,88 @@ export function QuickAddButton({
   );
 }
 
+function IntentCard({
+  title, desc, icon: Icon, onClick, primary,
+}: { title: string; desc: string; icon: any; onClick: () => void; primary?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full text-left rounded-lg border p-3 flex items-start gap-3 transition-colors hover:bg-muted/50 ${primary ? "border-primary/50 bg-primary/5" : ""}`}
+    >
+      <div className="w-9 h-9 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
+        <Icon className="w-5 h-5" />
+      </div>
+      <div className="min-w-0">
+        <div className="font-medium text-sm">{title}</div>
+        <div className="text-xs text-muted-foreground">{desc}</div>
+      </div>
+    </button>
+  );
+}
+
 function QuickAddDialog({ onClose }: { onClose: () => void }) {
   const [mode, setMode] = useState<Mode>("livestock");
+  const [intent, setIntent] = useState<"choose" | "quick">("choose");
+  const nav = useNavigate();
+  const go = (to: string) => { onClose(); nav({ to }); };
   return (
     <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Quick Add to Inventory</DialogTitle>
+          <DialogTitle>Add inventory</DialogTitle>
           <DialogDescription>
-            Items land in today's Quick Add batch for traceability. A primary photo is required.
+            {intent === "choose"
+              ? "What are you adding? Pick the path that matches."
+              : "Tagged stock — lands in today's Quick Add batch. A primary photo is required."}
           </DialogDescription>
         </DialogHeader>
-        <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)}>
-          <TabsList className="grid grid-cols-2 w-full">
-            <TabsTrigger value="livestock">Livestock</TabsTrigger>
-            <TabsTrigger value="dry_good">Dry Goods</TabsTrigger>
-          </TabsList>
-          <TabsContent value="livestock" className="pt-3">
-            <QuickAddForm mode="livestock" onDone={onClose} />
-          </TabsContent>
-          <TabsContent value="dry_good" className="pt-3">
-            <QuickAddForm mode="dry_good" onDone={onClose} />
-          </TabsContent>
-        </Tabs>
+
+        {intent === "choose" ? (
+          <div className="space-y-2.5">
+            <IntentCard
+              primary
+              icon={Tag}
+              title="Add tagged stock for sale"
+              desc="An item already tagged & priced (dry goods, fish, coral). Goes live when you pick a location."
+              onClick={() => setIntent("quick")}
+            />
+            <IntentCard
+              icon={Waves}
+              title="Catalog corals in a tank"
+              desc="Log corals already in the building as drafts to price later (plug / rack tags)."
+              onClick={() => go("/inventory/coral-discovery")}
+            />
+            <IntentCard
+              icon={PackageOpen}
+              title="Receive a vendor order"
+              desc="Enter a vendor invoice / order sheet — AI extracts the lines, admin approves pricing."
+              onClick={() => go("/batches")}
+            />
+          </div>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={() => setIntent("choose")}
+              className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 mb-1"
+            >
+              <ChevronLeft className="w-3 h-3" /> back
+            </button>
+            <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)}>
+              <TabsList className="grid grid-cols-2 w-full">
+                <TabsTrigger value="livestock">Livestock</TabsTrigger>
+                <TabsTrigger value="dry_good">Dry Goods</TabsTrigger>
+              </TabsList>
+              <TabsContent value="livestock" className="pt-3">
+                <QuickAddForm mode="livestock" onDone={onClose} />
+              </TabsContent>
+              <TabsContent value="dry_good" className="pt-3">
+                <QuickAddForm mode="dry_good" onDone={onClose} />
+              </TabsContent>
+            </Tabs>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
