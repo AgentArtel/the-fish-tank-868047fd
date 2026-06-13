@@ -378,7 +378,7 @@ function ScrapeSourceDetail() {
             <SelectItem value="new">New (not yet imported)</SelectItem>
             <SelectItem value="imported">Imported</SelectItem>
             <SelectItem value="ignored">Ignored</SelectItem>
-            <SelectItem value="unavailable">Unavailable at vendor</SelectItem>
+            <SelectItem value="unavailable">Sold / archived (gone from vendor)</SelectItem>
             <SelectItem value="all">All</SelectItem>
           </SelectContent>
         </Select>

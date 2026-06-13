@@ -201,7 +201,7 @@ function ScrapeSourcesPage() {
 
       <div className="space-y-3">
         {(data?.sources ?? []).map((s: any) => {
-          const c = data?.counts?.[s.id] ?? { new: 0, available: 0, imported: 0 };
+          const c = data?.counts?.[s.id] ?? { new: 0, available: 0, imported: 0, sold: 0 };
           return (
             <Link
               key={s.id}
@@ -235,6 +235,11 @@ function ScrapeSourcesPage() {
                       </Badge>
                     )}
                     <Badge variant="outline">{c.available} live at vendor</Badge>
+                    {c.sold > 0 && (
+                      <Badge variant="outline" className="text-muted-foreground">
+                        {c.sold} sold / archived
+                      </Badge>
+                    )}
                     <Badge variant="outline">{c.imported} imported</Badge>
                     <span className="text-muted-foreground ml-auto flex items-center gap-1">
                       <RefreshCw className="w-3 h-3" />
