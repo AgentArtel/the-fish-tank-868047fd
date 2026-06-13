@@ -119,7 +119,25 @@ export const getScrapeSource = createServerFn({ method: "POST" })
     const { data: items, error: ie } = await q;
     if (ie) throw new Error(ie.message);
 
-    return { source, items: items ?? [] };
+    // Image-capture completeness (for the data asset): how many items have a
+    // vendor image and how many of those aren't yet downloaded to storage.
+    const { count: imgTotal } = await context.supabase
+      .from("vendor_scrape_items")
+      .select("id", { count: "exact", head: true })
+      .eq("source_id", data.sourceId)
+      .not("photo_source_url", "is", null);
+    const { count: imgMissing } = await context.supabase
+      .from("vendor_scrape_items")
+      .select("id", { count: "exact", head: true })
+      .eq("source_id", data.sourceId)
+      .not("photo_source_url", "is", null)
+      .is("photo_path", null);
+
+    return {
+      source,
+      items: items ?? [],
+      photoStats: { total: imgTotal ?? 0, missing: imgMissing ?? 0 },
+    };
   });
 
 // ---------- refresh / scrape a source ----------
@@ -232,6 +250,19 @@ async function fetchProductsPage(url: string, transport: Transport): Promise<any
     throw err;
   }
   return await res.json();
+}
+
+// Cloudflare Workers cap subrequests per invocation (~1000), and a full pass
+// already spends most of that on per-item DB writes. So only download a bounded
+// number of images per scrape run; the rest are captured on demand by
+// backfillScrapeImages (items keep photo_path=null until then). Small weekly
+// deltas get captured automatically; big initial loads drain via the back-fill.
+const MAX_IMAGE_DOWNLOADS_PER_RUN = 80;
+
+function imageBucketPath(vendorSlug: string, externalId: string, imgUrl: string): string {
+  const ext = (imgUrl.split("?")[0].split(".").pop() || "jpg").toLowerCase().slice(0, 5);
+  const safeId = externalId.replace(/[^A-Za-z0-9_-]+/g, "_");
+  return `scraped/${vendorSlug}/${safeId}.${ext}`;
 }
 
 async function downloadImage(supabaseAdmin: any, opts: { url: string; bucketPath: string }) {
@@ -385,14 +416,19 @@ export async function runScrapeForSource(
     const existing = existingByExt.get(external_id);
 
     let photo_path: string | null = existing?.photo_path ?? null;
-    // (Re)download photo if missing or url changed
-    if (imgUrl && (!photo_path || existing?.photo_source_url !== imgUrl)) {
+    // (Re)download photo if missing or url changed, up to the per-run cap.
+    // Items skipped here keep photo_path=null and are picked up by the back-fill
+    // (or a later run) — already-downloaded items are skipped before they spend
+    // any of the cap, so capture resumes where it left off.
+    if (
+      imgUrl &&
+      (!photo_path || existing?.photo_source_url !== imgUrl) &&
+      imagesDownloaded < MAX_IMAGE_DOWNLOADS_PER_RUN
+    ) {
       try {
-        const ext = (imgUrl.split("?")[0].split(".").pop() || "jpg").toLowerCase().slice(0, 5);
-        const safeId = external_id.replace(/[^A-Za-z0-9_-]+/g, "_");
         photo_path = await downloadImage(supabaseAdmin, {
           url: imgUrl,
-          bucketPath: `scraped/${vendorSlug}/${safeId}.${ext}`,
+          bucketPath: imageBucketPath(vendorSlug, external_id, imgUrl),
         });
         imagesDownloaded++;
       } catch (e: any) {
@@ -589,4 +625,68 @@ export const updateScrapeSource = createServerFn({ method: "POST" })
       .eq("id", data.sourceId);
     if (error) throw new Error(error.message);
     return { ok: true };
+  });
+
+// ---------- back-fill un-captured images (data asset) — admin only ----------
+// Downloads vendor images to storage for items that have a photo_source_url but
+// no photo_path yet, in a bounded batch so a single Worker invocation stays
+// under its subrequest limit. The UI calls this in a loop until remaining === 0.
+export const backfillScrapeImages = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        sourceId: z.string().uuid(),
+        limit: z.number().int().min(1).max(80).default(50),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await requireAdmin(context.supabase, context.userId);
+
+    const { data: source } = await context.supabase
+      .from("vendor_scrape_sources")
+      .select("id, vendors:vendor_id(slug)")
+      .eq("id", data.sourceId)
+      .maybeSingle();
+    if (!source) throw new Error("Source not found");
+    const vendorSlug = (source as any).vendors?.slug ?? "vendor";
+
+    const { data: items, error: ie } = await context.supabase
+      .from("vendor_scrape_items")
+      .select("id, external_id, photo_source_url")
+      .eq("source_id", data.sourceId)
+      .not("photo_source_url", "is", null)
+      .is("photo_path", null)
+      .limit(data.limit);
+    if (ie) throw new Error(ie.message);
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    let downloaded = 0;
+    let failed = 0;
+    for (const it of items ?? []) {
+      try {
+        const path = await downloadImage(supabaseAdmin, {
+          url: it.photo_source_url,
+          bucketPath: imageBucketPath(vendorSlug, it.external_id, it.photo_source_url),
+        });
+        await context.supabase
+          .from("vendor_scrape_items")
+          .update({ photo_path: path })
+          .eq("id", it.id);
+        downloaded++;
+      } catch (e: any) {
+        failed++;
+        console.error("backfill image failed", it.external_id, e?.message);
+      }
+    }
+
+    const { count: remaining } = await context.supabase
+      .from("vendor_scrape_items")
+      .select("id", { count: "exact", head: true })
+      .eq("source_id", data.sourceId)
+      .not("photo_source_url", "is", null)
+      .is("photo_path", null);
+
+    return { downloaded, failed, remaining: remaining ?? 0 };
   });
