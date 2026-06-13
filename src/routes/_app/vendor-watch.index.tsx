@@ -44,6 +44,8 @@ import {
   Tag,
   Archive,
   ExternalLink,
+  LayoutGrid,
+  List,
   Star,
 } from "lucide-react";
 
@@ -221,6 +223,28 @@ const FEED_META: Record<FeedType, { label: string; Icon: typeof Sparkles; cls: s
   sold: { label: "Sold / gone", Icon: Archive, cls: "bg-muted text-muted-foreground" },
 };
 
+// Deterministic per-vendor color so each vendor reads as the same hue across
+// every event card / source row. Tailwind classes must be statically present
+// for the JIT compiler — keep the full strings, don't template the color name.
+const VENDOR_PALETTE = [
+  { badge: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30", bar: "bg-sky-500", dot: "bg-sky-500" },
+  { badge: "bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30", bar: "bg-violet-500", dot: "bg-violet-500" },
+  { badge: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30", bar: "bg-emerald-500", dot: "bg-emerald-500" },
+  { badge: "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30", bar: "bg-rose-500", dot: "bg-rose-500" },
+  { badge: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30", bar: "bg-amber-500", dot: "bg-amber-500" },
+  { badge: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/30", bar: "bg-cyan-500", dot: "bg-cyan-500" },
+  { badge: "bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300 border-fuchsia-500/30", bar: "bg-fuchsia-500", dot: "bg-fuchsia-500" },
+  { badge: "bg-lime-500/15 text-lime-700 dark:text-lime-300 border-lime-500/30", bar: "bg-lime-500", dot: "bg-lime-500" },
+  { badge: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30", bar: "bg-indigo-500", dot: "bg-indigo-500" },
+  { badge: "bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/30", bar: "bg-orange-500", dot: "bg-orange-500" },
+];
+function vendorColor(name: string | null | undefined) {
+  const s = (name ?? "").toLowerCase();
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return VENDOR_PALETTE[h % VENDOR_PALETTE.length];
+}
+
 function SourcesTab() {
   const fn = useServerFn(listScrapeSources);
   const { data, isLoading } = useQuery({
@@ -239,8 +263,15 @@ function SourcesTab() {
       )}
 
       <div className="space-y-3">
-        {(data?.sources ?? []).map((s: any) => {
+        {[...(data?.sources ?? [])]
+          .sort((a: any, b: any) => {
+            const va = (a.vendors?.name ?? "").localeCompare(b.vendors?.name ?? "", undefined, { sensitivity: "base" });
+            if (va !== 0) return va;
+            return (a.name ?? "").localeCompare(b.name ?? "", undefined, { sensitivity: "base" });
+          })
+          .map((s: any) => {
           const c = data?.counts?.[s.id] ?? { new: 0, available: 0, imported: 0, sold: 0 };
+          const vc = vendorColor(s.vendors?.name);
           return (
             <Link
               key={s.id}
@@ -249,7 +280,7 @@ function SourcesTab() {
               className="block rounded-lg border bg-card p-4 hover:bg-muted/30 transition-colors"
             >
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <div className={`w-10 h-10 rounded-md flex items-center justify-center shrink-0 border ${vc.badge}`}>
                   <Globe className="w-5 h-5" />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -306,6 +337,10 @@ function FeedTab() {
   const [filter, setFilter] = useState<"all" | FeedType>("all");
   const [coral, setCoral] = useState<string>("all");
   const [watchlistOnly, setWatchlistOnly] = useState(false);
+  const [viewMode, setViewMode] = useState<"list" | "grid">(() => {
+    if (typeof window === "undefined") return "list";
+    return (localStorage.getItem("vendor-watch.view") as "list" | "grid") || "list";
+  });
   const { data, isLoading } = useQuery({
     queryKey: ["vendor-feed", 14],
     queryFn: () => feedFn({ data: { days: 14 } }),
@@ -405,6 +440,32 @@ function FeedTab() {
           </Button>
         )}
         <span className="text-xs text-muted-foreground self-center ml-auto">last 14 days</span>
+        <div className="flex border rounded-md overflow-hidden self-center">
+          <button
+            type="button"
+            onClick={() => {
+              setViewMode("list");
+              localStorage.setItem("vendor-watch.view", "list");
+            }}
+            className={`px-2 py-1 ${viewMode === "list" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
+            title="List view"
+            aria-label="List view"
+          >
+            <List className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setViewMode("grid");
+              localStorage.setItem("vendor-watch.view", "grid");
+            }}
+            className={`px-2 py-1 ${viewMode === "grid" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
+            title="Grid view"
+            aria-label="Grid view"
+          >
+            <LayoutGrid className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
@@ -414,37 +475,131 @@ function FeedTab() {
         </div>
       )}
 
-      <div className="space-y-2">
-        {events.map((e: any) => {
-          const meta = FEED_META[e.type as FeedType];
-          const thumb = sizedImageUrl(e.photoUrl, 96);
-          const drop =
-            e.type === "price_drop" && e.priceBefore != null && e.wholesaleCost != null
-              ? Math.round((1 - Number(e.wholesaleCost) / Number(e.priceBefore)) * 100)
-              : null;
-          return (
-            <div
-              key={`${e.type}-${e.id}`}
-              className="flex items-center gap-3 rounded-lg border bg-card p-3"
-            >
-              <div className="w-12 h-12 rounded bg-muted overflow-hidden flex items-center justify-center shrink-0">
-                {thumb ? (
-                  <img src={thumb} alt="" className="w-full h-full object-cover" loading="lazy" />
-                ) : (
-                  <span className="text-[9px] text-muted-foreground">no photo</span>
-                )}
+      {viewMode === "list" && (
+        <div className="space-y-2">
+          {events.map((e: any) => {
+            const meta = FEED_META[e.type as FeedType];
+            const thumb = sizedImageUrl(e.photoUrl, 96);
+            const vc = vendorColor(e.vendorName);
+            const drop =
+              e.type === "price_drop" && e.priceBefore != null && e.wholesaleCost != null
+                ? Math.round((1 - Number(e.wholesaleCost) / Number(e.priceBefore)) * 100)
+                : null;
+            return (
+              <div
+                key={`${e.type}-${e.id}`}
+                className="flex items-stretch gap-3 rounded-lg border bg-card overflow-hidden"
+              >
+                <div className={`w-1 shrink-0 ${vc.bar}`} aria-hidden />
+                <div className="flex items-center gap-3 p-3 flex-1 min-w-0">
+                  <div className="w-12 h-12 rounded bg-muted overflow-hidden flex items-center justify-center shrink-0">
+                    {thumb ? (
+                      <img src={thumb} alt="" className="w-full h-full object-cover" loading="lazy" />
+                    ) : (
+                      <span className="text-[9px] text-muted-foreground">no photo</span>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge className={`border-0 text-[10px] ${meta.cls}`}>
+                        <meta.Icon className="w-3 h-3 mr-0.5" />
+                        {meta.label}
+                      </Badge>
+                      <Badge className={`border text-[10px] ${vc.badge}`}>{e.vendorName}</Badge>
+                      {e.coralType && (
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] ${tracked.has(e.coralType) ? "border-amber-400 text-amber-700 dark:text-amber-300" : ""}`}
+                        >
+                          {tracked.has(e.coralType) && (
+                            <Star className="w-2.5 h-2.5 mr-0.5 fill-amber-400 text-amber-400" />
+                          )}
+                          {coralTypeLabel(e.coralType)}
+                        </Badge>
+                      )}
+                      <span className="text-[11px] text-muted-foreground">· {fmtRelative(e.eventAt)}</span>
+                    </div>
+                    <div className="font-medium text-sm truncate mt-0.5">{e.title}</div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-sm font-semibold">{fmtMoney(e.wholesaleCost)}</div>
+                    {e.type === "price_drop" && (
+                      <div className="text-[11px] text-emerald-600">
+                        <span className="line-through text-muted-foreground mr-1">
+                          {fmtMoney(e.priceBefore)}
+                        </span>
+                        {drop != null && drop > 0 ? `−${drop}%` : ""}
+                      </div>
+                    )}
+                    {e.type === "on_sale" && e.compareAtPrice != null && (
+                      <div className="text-[11px] text-rose-600 line-through">
+                        {fmtMoney(e.compareAtPrice)}
+                      </div>
+                    )}
+                    {e.productUrl && (
+                      <a
+                        href={e.productUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5 mt-0.5"
+                      >
+                        view <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Badge className={`border-0 text-[10px] ${meta.cls}`}>
-                    <meta.Icon className="w-3 h-3 mr-0.5" />
-                    {meta.label}
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">{e.vendorName}</span>
+            );
+          })}
+        </div>
+      )}
+
+      {viewMode === "grid" && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          {events.map((e: any) => {
+            const meta = FEED_META[e.type as FeedType];
+            const thumb = sizedImageUrl(e.photoUrl, 320);
+            const vc = vendorColor(e.vendorName);
+            const drop =
+              e.type === "price_drop" && e.priceBefore != null && e.wholesaleCost != null
+                ? Math.round((1 - Number(e.wholesaleCost) / Number(e.priceBefore)) * 100)
+                : null;
+            return (
+              <div
+                key={`${e.type}-${e.id}`}
+                className="rounded-lg border bg-card overflow-hidden flex flex-col"
+              >
+                <div className={`h-1 ${vc.bar}`} aria-hidden />
+                <div className="relative aspect-square bg-muted overflow-hidden">
+                  {thumb ? (
+                    <img
+                      src={thumb}
+                      alt={e.title}
+                      width={320}
+                      height={320}
+                      loading="lazy"
+                      decoding="async"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <span className="text-xs text-muted-foreground">no photo</span>
+                    </div>
+                  )}
+                  <div className="absolute top-2 left-2">
+                    <Badge className={`border-0 text-[10px] ${meta.cls}`}>
+                      <meta.Icon className="w-3 h-3 mr-0.5" />
+                      {meta.label}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="p-3 space-y-1.5 flex-1 flex flex-col">
+                  <Badge className={`border text-[10px] self-start ${vc.badge}`}>{e.vendorName}</Badge>
+                  <div className="font-medium text-sm line-clamp-2 leading-snug">{e.title}</div>
                   {e.coralType && (
                     <Badge
                       variant="outline"
-                      className={`text-[10px] ${tracked.has(e.coralType) ? "border-amber-400 text-amber-700 dark:text-amber-300" : ""}`}
+                      className={`text-[9px] self-start ${tracked.has(e.coralType) ? "border-amber-400 text-amber-700 dark:text-amber-300" : ""}`}
                     >
                       {tracked.has(e.coralType) && (
                         <Star className="w-2.5 h-2.5 mr-0.5 fill-amber-400 text-amber-400" />
@@ -452,40 +607,41 @@ function FeedTab() {
                       {coralTypeLabel(e.coralType)}
                     </Badge>
                   )}
-                  <span className="text-[11px] text-muted-foreground">· {fmtRelative(e.eventAt)}</span>
+                  <div className="flex items-center justify-between mt-auto pt-1">
+                    <div>
+                      <div className="text-sm font-semibold">{fmtMoney(e.wholesaleCost)}</div>
+                      {e.type === "price_drop" && (
+                        <div className="text-[10px] text-emerald-600">
+                          <span className="line-through text-muted-foreground mr-1">
+                            {fmtMoney(e.priceBefore)}
+                          </span>
+                          {drop != null && drop > 0 ? `−${drop}%` : ""}
+                        </div>
+                      )}
+                      {e.type === "on_sale" && e.compareAtPrice != null && (
+                        <div className="text-[10px] text-rose-600 line-through">
+                          {fmtMoney(e.compareAtPrice)}
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">{fmtRelative(e.eventAt)}</span>
+                  </div>
+                  {e.productUrl && (
+                    <a
+                      href={e.productUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[10px] text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5"
+                    >
+                      view <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
                 </div>
-                <div className="font-medium text-sm truncate mt-0.5">{e.title}</div>
               </div>
-              <div className="text-right shrink-0">
-                <div className="text-sm font-semibold">{fmtMoney(e.wholesaleCost)}</div>
-                {e.type === "price_drop" && (
-                  <div className="text-[11px] text-emerald-600">
-                    <span className="line-through text-muted-foreground mr-1">
-                      {fmtMoney(e.priceBefore)}
-                    </span>
-                    {drop != null && drop > 0 ? `−${drop}%` : ""}
-                  </div>
-                )}
-                {e.type === "on_sale" && e.compareAtPrice != null && (
-                  <div className="text-[11px] text-rose-600 line-through">
-                    {fmtMoney(e.compareAtPrice)}
-                  </div>
-                )}
-                {e.productUrl && (
-                  <a
-                    href={e.productUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5 mt-0.5"
-                  >
-                    view <ExternalLink className="w-3 h-3" />
-                  </a>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </>
   );
 }
