@@ -72,6 +72,19 @@ function ScrapeSourceDetail() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  const [lightbox, setLightbox] = useState<{ url: string; title: string } | null>(null);
+
+  const openFull = async (e: React.MouseEvent, it: any) => {
+    e.stopPropagation();
+    if (!it.photo_path) return;
+    // Open immediately with the cached thumb so there's no blank flash,
+    // then swap in the full-quality original signed URL when it resolves.
+    setLightbox({ url: thumbs[it.id] ?? "", title: it.title });
+    const { data: signed } = await supabase.storage
+      .from("inventory-media")
+      .createSignedUrl(it.photo_path, 3600);
+    if (signed?.signedUrl) setLightbox({ url: signed.signedUrl, title: it.title });
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ["scrape-source", sourceId, statusFilter],
@@ -377,7 +390,10 @@ function ScrapeSourceDetail() {
               onClick={(e) => e.stopPropagation()}
               disabled={statusFilter === "imported"}
             />
-            <div className="w-14 h-14 rounded bg-muted overflow-hidden flex items-center justify-center">
+            <div
+              className="w-14 h-14 rounded bg-muted overflow-hidden flex items-center justify-center cursor-zoom-in"
+              onClick={(e) => openFull(e, it)}
+            >
               {thumbs[it.id] ? (
                 <img
                   src={thumbs[it.id]}
@@ -438,7 +454,10 @@ function ScrapeSourceDetail() {
                   isSel ? "ring-2 ring-primary" : ""
                 }`}
               >
-                <div className="relative aspect-square bg-muted overflow-hidden">
+                <div
+                  className="relative aspect-square bg-muted overflow-hidden cursor-zoom-in"
+                  onClick={(e) => openFull(e, it)}
+                >
                   {thumbs[it.id] ? (
                     <img
                       src={thumbs[it.id]}
@@ -501,6 +520,24 @@ function ScrapeSourceDetail() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 cursor-zoom-out"
+          onClick={() => setLightbox(null)}
+        >
+          {lightbox.url ? (
+            <img
+              src={lightbox.url}
+              alt={lightbox.title}
+              className="max-w-full max-h-full object-contain rounded shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <Loader2 className="w-8 h-8 text-white animate-spin" />
+          )}
         </div>
       )}
     </div>
