@@ -54,6 +54,22 @@ function fmtRelative(iso: string | null | undefined) {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+// Display the vendor's own (public) Shopify CDN image directly. It's stored on
+// every scraped item as photo_source_url and is always current, so we don't
+// depend on the copied-to-storage thumbnail (which can lag a scrape or get
+// capped). Shopify CDN supports on-the-fly resizing via the `width` param.
+function sizedImageUrl(src: string | null | undefined, width?: number): string | null {
+  if (!src) return null;
+  if (!width) return src;
+  try {
+    const u = new URL(src);
+    u.searchParams.set("width", String(width));
+    return u.toString();
+  } catch {
+    return src;
+  }
+}
+
 function ScrapeSourceDetail() {
   const { sourceId } = Route.useParams();
   const qc = useQueryClient();
@@ -76,9 +92,13 @@ function ScrapeSourceDetail() {
 
   const openFull = async (e: React.MouseEvent, it: any) => {
     e.stopPropagation();
+    // Prefer the vendor's full-res CDN original directly (public, always there).
+    if (it.photo_source_url) {
+      setLightbox({ url: it.photo_source_url, title: it.title });
+      return;
+    }
     if (!it.photo_path) return;
-    // Open immediately with the cached thumb so there's no blank flash,
-    // then swap in the full-quality original signed URL when it resolves.
+    // Fallback for items without a source URL: cached thumb, then signed original.
     setLightbox({ url: thumbs[it.id] ?? "", title: it.title });
     const { data: signed } = await supabase.storage
       .from("inventory-media")
@@ -115,7 +135,10 @@ function ScrapeSourceDetail() {
   // 320px webp so list/grid thumbs aren't pulling 500KB+ each.
   useMemo(() => {
     const items = data?.items ?? [];
-    const missing = items.filter((it: any) => it.photo_path && !thumbs[it.id]);
+    // Only sign stored thumbs for the rare item lacking a vendor CDN URL.
+    const missing = items.filter(
+      (it: any) => it.photo_path && !it.photo_source_url && !thumbs[it.id],
+    );
     if (missing.length === 0) return;
     (async () => {
       const paths = missing.map((it: any) => it.photo_path).slice(0, 60);
@@ -136,6 +159,10 @@ function ScrapeSourceDetail() {
   const source = data?.source;
   const items = data?.items ?? [];
   const allSelected = items.length > 0 && items.every((it: any) => selected.has(it.id));
+
+  // Vendor CDN image first (always present), stored signed thumb as fallback.
+  const thumbFor = (it: any): string | null =>
+    sizedImageUrl(it.photo_source_url, 320) ?? thumbs[it.id] ?? null;
 
   const toggle = (id: string) => {
     setSelected((s) => {
@@ -404,9 +431,9 @@ function ScrapeSourceDetail() {
               className="w-14 h-14 rounded bg-muted overflow-hidden flex items-center justify-center cursor-zoom-in"
               onClick={(e) => openFull(e, it)}
             >
-              {thumbs[it.id] ? (
+              {thumbFor(it) ? (
                 <img
-                  src={thumbs[it.id]}
+                  src={thumbFor(it) as string}
                   alt=""
                   width={56}
                   height={56}
@@ -468,9 +495,9 @@ function ScrapeSourceDetail() {
                   className="relative aspect-square bg-muted overflow-hidden cursor-zoom-in"
                   onClick={(e) => openFull(e, it)}
                 >
-                  {thumbs[it.id] ? (
+                  {thumbFor(it) ? (
                     <img
-                      src={thumbs[it.id]}
+                      src={thumbFor(it) as string}
                       alt={it.title}
                       width={320}
                       height={320}
