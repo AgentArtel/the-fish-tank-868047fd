@@ -1137,3 +1137,18 @@ without the slow image step.
 
 Follow-up option: sub-daily cadence (e.g. hourly) for near-live availability would
 need a small Lovable migration to extend the cadence CHECK + isDue.
+
+---
+## 2026-06-13 — Phase 1a kickoff: sale-tracking engine (Claude Code)
+
+Foundation for coral sold-off + (later) Clover sale ingest, per
+`handoff-clover-phase1.md`. App-side engine (server fns in ops.functions.ts;
+`as any` until the migration regenerates types):
+- `applyInventorySale()` helper — writes an `inventory_sale_events` ledger row,
+  then: coral **colony** = event only (no decrement); coral **frag** / fish / dry
+  good = decrement `quantity_available` + bump `quantity_sold` (clamped to the
+  qty-balance CHECK), flip to `sold_out` at 0. Shared by manual + Clover.
+- `logInventorySale` (editor) — manual sale; `setColonyGone` (editor) — colony
+  fully-gone toggle → sold_out.
+Awaiting Lovable's Phase-1a migration (`inventory_sale_events` + `colony_gone`),
+then the UI (Log-sale button, colony toggle, frag/colony+price-mode fields, reports).
