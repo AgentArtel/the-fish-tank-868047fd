@@ -1028,3 +1028,19 @@ scrape). NOT true website push — still managed polling. **Parked** per boss; r
 for the high-value WYSIWYG sources (WWC, Furnace) on the Firecrawl Team plan.
 Seed status: WWC + Top Shelf returning listings; **Rubio's empty** (password-walled
 wholesale → needs the authenticated tier).
+
+---
+## 2026-06-13 — Vendor Watch: coral-type classification + feed type filter (Claude Code)
+
+Phase 1 of coral-type + watchlist (no migration):
+- New `src/lib/coral-type.ts` — deterministic title classifier (acro/chalice/zoa/
+  euphyllia/acan/brain/monti/goni/mushroom/leather/duncan/cyphastrea/psammocora/
+  clam/anemone), first-match-wins, conservative (→ "Other"). Pure fns, shared
+  server+client. AI refinement is a later draft-only option.
+- `getVendorFeed` tags each event with `coralType` (classified from title).
+- Feed UI: a coral-type dropdown (only shows types present) + a per-row type badge.
+
+Hand-off `.lovable/handoff-vendor-watch-watchlist.md` — one small `tracked_coral_types`
+table (shop-wide) to back the "track a type across all vendors" watchlist. Once it
+ships I add the ★ Watchlist filter + track/untrack. `coral_type` column deferred
+(on-the-fly classification covers it for now).

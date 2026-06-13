@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { slugify } from "@/lib/ops";
+import { classifyCoralType } from "@/lib/coral-type";
 
 // ---------- guards (mirrors ops.functions.ts) ----------
 async function isAdmin(supabase: any, userId: string) {
@@ -776,6 +777,7 @@ function feedEvent(i: any, type: FeedType, eventAt: string | null, extra: Record
     type,
     eventAt,
     title: i.title,
+    coralType: classifyCoralType(i.title),
     productUrl: i.product_url,
     photoUrl: i.photo_source_url,
     wholesaleCost: i.wholesale_cost,

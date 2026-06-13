@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { listScrapeSources, createScrapeSource, getVendorFeed } from "@/lib/scrape.functions";
+import { CORAL_TYPES, coralTypeLabel } from "@/lib/coral-type";
 import {
   Globe,
   ArrowRight,
@@ -293,12 +294,21 @@ function SourcesTab() {
 function FeedTab() {
   const feedFn = useServerFn(getVendorFeed);
   const [filter, setFilter] = useState<"all" | FeedType>("all");
+  const [coral, setCoral] = useState<string>("all");
   const { data, isLoading } = useQuery({
     queryKey: ["vendor-feed", 14],
     queryFn: () => feedFn({ data: { days: 14 } }),
   });
-  const events = (data?.events ?? []).filter((e: any) => filter === "all" || e.type === filter);
+  const allEvents = data?.events ?? [];
+  const events = allEvents.filter(
+    (e: any) =>
+      (filter === "all" || e.type === filter) &&
+      (coral === "all" || (coral === "other" ? !e.coralType : e.coralType === coral)),
+  );
   const counts = data?.counts;
+  // Only offer coral-type options that actually appear in the feed.
+  const coralOptions = CORAL_TYPES.filter((ct) => allEvents.some((e: any) => e.coralType === ct.slug));
+  const hasOther = allEvents.some((e: any) => !e.coralType);
 
   const chip = (key: "all" | FeedType, label: string, n?: number) => (
     <button
@@ -321,6 +331,22 @@ function FeedTab() {
         {chip("price_drop", "Price drops", counts?.price_drop)}
         {chip("on_sale", "On sale", counts?.on_sale)}
         {chip("sold", "Sold / gone", counts?.sold)}
+        {(coralOptions.length > 0 || hasOther) && (
+          <Select value={coral} onValueChange={setCoral}>
+            <SelectTrigger className="h-7 w-36 text-xs">
+              <SelectValue placeholder="All types" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All types</SelectItem>
+              {coralOptions.map((ct) => (
+                <SelectItem key={ct.slug} value={ct.slug}>
+                  {ct.label}
+                </SelectItem>
+              ))}
+              {hasOther && <SelectItem value="other">Other</SelectItem>}
+            </SelectContent>
+          </Select>
+        )}
         <span className="text-xs text-muted-foreground self-center ml-auto">last 14 days</span>
       </div>
 
@@ -358,6 +384,11 @@ function FeedTab() {
                     {meta.label}
                   </Badge>
                   <span className="text-xs text-muted-foreground">{e.vendorName}</span>
+                  {e.coralType && (
+                    <Badge variant="outline" className="text-[10px]">
+                      {coralTypeLabel(e.coralType)}
+                    </Badge>
+                  )}
                   <span className="text-[11px] text-muted-foreground">· {fmtRelative(e.eventAt)}</span>
                 </div>
                 <div className="font-medium text-sm truncate mt-0.5">{e.title}</div>
