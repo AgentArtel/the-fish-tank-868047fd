@@ -1173,3 +1173,19 @@ Next: a cross-item "sold by coral type over time" report; then Phase 1b (Clover)
 - `CoralSalesReport` component appended as a **dashboard** section (no new route):
   period selector (7/30/90d) + per-type bars (heads/frags + revenue) + totals.
 Closes the Phase 1a follow-up. Next: Phase 1b (Clover) when the merchant token lands.
+
+---
+## 2026-06-13 — Clover Phase 1b: client + catalog import + settings page (Claude Code)
+
+On Lovable's clover tables + secrets. App-side, read-only against Clover:
+- `clover.api.ts` — server-only Clover REST client (env creds; cents; 429 backoff;
+  paginated items; test-connection). Named `.api` not `.client` (TanStack treats
+  `*.client.*` as browser-only).
+- `clover.functions.ts` — `getCloverOverview` (status + linked/unlinked counts),
+  `testCloverConnection` (admin), `importCloverCatalog` (admin): pulls every Clover
+  item → upserts `clover_item_links`, auto-links to an inventory item by exact
+  (case-insensitive) name, rest stay `unlinked`. Updates `clover_connection`.
+- `/settings/clover` page (nav un-"soon"ed): connection status, Test connection,
+  Import/re-sync catalog, link counts.
+Next: sale ingest (poll route → applyInventorySale), the mapping editor + unmatched
+queue, then Phase 2 push.

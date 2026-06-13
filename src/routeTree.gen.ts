@@ -34,6 +34,7 @@ import { Route as AppBatchesIndexRouteImport } from './routes/_app/batches.index
 import { Route as AppVendorWatchSourceIdRouteImport } from './routes/_app/vendor-watch.$sourceId'
 import { Route as AppSettingsUsersRouteImport } from './routes/_app/settings.users'
 import { Route as AppSettingsMetaRouteImport } from './routes/_app/settings.meta'
+import { Route as AppSettingsCloverRouteImport } from './routes/_app/settings.clover'
 import { Route as AppSettingsAiRouteImport } from './routes/_app/settings.ai'
 import { Route as AppInventoryMissingTagsRouteImport } from './routes/_app/inventory.missing-tags'
 import { Route as AppInventoryCoralDiscoveryRouteImport } from './routes/_app/inventory.coral-discovery'
@@ -167,6 +168,11 @@ const AppSettingsMetaRoute = AppSettingsMetaRouteImport.update({
   path: '/settings/meta',
   getParentRoute: () => AppRoute,
 } as any)
+const AppSettingsCloverRoute = AppSettingsCloverRouteImport.update({
+  id: '/settings/clover',
+  path: '/settings/clover',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppSettingsAiRoute = AppSettingsAiRouteImport.update({
   id: '/settings/ai',
   path: '/settings/ai',
@@ -235,6 +241,7 @@ export interface FileRoutesByFullPath {
   '/inventory/coral-discovery': typeof AppInventoryCoralDiscoveryRoute
   '/inventory/missing-tags': typeof AppInventoryMissingTagsRoute
   '/settings/ai': typeof AppSettingsAiRoute
+  '/settings/clover': typeof AppSettingsCloverRoute
   '/settings/meta': typeof AppSettingsMetaRoute
   '/settings/users': typeof AppSettingsUsersRoute
   '/vendor-watch/$sourceId': typeof AppVendorWatchSourceIdRoute
@@ -267,6 +274,7 @@ export interface FileRoutesByTo {
   '/inventory/coral-discovery': typeof AppInventoryCoralDiscoveryRoute
   '/inventory/missing-tags': typeof AppInventoryMissingTagsRoute
   '/settings/ai': typeof AppSettingsAiRoute
+  '/settings/clover': typeof AppSettingsCloverRoute
   '/settings/meta': typeof AppSettingsMetaRoute
   '/settings/users': typeof AppSettingsUsersRoute
   '/vendor-watch/$sourceId': typeof AppVendorWatchSourceIdRoute
@@ -303,6 +311,7 @@ export interface FileRoutesById {
   '/_app/inventory/coral-discovery': typeof AppInventoryCoralDiscoveryRoute
   '/_app/inventory/missing-tags': typeof AppInventoryMissingTagsRoute
   '/_app/settings/ai': typeof AppSettingsAiRoute
+  '/_app/settings/clover': typeof AppSettingsCloverRoute
   '/_app/settings/meta': typeof AppSettingsMetaRoute
   '/_app/settings/users': typeof AppSettingsUsersRoute
   '/_app/vendor-watch/$sourceId': typeof AppVendorWatchSourceIdRoute
@@ -339,6 +348,7 @@ export interface FileRouteTypes {
     | '/inventory/coral-discovery'
     | '/inventory/missing-tags'
     | '/settings/ai'
+    | '/settings/clover'
     | '/settings/meta'
     | '/settings/users'
     | '/vendor-watch/$sourceId'
@@ -371,6 +381,7 @@ export interface FileRouteTypes {
     | '/inventory/coral-discovery'
     | '/inventory/missing-tags'
     | '/settings/ai'
+    | '/settings/clover'
     | '/settings/meta'
     | '/settings/users'
     | '/vendor-watch/$sourceId'
@@ -406,6 +417,7 @@ export interface FileRouteTypes {
     | '/_app/inventory/coral-discovery'
     | '/_app/inventory/missing-tags'
     | '/_app/settings/ai'
+    | '/_app/settings/clover'
     | '/_app/settings/meta'
     | '/_app/settings/users'
     | '/_app/vendor-watch/$sourceId'
@@ -603,6 +615,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsMetaRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/settings/clover': {
+      id: '/_app/settings/clover'
+      path: '/settings/clover'
+      fullPath: '/settings/clover'
+      preLoaderRoute: typeof AppSettingsCloverRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/settings/ai': {
       id: '/_app/settings/ai'
       path: '/settings/ai'
@@ -710,6 +729,7 @@ interface AppRouteChildren {
   AppContentIdRoute: typeof AppContentIdRoute
   AppContentNewRoute: typeof AppContentNewRoute
   AppSettingsAiRoute: typeof AppSettingsAiRoute
+  AppSettingsCloverRoute: typeof AppSettingsCloverRoute
   AppSettingsMetaRoute: typeof AppSettingsMetaRoute
   AppSettingsUsersRoute: typeof AppSettingsUsersRoute
   AppVendorWatchSourceIdRoute: typeof AppVendorWatchSourceIdRoute
@@ -733,6 +753,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppContentIdRoute: AppContentIdRoute,
   AppContentNewRoute: AppContentNewRoute,
   AppSettingsAiRoute: AppSettingsAiRoute,
+  AppSettingsCloverRoute: AppSettingsCloverRoute,
   AppSettingsMetaRoute: AppSettingsMetaRoute,
   AppSettingsUsersRoute: AppSettingsUsersRoute,
   AppVendorWatchSourceIdRoute: AppVendorWatchSourceIdRoute,
