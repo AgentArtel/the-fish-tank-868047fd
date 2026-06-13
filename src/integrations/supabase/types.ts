@@ -268,6 +268,9 @@ export type Database = {
           attrs: Json
           availability_status: Database["public"]["Enums"]["inventory_availability_status"]
           category: string | null
+          colony_gone: boolean
+          colony_gone_at: string | null
+          colony_gone_by: string | null
           created_at: string
           created_by: string | null
           id: string
@@ -301,6 +304,9 @@ export type Database = {
           attrs?: Json
           availability_status?: Database["public"]["Enums"]["inventory_availability_status"]
           category?: string | null
+          colony_gone?: boolean
+          colony_gone_at?: string | null
+          colony_gone_by?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -334,6 +340,9 @@ export type Database = {
           attrs?: Json
           availability_status?: Database["public"]["Enums"]["inventory_availability_status"]
           category?: string | null
+          colony_gone?: boolean
+          colony_gone_at?: string | null
+          colony_gone_by?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -446,6 +455,71 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "inventory_media_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_sale_events: {
+        Row: {
+          clover_item_name: string | null
+          clover_line_item_id: string | null
+          clover_order_id: string | null
+          clover_payment_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          inventory_item_id: string | null
+          kind: string
+          notes: string | null
+          qty: number
+          sold_at: string
+          source: string
+          status: string
+          total_cents: number | null
+          unit_price_cents: number | null
+        }
+        Insert: {
+          clover_item_name?: string | null
+          clover_line_item_id?: string | null
+          clover_order_id?: string | null
+          clover_payment_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          inventory_item_id?: string | null
+          kind?: string
+          notes?: string | null
+          qty: number
+          sold_at?: string
+          source?: string
+          status?: string
+          total_cents?: number | null
+          unit_price_cents?: number | null
+        }
+        Update: {
+          clover_item_name?: string | null
+          clover_line_item_id?: string | null
+          clover_order_id?: string | null
+          clover_payment_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          inventory_item_id?: string | null
+          kind?: string
+          notes?: string | null
+          qty?: number
+          sold_at?: string
+          source?: string
+          status?: string
+          total_cents?: number | null
+          unit_price_cents?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_sale_events_inventory_item_id_fkey"
             columns: ["inventory_item_id"]
             isOneToOne: false
             referencedRelation: "inventory_items"
