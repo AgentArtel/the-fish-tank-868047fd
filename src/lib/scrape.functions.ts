@@ -264,7 +264,13 @@ type ScrapeSummary = {
  */
 export async function runScrapeForSource(
   db: any,
-  source: { id: string; kind: string; source_url: string; vendors?: { slug?: string } | null },
+  source: {
+    id: string;
+    kind: string;
+    source_url: string;
+    prefer_firecrawl?: boolean | null;
+    vendors?: { slug?: string } | null;
+  },
 ): Promise<ScrapeSummary> {
   if (source.kind !== "shopify_public") {
     throw new Error(`Only shopify_public sources are supported (got ${source.kind})`);
