@@ -5,6 +5,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
+import { CoralSalesReport } from "@/components/coral-sales-report";
 import { getWorkload } from "@/lib/workload.functions";
 import { fmtMoney } from "@/lib/ops";
 import {
@@ -311,6 +312,8 @@ function Dashboard() {
           )}
         </div>
       </section>
+
+      <CoralSalesReport />
     </div>
   );
 }

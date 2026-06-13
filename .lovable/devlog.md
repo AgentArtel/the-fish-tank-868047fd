@@ -1164,3 +1164,12 @@ On Lovable's applied migration. New `SalesCard` on the item page (`inventory.$id
 - **Sale history + totals** per item (reads `inventory_sale_events`; `as any` until
   types regen — table exists in DB so it works live).
 Next: a cross-item "sold by coral type over time" report; then Phase 1b (Clover).
+
+---
+## 2026-06-13 — Phase 1a: "sold by coral type" report (Claude Code)
+
+- `getCoralSalesByType(days)` server fn — rolls up `inventory_sale_events` (coral
+  lines, classified from item name) by type: qty sold, revenue, # sales.
+- `CoralSalesReport` component appended as a **dashboard** section (no new route):
+  period selector (7/30/90d) + per-type bars (heads/frags + revenue) + totals.
+Closes the Phase 1a follow-up. Next: Phase 1b (Clover) when the merchant token lands.
