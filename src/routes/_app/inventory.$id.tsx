@@ -29,6 +29,7 @@ import {
 import { Sparkles, Loader2 } from "lucide-react";
 import { PhotoOnFileWizard, inventoryHasPhoto } from "@/components/photo-on-file-wizard";
 import { AttrsEditor } from "@/components/attrs-editor";
+import { SalesCard } from "@/components/inventory-sales-card";
 import { ITEM_TYPE_LABELS, type ItemType } from "@/lib/item-type-attrs";
 
 export const Route = createFileRoute("/_app/inventory/$id")({ component: InventoryDetail });
@@ -82,6 +83,7 @@ function InventoryDetail() {
       </div>
 
       <QuantitiesCard item={item} onDone={refresh} />
+      <SalesCard item={item} onDone={refresh} />
       <PerTypeCard item={item} onDone={refresh} />
       <NotesCard item={item} onDone={refresh} />
       <MediaSection inventoryItemId={id} />

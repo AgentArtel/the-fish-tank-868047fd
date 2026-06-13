@@ -1152,3 +1152,15 @@ Foundation for coral sold-off + (later) Clover sale ingest, per
   fully-gone toggle → sold_out.
 Awaiting Lovable's Phase-1a migration (`inventory_sale_events` + `colony_gone`),
 then the UI (Log-sale button, colony toggle, frag/colony+price-mode fields, reports).
+
+---
+## 2026-06-13 — Phase 1a UI: per-item sale tracking (Claude Code)
+
+On Lovable's applied migration. New `SalesCard` on the item page (`inventory.$id`):
+- Corals: **Stock mode** (frag/colony) + **Price mode** (per-head/fixed) selects
+  (saved to attrs), and a **Colony gone** toggle (→ sold_out) for colonies.
+- **Log sale** (heads/frags + optional unit price) → `logInventorySale` → ledger +
+  stock decrement (frag/fish/dry-good) or event-only (colony).
+- **Sale history + totals** per item (reads `inventory_sale_events`; `as any` until
+  types regen — table exists in DB so it works live).
+Next: a cross-item "sold by coral type over time" report; then Phase 1b (Clover).
