@@ -87,7 +87,9 @@ function ScrapeSourceDetail() {
     refetchOnWindowFocus: false,
   });
 
-  // Generate signed URLs for thumbnails (private bucket)
+  // Generate signed URLs for thumbnails (private bucket). Ask Supabase to
+  // transform the original (often 1500-2500px Shopify masters) down to a
+  // 320px webp so list/grid thumbs aren't pulling 500KB+ each.
   useMemo(() => {
     const items = data?.items ?? [];
     const missing = items.filter((it: any) => it.photo_path && !thumbs[it.id]);
@@ -96,7 +98,9 @@ function ScrapeSourceDetail() {
       const paths = missing.map((it: any) => it.photo_path).slice(0, 60);
       const { data: signed } = await supabase.storage
         .from("inventory-media")
-        .createSignedUrls(paths, 3600);
+        .createSignedUrls(paths, 3600, {
+          transform: { width: 320, height: 320, resize: "cover", quality: 70 },
+        } as any);
       if (!signed) return;
       const next: Record<string, string> = {};
       missing.slice(0, signed.length).forEach((it: any, i: number) => {
