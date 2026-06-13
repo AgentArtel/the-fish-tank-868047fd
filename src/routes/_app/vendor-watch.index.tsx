@@ -266,7 +266,11 @@ function SourcesTab() {
                       </Badge>
                     )}
                     <Badge variant="outline">{c.available} live at vendor</Badge>
-                    {c.sold > 0 && <Badge variant="outline">{c.sold} sold/gone</Badge>}
+                    {c.sold > 0 && (
+                      <Badge variant="outline" className="text-muted-foreground">
+                        {c.sold} sold / archived
+                      </Badge>
+                    )}
                     <span className="text-muted-foreground ml-auto flex items-center gap-1">
                       <RefreshCw className="w-3 h-3" />
                       {fmtRelative(s.last_scraped_at)}
