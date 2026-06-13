@@ -17,6 +17,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import {
   getScrapeSource,
+  getScrapeProgress,
   refreshScrapeSource,
   setScrapeItemStatus,
   updateScrapeSource,
@@ -58,6 +59,7 @@ function ScrapeSourceDetail() {
   const qc = useQueryClient();
   const getFn = useServerFn(getScrapeSource);
   const refreshFn = useServerFn(refreshScrapeSource);
+  const progressFn = useServerFn(getScrapeProgress);
   const setStatusFn = useServerFn(setScrapeItemStatus);
   const updateFn = useServerFn(updateScrapeSource);
   const [savingCfg, setSavingCfg] = useState(false);
@@ -74,6 +76,15 @@ function ScrapeSourceDetail() {
   const { data, isLoading } = useQuery({
     queryKey: ["scrape-source", sourceId, statusFilter],
     queryFn: () => getFn({ data: { sourceId, statusFilter } }),
+  });
+
+  // Live progress poll: only runs while a refresh is in-flight.
+  const { data: progress } = useQuery({
+    queryKey: ["scrape-progress", sourceId],
+    queryFn: () => progressFn({ data: { sourceId } }),
+    enabled: refreshing,
+    refetchInterval: refreshing ? 2000 : false,
+    refetchOnWindowFocus: false,
   });
 
   // Generate signed URLs for thumbnails (private bucket)
@@ -180,7 +191,8 @@ function ScrapeSourceDetail() {
           <Button onClick={refresh} disabled={refreshing} size="sm">
             {refreshing ? (
               <>
-                <Loader2 className="w-4 h-4 mr-1 animate-spin" /> Refreshing…
+                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                Scraping{progress?.itemCount ? ` · ${progress.itemCount} items` : "…"}
               </>
             ) : (
               <>
