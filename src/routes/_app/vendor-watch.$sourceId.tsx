@@ -522,6 +522,24 @@ function ScrapeSourceDetail() {
           })}
         </div>
       )}
+
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 cursor-zoom-out"
+          onClick={() => setLightbox(null)}
+        >
+          {lightbox.url ? (
+            <img
+              src={lightbox.url}
+              alt={lightbox.title}
+              className="max-w-full max-h-full object-contain rounded shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <Loader2 className="w-8 h-8 text-white animate-spin" />
+          )}
+        </div>
+      )}
     </div>
   );
 }
