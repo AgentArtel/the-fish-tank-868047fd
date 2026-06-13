@@ -475,37 +475,131 @@ function FeedTab() {
         </div>
       )}
 
-      <div className="space-y-2">
-        {events.map((e: any) => {
-          const meta = FEED_META[e.type as FeedType];
-          const thumb = sizedImageUrl(e.photoUrl, 96);
-          const drop =
-            e.type === "price_drop" && e.priceBefore != null && e.wholesaleCost != null
-              ? Math.round((1 - Number(e.wholesaleCost) / Number(e.priceBefore)) * 100)
-              : null;
-          return (
-            <div
-              key={`${e.type}-${e.id}`}
-              className="flex items-center gap-3 rounded-lg border bg-card p-3"
-            >
-              <div className="w-12 h-12 rounded bg-muted overflow-hidden flex items-center justify-center shrink-0">
-                {thumb ? (
-                  <img src={thumb} alt="" className="w-full h-full object-cover" loading="lazy" />
-                ) : (
-                  <span className="text-[9px] text-muted-foreground">no photo</span>
-                )}
+      {viewMode === "list" && (
+        <div className="space-y-2">
+          {events.map((e: any) => {
+            const meta = FEED_META[e.type as FeedType];
+            const thumb = sizedImageUrl(e.photoUrl, 96);
+            const vc = vendorColor(e.vendorName);
+            const drop =
+              e.type === "price_drop" && e.priceBefore != null && e.wholesaleCost != null
+                ? Math.round((1 - Number(e.wholesaleCost) / Number(e.priceBefore)) * 100)
+                : null;
+            return (
+              <div
+                key={`${e.type}-${e.id}`}
+                className="flex items-stretch gap-3 rounded-lg border bg-card overflow-hidden"
+              >
+                <div className={`w-1 shrink-0 ${vc.bar}`} aria-hidden />
+                <div className="flex items-center gap-3 p-3 flex-1 min-w-0">
+                  <div className="w-12 h-12 rounded bg-muted overflow-hidden flex items-center justify-center shrink-0">
+                    {thumb ? (
+                      <img src={thumb} alt="" className="w-full h-full object-cover" loading="lazy" />
+                    ) : (
+                      <span className="text-[9px] text-muted-foreground">no photo</span>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge className={`border-0 text-[10px] ${meta.cls}`}>
+                        <meta.Icon className="w-3 h-3 mr-0.5" />
+                        {meta.label}
+                      </Badge>
+                      <Badge className={`border text-[10px] ${vc.badge}`}>{e.vendorName}</Badge>
+                      {e.coralType && (
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] ${tracked.has(e.coralType) ? "border-amber-400 text-amber-700 dark:text-amber-300" : ""}`}
+                        >
+                          {tracked.has(e.coralType) && (
+                            <Star className="w-2.5 h-2.5 mr-0.5 fill-amber-400 text-amber-400" />
+                          )}
+                          {coralTypeLabel(e.coralType)}
+                        </Badge>
+                      )}
+                      <span className="text-[11px] text-muted-foreground">· {fmtRelative(e.eventAt)}</span>
+                    </div>
+                    <div className="font-medium text-sm truncate mt-0.5">{e.title}</div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-sm font-semibold">{fmtMoney(e.wholesaleCost)}</div>
+                    {e.type === "price_drop" && (
+                      <div className="text-[11px] text-emerald-600">
+                        <span className="line-through text-muted-foreground mr-1">
+                          {fmtMoney(e.priceBefore)}
+                        </span>
+                        {drop != null && drop > 0 ? `−${drop}%` : ""}
+                      </div>
+                    )}
+                    {e.type === "on_sale" && e.compareAtPrice != null && (
+                      <div className="text-[11px] text-rose-600 line-through">
+                        {fmtMoney(e.compareAtPrice)}
+                      </div>
+                    )}
+                    {e.productUrl && (
+                      <a
+                        href={e.productUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5 mt-0.5"
+                      >
+                        view <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Badge className={`border-0 text-[10px] ${meta.cls}`}>
-                    <meta.Icon className="w-3 h-3 mr-0.5" />
-                    {meta.label}
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">{e.vendorName}</span>
+            );
+          })}
+        </div>
+      )}
+
+      {viewMode === "grid" && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          {events.map((e: any) => {
+            const meta = FEED_META[e.type as FeedType];
+            const thumb = sizedImageUrl(e.photoUrl, 320);
+            const vc = vendorColor(e.vendorName);
+            const drop =
+              e.type === "price_drop" && e.priceBefore != null && e.wholesaleCost != null
+                ? Math.round((1 - Number(e.wholesaleCost) / Number(e.priceBefore)) * 100)
+                : null;
+            return (
+              <div
+                key={`${e.type}-${e.id}`}
+                className="rounded-lg border bg-card overflow-hidden flex flex-col"
+              >
+                <div className={`h-1 ${vc.bar}`} aria-hidden />
+                <div className="relative aspect-square bg-muted overflow-hidden">
+                  {thumb ? (
+                    <img
+                      src={thumb}
+                      alt={e.title}
+                      width={320}
+                      height={320}
+                      loading="lazy"
+                      decoding="async"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <span className="text-xs text-muted-foreground">no photo</span>
+                    </div>
+                  )}
+                  <div className="absolute top-2 left-2">
+                    <Badge className={`border-0 text-[10px] ${meta.cls}`}>
+                      <meta.Icon className="w-3 h-3 mr-0.5" />
+                      {meta.label}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="p-3 space-y-1.5 flex-1 flex flex-col">
+                  <Badge className={`border text-[10px] self-start ${vc.badge}`}>{e.vendorName}</Badge>
+                  <div className="font-medium text-sm line-clamp-2 leading-snug">{e.title}</div>
                   {e.coralType && (
                     <Badge
                       variant="outline"
-                      className={`text-[10px] ${tracked.has(e.coralType) ? "border-amber-400 text-amber-700 dark:text-amber-300" : ""}`}
+                      className={`text-[9px] self-start ${tracked.has(e.coralType) ? "border-amber-400 text-amber-700 dark:text-amber-300" : ""}`}
                     >
                       {tracked.has(e.coralType) && (
                         <Star className="w-2.5 h-2.5 mr-0.5 fill-amber-400 text-amber-400" />
@@ -513,40 +607,41 @@ function FeedTab() {
                       {coralTypeLabel(e.coralType)}
                     </Badge>
                   )}
-                  <span className="text-[11px] text-muted-foreground">· {fmtRelative(e.eventAt)}</span>
+                  <div className="flex items-center justify-between mt-auto pt-1">
+                    <div>
+                      <div className="text-sm font-semibold">{fmtMoney(e.wholesaleCost)}</div>
+                      {e.type === "price_drop" && (
+                        <div className="text-[10px] text-emerald-600">
+                          <span className="line-through text-muted-foreground mr-1">
+                            {fmtMoney(e.priceBefore)}
+                          </span>
+                          {drop != null && drop > 0 ? `−${drop}%` : ""}
+                        </div>
+                      )}
+                      {e.type === "on_sale" && e.compareAtPrice != null && (
+                        <div className="text-[10px] text-rose-600 line-through">
+                          {fmtMoney(e.compareAtPrice)}
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">{fmtRelative(e.eventAt)}</span>
+                  </div>
+                  {e.productUrl && (
+                    <a
+                      href={e.productUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[10px] text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5"
+                    >
+                      view <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
                 </div>
-                <div className="font-medium text-sm truncate mt-0.5">{e.title}</div>
               </div>
-              <div className="text-right shrink-0">
-                <div className="text-sm font-semibold">{fmtMoney(e.wholesaleCost)}</div>
-                {e.type === "price_drop" && (
-                  <div className="text-[11px] text-emerald-600">
-                    <span className="line-through text-muted-foreground mr-1">
-                      {fmtMoney(e.priceBefore)}
-                    </span>
-                    {drop != null && drop > 0 ? `−${drop}%` : ""}
-                  </div>
-                )}
-                {e.type === "on_sale" && e.compareAtPrice != null && (
-                  <div className="text-[11px] text-rose-600 line-through">
-                    {fmtMoney(e.compareAtPrice)}
-                  </div>
-                )}
-                {e.productUrl && (
-                  <a
-                    href={e.productUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5 mt-0.5"
-                  >
-                    view <ExternalLink className="w-3 h-3" />
-                  </a>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </>
   );
 }
