@@ -297,6 +297,7 @@ function ManualForm({
         <div className="space-y-1.5">
           <Label className="text-xs">Retail price (USD) *</Label>
           <Input type="number" step="0.01" min="0" value={retailPrice} onChange={e => setRetailPrice(e.target.value)} placeholder="49.99" />
+          <p className="text-[10px] text-muted-foreground">From the price tag — saved as <span className="font-medium">approved</span> retail (tagged items are pre-approved).</p>
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Wholesale cost (optional)</Label>
@@ -305,12 +306,20 @@ function ManualForm({
         <div className="space-y-1.5 sm:col-span-2">
           <Label className="text-xs">Location (tank / shelf)</Label>
           <Select value={locationId} onValueChange={setLocationId}>
-            <SelectTrigger><SelectValue placeholder="Pick a location to mark Available" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="Pick a location to go live (Available)" /></SelectTrigger>
             <SelectContent>
               {locations.map((l: any) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
             </SelectContent>
           </Select>
-          <p className="text-[10px] text-muted-foreground">No location? It will be saved as <span className="font-medium">Incoming</span>.</p>
+          {locationId ? (
+            <p className="text-[11px] rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 px-2 py-1">
+              Will go live now as <span className="font-medium">Available</span>.
+            </p>
+          ) : (
+            <p className="text-[11px] rounded bg-amber-500/10 text-amber-700 dark:text-amber-300 px-2 py-1">
+              No location yet — saves as <span className="font-medium">Incoming</span> (not live). Pick a location to make it Available now.
+            </p>
+          )}
         </div>
         {itemType === "coral" && (
           <>

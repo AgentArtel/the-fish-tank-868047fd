@@ -1070,3 +1070,25 @@ On Lovable's `tracked_coral_types` table:
   to direct fetch / Firecrawl headers). If still empty → catalog is HTML-behind-
   login → needs Firecrawl-with-login + HTML parsing (bigger; weigh for one source).
   Boss to test products.json while logged in before we build.
+
+---
+## 2026-06-13 — Intake quick wins + Quick-Add pricing decision (Claude Code)
+
+From the inventory/intake audit. Quick wins (frontend, low risk):
+- **Location clarity** — Quick Add now shows a live banner: green "Will go live as
+  Available" when a location is picked, amber "saves as Incoming (not live)" when
+  not. (Was a tiny static hint.)
+- **Price clarity** — note under the retail field: "From the price tag — saved as
+  approved retail (tagged items are pre-approved)."
+- **Dedupe** — extracted `resolveQuickAddBatch()`; `getOrCreateQuickAddBatch`,
+  `quickAddInventoryItem`, and `bulkImportInventoryRows` now share it (was 3 copies).
+- **Consistency** — new `createVendorBatch` server fn (editor-gated); the New batch
+  dialog no longer does a raw client insert.
+
+**Pricing-approval decision (audit item #6): RESOLVED — keep as-is.** Quick Add
+intentionally inserts `pricing_status:'approved'` because it's used to photograph
+**already-tagged** items, whose price is pre-approved. So Quick Add is restock of
+priced stock, not setting new pricing — the admin-only pricing gate (batches/coral)
+still governs *new* pricing. No gate change / no migration. UI now states this.
+
+Next (signed off, separate): unify the three add-stock tools into one mental model.

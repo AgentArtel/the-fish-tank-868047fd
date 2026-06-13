@@ -1010,54 +1010,92 @@ export const extractBatchWithAI = createServerFn({ method: "POST" })
 // Quick Add (in-store restock / walk-around logging)
 // ============================================================
 
+// Shared: find-or-create the caller's Quick Add batch for today (one per user
+// per day). Used by getOrCreateQuickAddBatch, quickAddInventoryItem, and
+// bulkImportInventoryRows so the logic doesn't drift across the three.
+async function resolveQuickAddBatch(
+  supabase: any,
+  userId: string,
+  note = "Auto-created Quick Add batch (in-store restock).",
+): Promise<{ batchId: string; vendorId: string }> {
+  const { data: vendor, error: vErr } = await supabase
+    .from("vendors")
+    .select("id")
+    .eq("slug", "quick-add")
+    .maybeSingle();
+  if (vErr) throw new Error(vErr.message);
+  if (!vendor) throw new Error("Quick Add vendor not found");
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const { data: existing } = await supabase
+    .from("vendor_batches")
+    .select("id")
+    .eq("vendor_id", vendor.id)
+    .eq("created_by", userId)
+    .gte("created_at", today.toISOString())
+    .lt("created_at", tomorrow.toISOString())
+    .maybeSingle();
+  if (existing) return { batchId: existing.id, vendorId: vendor.id };
+
+  const { data: created, error: cErr } = await supabase
+    .from("vendor_batches")
+    .insert({
+      vendor_id: vendor.id,
+      source_document_type: "manual_entry",
+      intake_status: "converted",
+      extraction_status: "manual",
+      invoice_date: today.toISOString().slice(0, 10),
+      notes: note,
+      is_quick_add: true,
+      created_by: userId,
+    })
+    .select("id")
+    .single();
+  if (cErr) throw new Error(cErr.message);
+  return { batchId: created.id, vendorId: vendor.id };
+}
+
 export const getOrCreateQuickAddBatch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
     await requireEditor(supabase, userId);
+    return await resolveQuickAddBatch(supabase, userId);
+  });
 
-    const { data: vendor, error: vErr } = await supabase
-      .from("vendors")
-      .select("id")
-      .eq("slug", "quick-add")
-      .maybeSingle();
-    if (vErr) throw new Error(vErr.message);
-    if (!vendor) throw new Error("Quick Add vendor not found");
-
-    // One batch per user per day
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayIso = today.toISOString();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    const { data: existing } = await supabase
-      .from("vendor_batches")
-      .select("id")
-      .eq("vendor_id", vendor.id)
-      .eq("created_by", userId)
-      .gte("created_at", todayIso)
-      .lt("created_at", tomorrow.toISOString())
-      .maybeSingle();
-
-    if (existing) return { batchId: existing.id, vendorId: vendor.id };
-
-    const { data: created, error: cErr } = await supabase
+// Create a vendor intake batch (used by the New batch dialog) — routed through a
+// server fn for the editor check + consistency, instead of a raw client insert.
+export const createVendorBatch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        vendor_id: z.string().uuid(),
+        source_document_type: z.string().min(1),
+        invoice_number: z.string().trim().nullish(),
+        invoice_date: z.string().nullish(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await requireEditor(context.supabase, context.userId);
+    const { data: batch, error } = await context.supabase
       .from("vendor_batches")
       .insert({
-        vendor_id: vendor.id,
-        source_document_type: "manual_entry",
-        intake_status: "converted",
-        extraction_status: "manual",
-        invoice_date: today.toISOString().slice(0, 10),
-        notes: "Auto-created Quick Add batch (in-store restock).",
-        is_quick_add: true,
-        created_by: userId,
+        vendor_id: data.vendor_id,
+        source_document_type: data.source_document_type as any,
+        invoice_number: data.invoice_number ?? null,
+        invoice_date: data.invoice_date || null,
+        created_by: context.userId,
       })
       .select("id")
       .single();
-    if (cErr) throw new Error(cErr.message);
-    return { batchId: created.id, vendorId: vendor.id };
+    if (error) throw new Error(error.message);
+    return { batchId: batch.id };
   });
 
 export const quickCreateVendor = createServerFn({ method: "POST" })
@@ -1153,46 +1191,8 @@ export const quickAddInventoryItem = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     await requireEditor(supabase, userId);
 
-    // Get/create today's quick-add batch
-    const { data: vendor } = await supabase
-      .from("vendors")
-      .select("id")
-      .eq("slug", "quick-add")
-      .maybeSingle();
-    if (!vendor) throw new Error("Quick Add vendor not found");
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    let batchId: string;
-    const { data: existing } = await supabase
-      .from("vendor_batches")
-      .select("id")
-      .eq("vendor_id", vendor.id)
-      .eq("created_by", userId)
-      .gte("created_at", today.toISOString())
-      .lt("created_at", tomorrow.toISOString())
-      .maybeSingle();
-    if (existing) batchId = existing.id;
-    else {
-      const { data: created, error: cErr } = await supabase
-        .from("vendor_batches")
-        .insert({
-          vendor_id: vendor.id,
-          source_document_type: "manual_entry",
-          intake_status: "converted",
-          extraction_status: "manual",
-          invoice_date: today.toISOString().slice(0, 10),
-          notes: "Auto-created Quick Add batch (in-store restock).",
-          is_quick_add: true,
-          created_by: userId,
-        })
-        .select("id")
-        .single();
-      if (cErr) throw new Error(cErr.message);
-      batchId = created.id;
-    }
+    // Get/create today's quick-add batch (shared helper)
+    const { batchId, vendorId } = await resolveQuickAddBatch(supabase, userId);
 
     // Create inventory item (start as 'incoming', flip to available after photo registered)
     const nowIso = new Date().toISOString();
@@ -1200,7 +1200,7 @@ export const quickAddInventoryItem = createServerFn({ method: "POST" })
       .from("inventory_items")
       .insert({
         source_vendor_batch_id: batchId,
-        vendor_id: data.source_vendor_id ?? vendor.id,
+        vendor_id: data.source_vendor_id ?? vendorId,
         item_name: data.item_name,
         scientific_name: data.scientific_name ?? null,
         item_type: data.item_type,
@@ -1911,46 +1911,12 @@ export const bulkImportInventoryRows = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     await requireEditor(supabase, userId);
 
-    // Resolve / create today's quick-add batch (same shape as quickAddInventoryItem).
-    const { data: qaVendor } = await supabase
-      .from("vendors")
-      .select("id")
-      .eq("slug", "quick-add")
-      .maybeSingle();
-    if (!qaVendor) throw new Error("Quick Add vendor not found");
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    let batchId: string;
-    const { data: existingBatch } = await supabase
-      .from("vendor_batches")
-      .select("id")
-      .eq("vendor_id", qaVendor.id)
-      .eq("created_by", userId)
-      .gte("created_at", today.toISOString())
-      .lt("created_at", tomorrow.toISOString())
-      .maybeSingle();
-    if (existingBatch) batchId = existingBatch.id;
-    else {
-      const { data: created, error: cErr } = await supabase
-        .from("vendor_batches")
-        .insert({
-          vendor_id: qaVendor.id,
-          source_document_type: "manual_entry",
-          intake_status: "converted",
-          extraction_status: "manual",
-          invoice_date: today.toISOString().slice(0, 10),
-          notes: "Auto-created Quick Add batch (bulk paste import).",
-          is_quick_add: true,
-          created_by: userId,
-        })
-        .select("id")
-        .single();
-      if (cErr) throw new Error(cErr.message);
-      batchId = created.id;
-    }
+    // Resolve / create today's quick-add batch (shared helper).
+    const { batchId, vendorId } = await resolveQuickAddBatch(
+      supabase,
+      userId,
+      "Auto-created Quick Add batch (bulk paste import).",
+    );
 
     let created = 0,
       merged = 0,
@@ -1993,7 +1959,7 @@ export const bulkImportInventoryRows = createServerFn({ method: "POST" })
           .from("inventory_items")
           .insert({
             source_vendor_batch_id: batchId,
-            vendor_id: data.source_vendor_id ?? qaVendor.id,
+            vendor_id: data.source_vendor_id ?? vendorId,
             item_name: r.item_name,
             scientific_name: r.scientific_name ?? null,
             item_type: r.item_type,
