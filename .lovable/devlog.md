@@ -1117,3 +1117,23 @@ Added to `vendor-watch.$sourceId.tsx` (client-side over the loaded items, no DB)
 - **★ Watchlist** toggle — show only tracked coral types — plus a **Track {type}**
   button when a type is selected (shared with the feed's tracked_coral_types).
 - **Coral-type badges** on list + grid rows, ★-highlighted when tracked.
+
+---
+## 2026-06-13 — Vendor Watch: lightweight availability sync (manual + automated) (Claude Code)
+
+Boss wants to keep listings in sync with the vendor's live site (what's sold/gone)
+without the slow image step.
+- `runScrapeForSource(db, source, { skipImages })` — skips image downloads; still
+  updates price/availability, appends snapshots, marks sold/gone. `photo_source_url`
+  still refreshes (display stays current via the vendor CDN).
+- `refreshScrapeSource` takes `skipImages`. Source detail page now has TWO buttons:
+  **Sync availability** (fast, no images) + **Refresh now** (full pull, with images).
+- **Automated cron is now lightweight by default**: the hook route defaults
+  `skipImages = true`, so the existing hourly pg_cron does availability/price syncs
+  (no images) on each source's cadence. No migration needed — set a source to
+  `daily` cadence for a daily auto-sync.
+- Images now come from the manual **Refresh now** (full) or the **Back-fill** button,
+  not every timer tick (keeps the data asset without bloating each sync).
+
+Follow-up option: sub-daily cadence (e.g. hourly) for near-live availability would
+need a small Lovable migration to extend the cadence CHECK + isDue.

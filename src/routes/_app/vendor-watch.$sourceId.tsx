@@ -43,6 +43,7 @@ import {
   Download,
   Star,
   ArrowUpDown,
+  Zap,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_app/vendor-watch/$sourceId")({
@@ -101,6 +102,7 @@ function ScrapeSourceDetail() {
   });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [lightbox, setLightbox] = useState<{ url: string; title: string } | null>(null);
 
@@ -268,19 +270,23 @@ function ScrapeSourceDetail() {
     }
   };
 
-  const refresh = async () => {
-    setRefreshing(true);
+  const refresh = async (skipImages = false) => {
+    const setBusy = skipImages ? setSyncing : setRefreshing;
+    setBusy(true);
     try {
-      const res = await refreshFn({ data: { sourceId } });
+      const res = await refreshFn({ data: { sourceId, skipImages } });
+      const via = res.transport === "firecrawl" ? " · via Firecrawl" : "";
       toast.success(
-        `Scraped ${res.fetched} item${res.fetched === 1 ? "" : "s"} — ${res.added} new, ${res.updated} updated, ${res.snapshots} history snapshot${res.snapshots === 1 ? "" : "s"}${res.transport === "firecrawl" ? " · via Firecrawl" : ""}`,
+        skipImages
+          ? `Synced — ${res.updated} updated, ${res.gone} sold/gone, ${res.snapshots} change${res.snapshots === 1 ? "" : "s"}${via}`
+          : `Scraped ${res.fetched} item${res.fetched === 1 ? "" : "s"} — ${res.added} new, ${res.updated} updated, ${res.snapshots} history snapshot${res.snapshots === 1 ? "" : "s"}${via}`,
       );
       qc.invalidateQueries({ queryKey: ["scrape-source", sourceId] });
       qc.invalidateQueries({ queryKey: ["scrape-sources"] });
     } catch (e: any) {
-      toast.error(e?.message ?? "Refresh failed");
+      toast.error(e?.message ?? (skipImages ? "Sync failed" : "Refresh failed"));
     } finally {
-      setRefreshing(false);
+      setBusy(false);
     }
   };
 
@@ -321,18 +327,33 @@ function ScrapeSourceDetail() {
         title={source ? `${(source as any).vendors?.name} — ${source.name}` : "Scrape source"}
         description={source?.source_url}
         action={
-          <Button onClick={refresh} disabled={refreshing} size="sm">
-            {refreshing ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                Scraping{progress?.itemCount ? ` · ${progress.itemCount} items` : "…"}
-              </>
-            ) : (
-              <>
-                <RefreshCw className="w-4 h-4 mr-1" /> Refresh now
-              </>
-            )}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => refresh(true)}
+              disabled={syncing || refreshing}
+              size="sm"
+              variant="outline"
+              title="Update prices + what's sold/gone from their live site (no images — fast)"
+            >
+              {syncing ? (
+                <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Syncing…</>
+              ) : (
+                <><Zap className="w-4 h-4 mr-1" /> Sync availability</>
+              )}
+            </Button>
+            <Button onClick={() => refresh(false)} disabled={refreshing || syncing} size="sm">
+              {refreshing ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                  Scraping{progress?.itemCount ? ` · ${progress.itemCount} items` : "…"}
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-1" /> Refresh now
+                </>
+              )}
+            </Button>
+          </div>
         }
       />
 
