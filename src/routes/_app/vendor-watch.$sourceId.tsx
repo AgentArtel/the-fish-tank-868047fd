@@ -72,6 +72,19 @@ function ScrapeSourceDetail() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  const [lightbox, setLightbox] = useState<{ url: string; title: string } | null>(null);
+
+  const openFull = async (e: React.MouseEvent, it: any) => {
+    e.stopPropagation();
+    if (!it.photo_path) return;
+    // Open immediately with the cached thumb so there's no blank flash,
+    // then swap in the full-quality original signed URL when it resolves.
+    setLightbox({ url: thumbs[it.id] ?? "", title: it.title });
+    const { data: signed } = await supabase.storage
+      .from("inventory-media")
+      .createSignedUrl(it.photo_path, 3600);
+    if (signed?.signedUrl) setLightbox({ url: signed.signedUrl, title: it.title });
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ["scrape-source", sourceId, statusFilter],
