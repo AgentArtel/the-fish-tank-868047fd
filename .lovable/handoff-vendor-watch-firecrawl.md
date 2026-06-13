@@ -3,22 +3,22 @@
 Date: 2026-06-13 · Author: Claude Code. This queues the egress fallback for
 sources whose free Shopify `products.json` fetch is network-blocked.
 
-## ⚠️ Precondition — confirm the block is real before we spend anything
+## Status: the adapter is SHIPPED — only the API key remains
 
-The Furnace `products.json` is 403'ing our Cloudflare Worker egress. Headers
-(User-Agent + retry) are already merged and **didn't help** → it's a network/TLS
-fingerprint block, not headers. **But** we'd been hammering it with repeated
-forced test passes, which can trip Cloudflare bot-protection on its own — and the
-real cron only hits this store **once a week**. So before building this:
+Per the boss's call, the Firecrawl transport is **built and merged** (in
+`scrape.functions.ts`). It's safe to wire up now because of the design below:
+**zero Firecrawl credits are spent until a source is actually blocked.** The
+direct free fetch always runs first; Firecrawl only fires on a 403/429. So
+turning it on now costs nothing for working vendors and gives us a ready,
+reusable fallback for any future blocked vendor.
 
-1. Confirm a residential `curl` of the URL returns 200 (store serves normal
-   clients), and
-2. Let tonight's **single** scheduled 22:00 ET tick run — if it 200s, the earlier
-   403s were our test-volume and **there's nothing to build here.**
+(At ~weekly volume per source, Firecrawl's **free tier** should cover us anyway.)
 
-Only proceed if a single, cooled-down request still 403s. (Good news: at ~weekly
-volume per source, Firecrawl's **free tier** should cover us, so even when we do
-turn it on, cost is ~nil.)
+Side note on whether the Furnace block is even "real" vs our own test-volume: a
+single cooled-down request (tonight's 22:00 ET tick, or one "Refresh now" on the
+deployed app) is the cleanest signal. But we no longer need to decide that before
+building — auto-fallback means a blocked Furnace will just transparently use
+Firecrawl and a working Furnace won't touch it.
 
 ## Design (KISS): Firecrawl is a transport, with auto-fallback
 
@@ -37,32 +37,39 @@ source, automatically, with no per-source config to manage.
 
 ## Lane split
 
-| Piece | Owner |
-|---|---|
-| Provision the Firecrawl **API key** server-side (see below) | **Lovable** |
-| `firecrawl` fetch transport + auto-fallback in `runScrapeForSource` | **Claude** (`src/`) |
+| Piece | Owner | Status |
+|---|---|---|
+| Provision the Firecrawl **API key** server-side | **Lovable** | ⬅ the only open item |
+| `firecrawl` transport + auto-fallback in `runScrapeForSource` | **Claude** (`src/`) | ✅ shipped |
 
-### What I need from you (Lovable)
-1. **A Firecrawl API key available to the server**, as `FIRECRAWL_API_KEY` in the
-   app runtime env (same mechanism as `SCRAPE_CRON_SECRET`) **and** Vault. Per the
-   locked decision, keys are Vault-stored, server-side only, masked — resolution =
-   workspace key if set, else the Lovable Firecrawl integration fallback. For now
-   I just need the key reachable as `process.env.FIRECRAWL_API_KEY`; the full
-   API-keys **settings UI** is a later phase, not this hand-off.
-2. **Confirm the access path:** do we call `https://api.firecrawl.dev/v1/scrape`
-   directly with that key, or does the Lovable Firecrawl integration expose a
-   different endpoint/proxy you'd rather I call? Tell me the endpoint + auth
-   header shape and I'll wire to it.
-3. **Confirm free-tier limits** on the key so we know our weekly volume stays
-   inside them.
+### The one thing I need from you (Lovable)
+**A Firecrawl API key reachable as `process.env.FIRECRAWL_API_KEY`** on the
+deployed app — same mechanism as `SCRAPE_CRON_SECRET` (app runtime env + Vault
+mirror). That's it; the adapter reads the key from the env and self-activates on
+the next blocked fetch. (The full Vault-backed API-keys **settings UI** —
+workspace key else Lovable-integration fallback, masked — is a later phase, not
+this hand-off.)
 
-### What I'll do (Claude) once the key + endpoint are confirmed
-- Add a `fetchViaFirecrawl(url)` helper that POSTs to the Firecrawl scrape
-  endpoint requesting the **raw body** of the `.json` URL, parses the JSON, and
-  returns it in the same shape `runScrapeForSource` already consumes.
-- Wrap the existing direct fetch so a block transparently falls back to Firecrawl;
-  surface the transport in the scrape status.
+Endpoint is already wired to your default: **`POST https://api.firecrawl.dev/v2/scrape`**,
+`Authorization: Bearer <key>`, body `{ url, formats: ["rawHtml"] }`. If your
+Firecrawl access differs, tell me and I'll adjust.
+
+### What's already built (Claude — for your review)
+- `fetchViaFirecrawl(url)` → POSTs to v2/scrape, returns the raw body;
+  `extractProductsJson()` recovers the JSON even if Firecrawl wraps it in
+  HTML/markdown.
+- The pagination loop tries **direct** first and **auto-falls back to Firecrawl**
+  on a 403/429 (only if a key is present), per page.
+- The scrape summary now reports `transport: "direct" | "firecrawl"`; the manual
+  "Refresh now" toast shows "· via Firecrawl" when the fallback fired.
 - No change to parsing, snapshots, RLS, or the cron.
+
+### To verify once the key is in
+Click "Refresh now" on the Furnace source (currently blocked). Expected: the
+direct fetch 403s, Firecrawl transparently takes over, items load, and the toast
+reads "… · via Firecrawl". If Firecrawl's `rawHtml` for a `.json` URL comes back
+in an unexpected shape, paste me the `net._http_response` body and I'll tune
+`extractProductsJson`.
 
 ## Not in scope
 - No full API-keys settings surface yet (later phase).

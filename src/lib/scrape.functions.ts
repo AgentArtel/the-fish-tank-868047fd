@@ -156,6 +156,61 @@ async function fetchWithRetry(url: string, attempts = 3): Promise<Response> {
   return res as Response;
 }
 
+// --- Firecrawl fallback transport (clean egress for bot-blocked storefronts) ---
+const FIRECRAWL_ENDPOINT = "https://api.firecrawl.dev/v2/scrape";
+
+// Fetch a URL's raw body via Firecrawl. Throws if not configured or on error.
+async function fetchViaFirecrawl(url: string): Promise<string> {
+  const key = process.env.FIRECRAWL_API_KEY;
+  if (!key) throw new Error("Firecrawl not configured (FIRECRAWL_API_KEY missing)");
+  const res = await fetch(FIRECRAWL_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+    body: JSON.stringify({ url, formats: ["rawHtml"], onlyMainContent: false }),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(`Firecrawl HTTP ${res.status}: ${t.slice(0, 180)}`);
+  }
+  const j: any = await res.json();
+  const body = j?.data?.rawHtml ?? j?.data?.html ?? j?.data?.markdown ?? j?.data?.content ?? "";
+  if (!body) throw new Error("Firecrawl returned empty content");
+  return body;
+}
+
+// Recover the products JSON object from a (possibly HTML/markdown-wrapped) body.
+function extractProductsJson(body: string): any {
+  const t = body.trim();
+  try {
+    return JSON.parse(t);
+  } catch {
+    const start = t.indexOf("{");
+    const end = t.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      try {
+        return JSON.parse(t.slice(start, end + 1));
+      } catch {
+        /* fall through to error below */
+      }
+    }
+    throw new Error("Could not parse products JSON from Firecrawl response");
+  }
+}
+
+// Fetch one products.json page via the chosen transport. On `direct`, a 403/429
+// is surfaced as a `blocked` error so the caller can fall back to Firecrawl.
+async function fetchProductsPage(url: string, transport: Transport): Promise<any> {
+  if (transport === "firecrawl") return extractProductsJson(await fetchViaFirecrawl(url));
+  const res = await fetchWithRetry(url);
+  if (!res.ok) {
+    const err: any = new Error(`HTTP ${res.status}`);
+    err.status = res.status;
+    err.blocked = res.status === 403 || res.status === 429;
+    throw err;
+  }
+  return await res.json();
+}
+
 async function downloadImage(supabaseAdmin: any, opts: { url: string; bucketPath: string }) {
   const res = await fetch(opts.url, { headers: { "User-Agent": SCRAPE_UA, Accept: "image/*,*/*" } });
   if (!res.ok) throw new Error(`Image fetch ${res.status} for ${opts.url}`);
@@ -186,6 +241,8 @@ function parseCompareAt(v: string | null | undefined): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+type Transport = "direct" | "firecrawl";
+
 type ScrapeSummary = {
   fetched: number;
   added: number;
@@ -193,6 +250,7 @@ type ScrapeSummary = {
   snapshots: number;
   gone: number;
   imagesDownloaded: number;
+  transport: Transport;
 };
 
 /**
@@ -214,26 +272,43 @@ export async function runScrapeForSource(
   const vendorSlug = source.vendors?.slug ?? "vendor";
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-  // Paginate Shopify products.json
+  // Paginate Shopify products.json. Free direct fetch first; if the storefront
+  // bot-blocks our egress (403/429), transparently fall back to Firecrawl.
   const all: ShopifyProduct[] = [];
   let page = 1;
+  let transport: Transport = "direct";
   const baseUrl = source.source_url;
   const sep = baseUrl.includes("?") ? "&" : "?";
+  const markError = (msg: string) =>
+    db
+      .from("vendor_scrape_sources")
+      .update({
+        last_scraped_at: new Date().toISOString(),
+        last_scrape_status: "error",
+        last_scrape_error: msg,
+      })
+      .eq("id", source.id);
   while (page < 20) {
     const url = `${baseUrl}${sep}limit=250&page=${page}`;
-    const res = await fetchWithRetry(url);
-    if (!res.ok) {
-      await db
-        .from("vendor_scrape_sources")
-        .update({
-          last_scraped_at: new Date().toISOString(),
-          last_scrape_status: "error",
-          last_scrape_error: `HTTP ${res.status} at page ${page}`,
-        })
-        .eq("id", source.id);
-      throw new Error(`Scrape failed: HTTP ${res.status} at page ${page}`);
+    let json: any;
+    try {
+      json = await fetchProductsPage(url, transport);
+    } catch (e: any) {
+      // Auto-fallback: a blocked direct fetch (and a configured key) → Firecrawl.
+      if (transport === "direct" && e?.blocked && process.env.FIRECRAWL_API_KEY) {
+        transport = "firecrawl";
+        try {
+          json = await fetchProductsPage(url, transport);
+        } catch (e2: any) {
+          await markError(`Firecrawl fallback failed at page ${page}: ${e2?.message ?? e2}`);
+          throw new Error(`Scrape failed (Firecrawl) at page ${page}: ${e2?.message ?? e2}`);
+        }
+      } else {
+        const why = e?.status ? `HTTP ${e.status}` : e?.message ?? String(e);
+        await markError(`${why} at page ${page}${e?.blocked ? " (blocked; no Firecrawl key)" : ""}`);
+        throw new Error(`Scrape failed: ${why} at page ${page}`);
+      }
     }
-    const json: any = await res.json();
     const products: ShopifyProduct[] = json.products ?? [];
     all.push(...products);
     if (products.length < 250) break;
@@ -408,7 +483,15 @@ export async function runScrapeForSource(
     })
     .eq("id", source.id);
 
-  return { fetched: all.length, added, updated, snapshots: snapshotRows.length, gone, imagesDownloaded };
+  return {
+    fetched: all.length,
+    added,
+    updated,
+    snapshots: snapshotRows.length,
+    gone,
+    imagesDownloaded,
+    transport,
+  };
 }
 
 export const refreshScrapeSource = createServerFn({ method: "POST" })

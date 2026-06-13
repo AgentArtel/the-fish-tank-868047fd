@@ -865,3 +865,22 @@ Added to `src/routes/_app/vendor-watch.$sourceId.tsx`:
   on confirming the Furnace block is real (tonight's single tick / residential
   curl) rather than self-inflicted test-volume. Lovable provisions
   `FIRECRAWL_API_KEY` server-side; Claude builds the adapter.
+
+---
+## 2026-06-13 — Vendor Watch: Firecrawl fallback transport SHIPPED (Claude Code)
+
+Built the Firecrawl egress fallback now (boss's call — wanted it ready for other
+vendors, not deferred). Design is zero-cost-until-blocked:
+- `runScrapeForSource` tries the **direct** free fetch first; on a 403/429 (and
+  only if `FIRECRAWL_API_KEY` is set) it **auto-falls back to Firecrawl** for the
+  rest of the run — same Shopify-JSON parsing, same append-only snapshots.
+- `fetchViaFirecrawl` POSTs `api.firecrawl.dev/v2/scrape` (`Bearer`, `formats:
+  ["rawHtml"]`); `extractProductsJson` recovers the JSON even if wrapped.
+- Summary now carries `transport`; the Refresh-now toast shows "· via Firecrawl".
+- Working vendors never touch Firecrawl → no credit spend; reusable for any
+  future blocked vendor with no per-source config.
+
+Open item (Lovable, only blocker to it working live):
+`.lovable/handoff-vendor-watch-firecrawl.md` — provision `FIRECRAWL_API_KEY`
+(app env + Vault). Then "Refresh now" on the blocked Furnace source demonstrates
+the fallback end-to-end.

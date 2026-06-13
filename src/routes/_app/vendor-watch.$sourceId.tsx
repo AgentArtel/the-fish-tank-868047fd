@@ -129,7 +129,7 @@ function ScrapeSourceDetail() {
     try {
       const res = await refreshFn({ data: { sourceId } });
       toast.success(
-        `Scraped ${res.fetched} item${res.fetched === 1 ? "" : "s"} — ${res.added} new, ${res.updated} updated, ${res.snapshots} history snapshot${res.snapshots === 1 ? "" : "s"}`,
+        `Scraped ${res.fetched} item${res.fetched === 1 ? "" : "s"} — ${res.added} new, ${res.updated} updated, ${res.snapshots} history snapshot${res.snapshots === 1 ? "" : "s"}${res.transport === "firecrawl" ? " · via Firecrawl" : ""}`,
       );
       qc.invalidateQueries({ queryKey: ["scrape-source", sourceId] });
       qc.invalidateQueries({ queryKey: ["scrape-sources"] });
