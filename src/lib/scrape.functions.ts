@@ -282,7 +282,8 @@ export async function runScrapeForSource(
   // bot-blocks our egress (403/429), transparently fall back to Firecrawl.
   const all: ShopifyProduct[] = [];
   let page = 1;
-  let transport: Transport = "direct";
+  let transport: Transport =
+    source.prefer_firecrawl && process.env.FIRECRAWL_API_KEY ? "firecrawl" : "direct";
   const baseUrl = source.source_url;
   const sep = baseUrl.includes("?") ? "&" : "?";
   const markError = (msg: string) =>
