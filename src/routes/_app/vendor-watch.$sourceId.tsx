@@ -454,7 +454,10 @@ function ScrapeSourceDetail() {
                   isSel ? "ring-2 ring-primary" : ""
                 }`}
               >
-                <div className="relative aspect-square bg-muted overflow-hidden">
+                <div
+                  className="relative aspect-square bg-muted overflow-hidden cursor-zoom-in"
+                  onClick={(e) => openFull(e, it)}
+                >
                   {thumbs[it.id] ? (
                     <img
                       src={thumbs[it.id]}
