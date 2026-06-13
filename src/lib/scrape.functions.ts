@@ -41,19 +41,24 @@ export const listScrapeSources = createServerFn({ method: "GET" })
       .order("name");
     if (error) throw new Error(error.message);
 
-    // counts per source
+    // counts per source — "new" excludes items that disappeared from the vendor
+    // (those are auto-archived to the Sold view).
     const ids = (data ?? []).map((s: any) => s.id);
-    const counts: Record<string, { new: number; available: number; imported: number }> = {};
+    const counts: Record<
+      string,
+      { new: number; available: number; imported: number; sold: number }
+    > = {};
     if (ids.length) {
       const { data: rows } = await context.supabase
         .from("vendor_scrape_items")
         .select("source_id, status, available_at_source")
         .in("source_id", ids);
       for (const r of rows ?? []) {
-        const c = (counts[r.source_id] ||= { new: 0, available: 0, imported: 0 });
-        if (r.status === "new") c.new++;
+        const c = (counts[r.source_id] ||= { new: 0, available: 0, imported: 0, sold: 0 });
+        if (r.status === "new" && r.available_at_source) c.new++;
         if (r.status === "imported") c.imported++;
         if (r.available_at_source) c.available++;
+        else c.sold++;
       }
     }
     return { sources: data ?? [], counts };
