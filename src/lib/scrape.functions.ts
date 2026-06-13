@@ -767,3 +767,126 @@ export const createScrapeSource = createServerFn({ method: "POST" })
     if (!src) throw new Error("Failed to create source");
     return { sourceId: src.id };
   });
+
+// ---------- cross-vendor feed (signals over snapshots) ----------
+type FeedType = "new" | "price_drop" | "on_sale" | "sold";
+function feedEvent(i: any, type: FeedType, eventAt: string | null, extra: Record<string, any> = {}) {
+  return {
+    id: i.id,
+    type,
+    eventAt,
+    title: i.title,
+    productUrl: i.product_url,
+    photoUrl: i.photo_source_url,
+    wholesaleCost: i.wholesale_cost,
+    compareAtPrice: i.compare_at_price,
+    available: i.available_at_source,
+    sourceId: i.source_id,
+    vendorName: i.source?.vendors?.name ?? i.source?.name ?? "Vendor",
+    sourceName: i.source?.name ?? "",
+    ...extra,
+  };
+}
+
+export const getVendorFeed = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ days: z.number().int().min(1).max(90).default(14) }).parse(d))
+  .handler(async ({ data, context }) => {
+    await requireEditor(context.supabase, context.userId);
+    const { supabase } = context;
+    const cutoff = new Date(Date.now() - data.days * 86_400_000).toISOString();
+    const sel =
+      "id, source_id, title, product_url, photo_source_url, wholesale_cost, compare_at_price, available_at_source, first_seen_at, last_seen_at, last_available_at, last_price_change_at, source:source_id(name, vendors:vendor_id(name, slug))";
+    const PER = 200;
+
+    // Just appeared — newly seen & still available.
+    const { data: appeared } = await supabase
+      .from("vendor_scrape_items")
+      .select(sel)
+      .gte("first_seen_at", cutoff)
+      .eq("available_at_source", true)
+      .neq("status", "ignored")
+      .order("first_seen_at", { ascending: false })
+      .limit(PER);
+
+    // On sale — compare_at_price present & above cost, still available.
+    const { data: onSaleRaw } = await supabase
+      .from("vendor_scrape_items")
+      .select(sel)
+      .not("compare_at_price", "is", null)
+      .eq("available_at_source", true)
+      .neq("status", "ignored")
+      .order("last_seen_at", { ascending: false })
+      .limit(PER);
+    const onSale = (onSaleRaw ?? []).filter(
+      (i: any) =>
+        i.compare_at_price != null &&
+        i.wholesale_cost != null &&
+        Number(i.compare_at_price) > Number(i.wholesale_cost),
+    );
+
+    // Sold / gone — recently disappeared from the vendor.
+    const { data: gone } = await supabase
+      .from("vendor_scrape_items")
+      .select(sel)
+      .eq("available_at_source", false)
+      .gte("last_available_at", cutoff)
+      .neq("status", "ignored")
+      .order("last_available_at", { ascending: false })
+      .limit(PER);
+
+    // Price changed recently — resolve which were drops via snapshot history.
+    const { data: changed } = await supabase
+      .from("vendor_scrape_items")
+      .select(sel)
+      .gte("last_price_change_at", cutoff)
+      .eq("available_at_source", true)
+      .neq("status", "ignored")
+      .order("last_price_change_at", { ascending: false })
+      .limit(PER);
+
+    const priorById = new Map<string, number>();
+    const changedIds = (changed ?? []).map((i: any) => i.id);
+    if (changedIds.length) {
+      const { data: snaps } = await supabase
+        .from("vendor_scrape_snapshots")
+        .select("scrape_item_id, wholesale_cost, observed_at")
+        .in("scrape_item_id", changedIds)
+        .order("observed_at", { ascending: false });
+      const byItem = new Map<string, any[]>();
+      for (const s of snaps ?? []) {
+        const arr = byItem.get(s.scrape_item_id) ?? [];
+        arr.push(s);
+        byItem.set(s.scrape_item_id, arr);
+      }
+      for (const it of changed ?? []) {
+        const current = it.wholesale_cost == null ? null : Number(it.wholesale_cost);
+        if (current == null) continue;
+        // Most recent snapshot price that differs from the current price.
+        const prior = (byItem.get(it.id) ?? [])
+          .map((s) => (s.wholesale_cost == null ? null : Number(s.wholesale_cost)))
+          .find((v) => v != null && v !== current);
+        if (prior != null && current < prior) priorById.set(it.id, prior);
+      }
+    }
+
+    const events: any[] = [];
+    for (const i of appeared ?? []) events.push(feedEvent(i, "new", i.first_seen_at));
+    for (const i of changed ?? [])
+      if (priorById.has(i.id))
+        events.push(feedEvent(i, "price_drop", i.last_price_change_at, { priceBefore: priorById.get(i.id) }));
+    for (const i of onSale) events.push(feedEvent(i, "on_sale", i.last_seen_at));
+    for (const i of gone ?? []) events.push(feedEvent(i, "sold", i.last_available_at));
+
+    events.sort((a, b) => (b.eventAt ?? "").localeCompare(a.eventAt ?? ""));
+
+    return {
+      events: events.slice(0, 300),
+      counts: {
+        new: appeared?.length ?? 0,
+        price_drop: priorById.size,
+        on_sale: onSale.length,
+        sold: gone?.length ?? 0,
+      },
+    };
+  });

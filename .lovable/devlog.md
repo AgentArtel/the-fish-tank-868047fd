@@ -958,3 +958,24 @@ First step of the feed/multi-vendor scope. No more seeding sources via migration
 
 Next: cross-vendor feed tab (signals over snapshots), then the coral-type +
 watchlist Lovable schema hand-off.
+
+---
+## 2026-06-13 — Vendor Watch: cross-vendor signals feed (Claude Code)
+
+Turns the snapshot data asset into a glanceable feed. New **Feed | Sources** tabs
+on `/vendor-watch` (no new route — tab state on the index, per the no-arch-change
+rule).
+- New read-only server fn `getVendorFeed(days=14)` computes four signals across
+  all sources from items + snapshots: **New** (recent first_seen, available),
+  **Price drop** (current wholesale < most-recent differing snapshot price),
+  **On sale** (compare_at_price > cost), **Sold/gone** (recently unavailable).
+  Returns merged events (newest first) + per-type counts. Bounded queries, no N+1
+  blowup (one snapshot fetch for the changed set).
+- Feed UI: filter chips per signal, photo thumb (vendor CDN), vendor + relative
+  time, price (with strike-through before-price / −% on drops, compare-at on
+  sale), and a "view" link to the vendor page.
+- Folded in Lovable's **sold/gone** concept (one signal) and surfaced their
+  computed `sold` count as a badge in the Sources list (was computed, unshown).
+
+No migration. Coral-type classification + watchlist is the next step (Lovable
+schema hand-off).
