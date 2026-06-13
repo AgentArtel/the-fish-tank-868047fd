@@ -50,6 +50,80 @@ export type Database = {
         }
         Relationships: []
       }
+      clover_connection: {
+        Row: {
+          base_url: string | null
+          connected: boolean
+          id: boolean
+          last_import_at: string | null
+          last_sale_synced_at: string | null
+          merchant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          base_url?: string | null
+          connected?: boolean
+          id?: boolean
+          last_import_at?: string | null
+          last_sale_synced_at?: string | null
+          merchant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          base_url?: string | null
+          connected?: boolean
+          id?: boolean
+          last_import_at?: string | null
+          last_sale_synced_at?: string | null
+          merchant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      clover_item_links: {
+        Row: {
+          clover_item_id: string
+          clover_name: string | null
+          clover_price_cents: number | null
+          created_at: string
+          id: string
+          inventory_item_id: string | null
+          last_synced_at: string | null
+          link_status: string
+          updated_at: string
+        }
+        Insert: {
+          clover_item_id: string
+          clover_name?: string | null
+          clover_price_cents?: number | null
+          created_at?: string
+          id?: string
+          inventory_item_id?: string | null
+          last_synced_at?: string | null
+          link_status?: string
+          updated_at?: string
+        }
+        Update: {
+          clover_item_id?: string
+          clover_name?: string | null
+          clover_price_cents?: number | null
+          created_at?: string
+          id?: string
+          inventory_item_id?: string | null
+          last_synced_at?: string | null
+          link_status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clover_item_links_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_items: {
         Row: {
           assigned_to: string | null
