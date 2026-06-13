@@ -44,6 +44,8 @@ import {
   Tag,
   Archive,
   ExternalLink,
+  LayoutGrid,
+  List,
   Star,
 } from "lucide-react";
 
