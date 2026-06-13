@@ -1214,7 +1214,11 @@ export const quickAddInventoryItem = createServerFn({ method: "POST" })
         live_sale_status: "not_eligible",
         needs_photo: false,
         notes: data.notes ?? null,
-        attrs: data.attrs && Object.keys(data.attrs).length > 0 ? data.attrs : null,
+        // attrs is NOT NULL DEFAULT '{}' — send an empty object, never explicit
+        // null (an explicit null violates the not-null constraint even though the
+        // column has a default). This is what made dry-good / plain-fish quick-adds
+        // fail: those item types add no attrs, so the old code sent attrs: null.
+        attrs: data.attrs && Object.keys(data.attrs).length > 0 ? data.attrs : {},
         received_at: nowIso,
         received_by: userId,
         created_by: userId,
