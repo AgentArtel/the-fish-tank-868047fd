@@ -390,7 +390,10 @@ function ScrapeSourceDetail() {
               onClick={(e) => e.stopPropagation()}
               disabled={statusFilter === "imported"}
             />
-            <div className="w-14 h-14 rounded bg-muted overflow-hidden flex items-center justify-center">
+            <div
+              className="w-14 h-14 rounded bg-muted overflow-hidden flex items-center justify-center cursor-zoom-in"
+              onClick={(e) => openFull(e, it)}
+            >
               {thumbs[it.id] ? (
                 <img
                   src={thumbs[it.id]}
