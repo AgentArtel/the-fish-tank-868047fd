@@ -2196,3 +2196,117 @@ export const getCoralDiscoveryOverview = createServerFn({ method: "POST" })
       recent,
     };
   });
+
+// ============================================================================
+// Sale tracking (Phase 1a) — generalized ledger + apply helper.
+// Coral colony: log a frag-off event, never decrement (colony is stock-untracked).
+// Coral frag / fish / dry good: decrement quantity_available, bump quantity_sold
+// (clamped to respect the qty-balance CHECK), flip to sold_out at 0.
+// Tables/columns (inventory_sale_events, colony_gone) cast `as any` until the
+// Phase-1a migration regenerates types. Reused by manual logging now + Clover later.
+// ============================================================================
+async function applyInventorySale(
+  supabase: any,
+  opts: {
+    inventoryItemId: string;
+    qty: number;
+    unitPriceCents?: number | null;
+    source?: "manual" | "clover";
+    kind?: "sale" | "refund" | "void";
+    cloverRefs?: { orderId?: string; lineItemId?: string; paymentId?: string; itemName?: string };
+    userId?: string;
+  },
+) {
+  const { data: item, error } = await supabase
+    .from("inventory_items")
+    .select("id, item_type, attrs, quantity_available, quantity_sold")
+    .eq("id", opts.inventoryItemId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!item) throw new Error("Inventory item not found");
+
+  const source = opts.source ?? "manual";
+  const kind = opts.kind ?? "sale";
+  const unit = opts.unitPriceCents ?? null;
+  const stockMode = (item.attrs as any)?.stock_mode ?? null;
+  const isColony = item.item_type === "coral" && stockMode === "colony";
+
+  const { error: le } = await supabase.from("inventory_sale_events").insert({
+    inventory_item_id: opts.inventoryItemId,
+    qty: opts.qty,
+    unit_price_cents: unit,
+    total_cents: unit != null ? Math.round(unit * opts.qty) : null,
+    source,
+    kind,
+    // refunds/voids land in the review queue (no auto-reverse, per decision)
+    status: kind === "sale" ? "applied" : "needs_review",
+    clover_order_id: opts.cloverRefs?.orderId ?? null,
+    clover_line_item_id: opts.cloverRefs?.lineItemId ?? null,
+    clover_payment_id: opts.cloverRefs?.paymentId ?? null,
+    clover_item_name: opts.cloverRefs?.itemName ?? null,
+    created_by: opts.userId ?? null,
+  });
+  if (le) throw new Error(le.message);
+
+  if (kind === "sale" && !isColony) {
+    const avail = Number(item.quantity_available ?? 0);
+    const sold = Number(item.quantity_sold ?? 0);
+    const dec = Math.min(opts.qty, avail); // clamp so received >= avail+sold stays valid
+    const newAvail = avail - dec;
+    const patch: Record<string, any> = {
+      quantity_available: newAvail,
+      quantity_sold: sold + dec,
+    };
+    if (newAvail === 0) patch.availability_status = "sold_out";
+    const { error: ue } = await supabase
+      .from("inventory_items")
+      .update(patch)
+      .eq("id", opts.inventoryItemId);
+    if (ue) throw new Error(ue.message);
+  }
+  return { ok: true };
+}
+
+// Manual "log a sale" (editor). Heads/frags + optional per-head price (cents).
+export const logInventorySale = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        inventoryItemId: z.string().uuid(),
+        qty: z.number().positive().max(100000),
+        unitPriceCents: z.number().int().nonnegative().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await requireEditor(context.supabase, context.userId);
+    return await applyInventorySale(context.supabase as any, {
+      inventoryItemId: data.inventoryItemId,
+      qty: data.qty,
+      unitPriceCents: data.unitPriceCents ?? null,
+      source: "manual",
+      kind: "sale",
+      userId: context.userId,
+    });
+  });
+
+// Toggle a colony as fully gone → flips availability to sold_out.
+export const setColonyGone = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ id: z.string().uuid(), gone: z.boolean() }).parse(d))
+  .handler(async ({ data, context }) => {
+    await requireEditor(context.supabase, context.userId);
+    const patch: Record<string, any> = {
+      colony_gone: data.gone,
+      colony_gone_at: data.gone ? new Date().toISOString() : null,
+      colony_gone_by: data.gone ? context.userId : null,
+    };
+    if (data.gone) patch.availability_status = "sold_out";
+    const { error } = await (context.supabase as any)
+      .from("inventory_items")
+      .update(patch)
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
