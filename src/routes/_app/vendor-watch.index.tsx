@@ -223,6 +223,28 @@ const FEED_META: Record<FeedType, { label: string; Icon: typeof Sparkles; cls: s
   sold: { label: "Sold / gone", Icon: Archive, cls: "bg-muted text-muted-foreground" },
 };
 
+// Deterministic per-vendor color so each vendor reads as the same hue across
+// every event card / source row. Tailwind classes must be statically present
+// for the JIT compiler — keep the full strings, don't template the color name.
+const VENDOR_PALETTE = [
+  { badge: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30", bar: "bg-sky-500", dot: "bg-sky-500" },
+  { badge: "bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30", bar: "bg-violet-500", dot: "bg-violet-500" },
+  { badge: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30", bar: "bg-emerald-500", dot: "bg-emerald-500" },
+  { badge: "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30", bar: "bg-rose-500", dot: "bg-rose-500" },
+  { badge: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30", bar: "bg-amber-500", dot: "bg-amber-500" },
+  { badge: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/30", bar: "bg-cyan-500", dot: "bg-cyan-500" },
+  { badge: "bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300 border-fuchsia-500/30", bar: "bg-fuchsia-500", dot: "bg-fuchsia-500" },
+  { badge: "bg-lime-500/15 text-lime-700 dark:text-lime-300 border-lime-500/30", bar: "bg-lime-500", dot: "bg-lime-500" },
+  { badge: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30", bar: "bg-indigo-500", dot: "bg-indigo-500" },
+  { badge: "bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/30", bar: "bg-orange-500", dot: "bg-orange-500" },
+];
+function vendorColor(name: string | null | undefined) {
+  const s = (name ?? "").toLowerCase();
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return VENDOR_PALETTE[h % VENDOR_PALETTE.length];
+}
+
 function SourcesTab() {
   const fn = useServerFn(listScrapeSources);
   const { data, isLoading } = useQuery({
