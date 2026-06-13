@@ -440,6 +440,32 @@ function FeedTab() {
           </Button>
         )}
         <span className="text-xs text-muted-foreground self-center ml-auto">last 14 days</span>
+        <div className="flex border rounded-md overflow-hidden self-center">
+          <button
+            type="button"
+            onClick={() => {
+              setViewMode("list");
+              localStorage.setItem("vendor-watch.view", "list");
+            }}
+            className={`px-2 py-1 ${viewMode === "list" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
+            title="List view"
+            aria-label="List view"
+          >
+            <List className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setViewMode("grid");
+              localStorage.setItem("vendor-watch.view", "grid");
+            }}
+            className={`px-2 py-1 ${viewMode === "grid" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
+            title="Grid view"
+            aria-label="Grid view"
+          >
+            <LayoutGrid className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
