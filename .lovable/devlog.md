@@ -884,3 +884,22 @@ Open item (Lovable, only blocker to it working live):
 `.lovable/handoff-vendor-watch-firecrawl.md` — provision `FIRECRAWL_API_KEY`
 (app env + Vault). Then "Refresh now" on the blocked Furnace source demonstrates
 the fallback end-to-end.
+
+---
+
+## 2026-06-13 — Firecrawl live + per-source toggle + live progress (Lovable)
+
+- `FIRECRAWL_API_KEY` provisioned via workspace Firecrawl connection.
+- Added `vendor_scrape_sources.prefer_firecrawl boolean` (migration). Plumbed
+  through `runScrapeForSource`, admin refresh, and cron hook selects.
+- Flipped **The Furnace** to `prefer_firecrawl = true` — direct fetch was
+  silently truncating at 384 items (one short page → loop exit). Firecrawl
+  paginates the real ~750-item collection. Zero duplicates (keyed on SKU).
+- New server fn `getScrapeProgress` + UI poll on source detail page: button
+  shows `Scraping · N items` updating every 2s while a refresh is in-flight.
+  No scrape-logic change.
+- Hand-off: `.lovable/handoff-vendor-watch-firecrawl-followup.md` (includes
+  boss's parked ask: cross-vendor coral-type tracking + watchlist).
+- Touched: `scrape.functions.ts` (additive only), `vendor-watch.$sourceId.tsx`,
+  `refresh-scrape-sources.ts`. `routeTree.gen.ts` and core scrape body
+  untouched.
