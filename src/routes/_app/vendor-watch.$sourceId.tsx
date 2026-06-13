@@ -191,7 +191,8 @@ function ScrapeSourceDetail() {
           <Button onClick={refresh} disabled={refreshing} size="sm">
             {refreshing ? (
               <>
-                <Loader2 className="w-4 h-4 mr-1 animate-spin" /> Refreshing…
+                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                Scraping{progress?.itemCount ? ` · ${progress.itemCount} items` : "…"}
               </>
             ) : (
               <>
