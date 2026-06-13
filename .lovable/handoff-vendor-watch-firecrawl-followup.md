@@ -83,3 +83,39 @@ Not in scope right now — just logging it so we don't lose it.
 - `routeTree.gen.ts` — untouched (auto-generated).
 - The Firecrawl adapter itself (`fetchViaFirecrawl`, `extractProductsJson`,
   `fetchProductsPage`) — unchanged.
+
+---
+
+## Addendum — 2026-06-13 (same session, later): Image perf + lightbox
+
+The boss flagged that thumbnails on `/vendor-watch/:sourceId` were loading
+slowly (full-resolution Shopify masters, 1500–2500px, 300–800KB each).
+
+### What Lovable shipped
+
+1. **Signed URL transforms for thumbnails.** `createSignedUrls` now passes
+   `transform: { width: 320, height: 320, resize: "cover", quality: 70 }` so
+   the 56×56 list thumbs and 320×320 grid thumbs are served as webp from
+   Supabase Storage — ~95% smaller than the original master.
+2. **Lazy + async decoding.** All `<img>` tags on the page got `loading="lazy"`
+   and `decoding="async"` so off-screen images don't fetch until scrolled near.
+3. **Explicit dimensions.** `width`/`height` attributes added to every `<img>`
+   to kill layout shift.
+4. **Lightbox for full quality.** Clicking any thumbnail now opens a fixed
+   overlay (`bg-black/80`) that renders the image at `object-contain` with
+   `max-w-full max-h-full`. The overlay opens instantly with the already-cached
+   thumb, then a fresh full-quality signed URL (no transform, 1h expiry) is
+   fetched in the background and swapped in. Close by clicking the overlay or
+   pressing Escape. Shows a `Loader2` spinner while the full-quality URL
+   resolves.
+
+### Files touched (Lovable)
+
+- `src/routes/_app/vendor-watch.$sourceId.tsx` — thumbnail transforms, lazy
+  loading, lightbox state + overlay, `cursor-zoom-in` on thumbs.
+
+### Your lane still untouched
+
+- Image download / storage logic in `scrape.functions.ts` — no change.
+- `vendor_scrape_items.photo_path` storage shape — no change.
+- No new migrations.
