@@ -4,6 +4,26 @@ Living record of what's been built, what was extra/unplanned, and what's still a
 
 ---
 
+## 2026-06-13 — Vendor Watch: image perf + lightbox (Lovable / UI lane)
+
+Follow-up to the Firecrawl hand-off earlier today.
+
+### Problem
+Thumbnails on `/vendor-watch/:sourceId` were loading full-resolution Shopify masters (1500–2500px, 300–800KB each). List view rendered 56×56 thumbs from these masters; grid view rendered 320×320. Both were slow.
+
+### Fix
+1. **Signed URL transforms** — `createSignedUrls` now passes `transform: { width: 320, height: 320, resize: "cover", quality: 70 }` so Supabase Storage serves webp thumbs (~95% smaller).
+2. **Lazy + async decoding** — `loading="lazy"` + `decoding="async"` on every `<img>` so off-screen images don't fetch until scrolled near.
+3. **Explicit dimensions** — `width`/`height` attributes on all `<img>` tags to prevent layout shift.
+4. **Lightbox for full quality** — click any thumb → fixed overlay (`bg-black/80`) renders `object-contain` at `max-w-full max-h-full`. Opens instantly with the cached thumb, then a fresh full-quality signed URL (no transform, 1h expiry) is fetched and swapped in. Close by click or Escape. `Loader2` spinner while full-quality URL resolves.
+
+### Files
+- `src/routes/_app/vendor-watch.$sourceId.tsx` — thumbnail transforms, lazy loading, lightbox overlay.
+
+### No migrations, no backend changes.
+
+---
+
 ## 2026-06-10 — Coral loop E2E (browser automation lane)
 
 Ran `handoff-coral-e2e.md` against the preview as admin `mbs.artel@gmail.com`. Test row: `ZZ E2E TEST CORAL 20260610T154255Z` @ plug `ZE9`, location **Live Sale Tank Test**, qty 1, no photo at capture (Variant B path forced by tooling — see note).
