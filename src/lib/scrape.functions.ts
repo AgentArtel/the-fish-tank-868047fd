@@ -447,3 +447,31 @@ export const setScrapeItemStatus = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+// ---------- update a source: cadence / pause — admin only ----------
+export const updateScrapeSource = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        sourceId: z.string().uuid(),
+        cadence: z.enum(["manual", "daily", "weekly", "friday_night"]).optional(),
+        is_active: z.boolean().optional(),
+      })
+      .refine((v) => v.cadence !== undefined || v.is_active !== undefined, {
+        message: "Nothing to update",
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await requireAdmin(context.supabase, context.userId);
+    const patch: Record<string, any> = {};
+    if (data.cadence !== undefined) patch.cadence = data.cadence;
+    if (data.is_active !== undefined) patch.is_active = data.is_active;
+    const { error } = await context.supabase
+      .from("vendor_scrape_sources")
+      .update(patch as any)
+      .eq("id", data.sourceId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
