@@ -30,3 +30,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Claude Code agent worktrees (local working dirs, not for commit)
+.claude/worktrees/
