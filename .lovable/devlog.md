@@ -1105,3 +1105,15 @@ intent, so there's a single clear mental model instead of three undiscoverable t
 - **Receive a vendor order** → Intake/Batches (invoice → AI → admin pricing).
 Intake stays a separate workflow (it's vendor receiving, not "log existing stock").
 Frontend only; no merge of forms, no DB change.
+
+---
+## 2026-06-13 — Vendor Watch: sorting/filtering + watchlist on source pages (Claude Code)
+
+Boss wanted better sorting/filtering and the watchlist to work by coral type on the
+per-vendor pages (previously only the cross-vendor feed had coral-type/watchlist).
+Added to `vendor-watch.$sourceId.tsx` (client-side over the loaded items, no DB):
+- **Coral-type filter** dropdown (only types present + Other).
+- **Sort** dropdown: recently seen / newest added / price low→high / high→low / name.
+- **★ Watchlist** toggle — show only tracked coral types — plus a **Track {type}**
+  button when a type is selected (shared with the feed's tracked_coral_types).
+- **Coral-type badges** on list + grid rows, ★-highlighted when tracked.
