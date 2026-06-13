@@ -87,7 +87,9 @@ function ScrapeSourceDetail() {
     refetchOnWindowFocus: false,
   });
 
-  // Generate signed URLs for thumbnails (private bucket)
+  // Generate signed URLs for thumbnails (private bucket). Ask Supabase to
+  // transform the original (often 1500-2500px Shopify masters) down to a
+  // 320px webp so list/grid thumbs aren't pulling 500KB+ each.
   useMemo(() => {
     const items = data?.items ?? [];
     const missing = items.filter((it: any) => it.photo_path && !thumbs[it.id]);
@@ -96,7 +98,9 @@ function ScrapeSourceDetail() {
       const paths = missing.map((it: any) => it.photo_path).slice(0, 60);
       const { data: signed } = await supabase.storage
         .from("inventory-media")
-        .createSignedUrls(paths, 3600);
+        .createSignedUrls(paths, 3600, {
+          transform: { width: 320, height: 320, resize: "cover", quality: 70 },
+        } as any);
       if (!signed) return;
       const next: Record<string, string> = {};
       missing.slice(0, signed.length).forEach((it: any, i: number) => {
@@ -375,7 +379,15 @@ function ScrapeSourceDetail() {
             />
             <div className="w-14 h-14 rounded bg-muted overflow-hidden flex items-center justify-center">
               {thumbs[it.id] ? (
-                <img src={thumbs[it.id]} alt="" className="w-full h-full object-cover" />
+                <img
+                  src={thumbs[it.id]}
+                  alt=""
+                  width={56}
+                  height={56}
+                  loading="lazy"
+                  decoding="async"
+                  className="w-full h-full object-cover"
+                />
               ) : (
                 <span className="text-[10px] text-muted-foreground">no photo</span>
               )}
@@ -428,7 +440,15 @@ function ScrapeSourceDetail() {
               >
                 <div className="relative aspect-square bg-muted overflow-hidden">
                   {thumbs[it.id] ? (
-                    <img src={thumbs[it.id]} alt={it.title} className="w-full h-full object-cover" />
+                    <img
+                      src={thumbs[it.id]}
+                      alt={it.title}
+                      width={320}
+                      height={320}
+                      loading="lazy"
+                      decoding="async"
+                      className="w-full h-full object-cover"
+                    />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <span className="text-xs text-muted-foreground">no photo</span>
