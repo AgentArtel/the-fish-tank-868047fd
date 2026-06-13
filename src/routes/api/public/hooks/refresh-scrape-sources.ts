@@ -85,7 +85,7 @@ export const Route = createFileRoute("/api/public/hooks/refresh-scrape-sources")
 
         const { data: sources, error } = await supabaseAdmin
           .from("vendor_scrape_sources")
-          .select("id, kind, source_url, cadence, is_active, last_scraped_at, vendors:vendor_id(slug)")
+          .select("id, kind, source_url, cadence, is_active, last_scraped_at, prefer_firecrawl, vendors:vendor_id(slug)")
           .eq("is_active", true);
         if (error) return json({ error: error.message }, 500);
 

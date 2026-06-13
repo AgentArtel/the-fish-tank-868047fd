@@ -4,6 +4,26 @@ Living record of what's been built, what was extra/unplanned, and what's still a
 
 ---
 
+## 2026-06-13 — Vendor Watch: image perf + lightbox (Lovable / UI lane)
+
+Follow-up to the Firecrawl hand-off earlier today.
+
+### Problem
+Thumbnails on `/vendor-watch/:sourceId` were loading full-resolution Shopify masters (1500–2500px, 300–800KB each). List view rendered 56×56 thumbs from these masters; grid view rendered 320×320. Both were slow.
+
+### Fix
+1. **Signed URL transforms** — `createSignedUrls` now passes `transform: { width: 320, height: 320, resize: "cover", quality: 70 }` so Supabase Storage serves webp thumbs (~95% smaller).
+2. **Lazy + async decoding** — `loading="lazy"` + `decoding="async"` on every `<img>` so off-screen images don't fetch until scrolled near.
+3. **Explicit dimensions** — `width`/`height` attributes on all `<img>` tags to prevent layout shift.
+4. **Lightbox for full quality** — click any thumb → fixed overlay (`bg-black/80`) renders `object-contain` at `max-w-full max-h-full`. Opens instantly with the cached thumb, then a fresh full-quality signed URL (no transform, 1h expiry) is fetched and swapped in. Close by click or Escape. `Loader2` spinner while full-quality URL resolves.
+
+### Files
+- `src/routes/_app/vendor-watch.$sourceId.tsx` — thumbnail transforms, lazy loading, lightbox overlay.
+
+### No migrations, no backend changes.
+
+---
+
 ## 2026-06-10 — Coral loop E2E (browser automation lane)
 
 Ran `handoff-coral-e2e.md` against the preview as admin `mbs.artel@gmail.com`. Test row: `ZZ E2E TEST CORAL 20260610T154255Z` @ plug `ZE9`, location **Live Sale Tank Test**, qty 1, no photo at capture (Variant B path forced by tooling — see note).
@@ -884,3 +904,22 @@ Open item (Lovable, only blocker to it working live):
 `.lovable/handoff-vendor-watch-firecrawl.md` — provision `FIRECRAWL_API_KEY`
 (app env + Vault). Then "Refresh now" on the blocked Furnace source demonstrates
 the fallback end-to-end.
+
+---
+
+## 2026-06-13 — Firecrawl live + per-source toggle + live progress (Lovable)
+
+- `FIRECRAWL_API_KEY` provisioned via workspace Firecrawl connection.
+- Added `vendor_scrape_sources.prefer_firecrawl boolean` (migration). Plumbed
+  through `runScrapeForSource`, admin refresh, and cron hook selects.
+- Flipped **The Furnace** to `prefer_firecrawl = true` — direct fetch was
+  silently truncating at 384 items (one short page → loop exit). Firecrawl
+  paginates the real ~750-item collection. Zero duplicates (keyed on SKU).
+- New server fn `getScrapeProgress` + UI poll on source detail page: button
+  shows `Scraping · N items` updating every 2s while a refresh is in-flight.
+  No scrape-logic change.
+- Hand-off: `.lovable/handoff-vendor-watch-firecrawl-followup.md` (includes
+  boss's parked ask: cross-vendor coral-type tracking + watchlist).
+- Touched: `scrape.functions.ts` (additive only), `vendor-watch.$sourceId.tsx`,
+  `refresh-scrape-sources.ts`. `routeTree.gen.ts` and core scrape body
+  untouched.

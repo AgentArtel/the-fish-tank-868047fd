@@ -59,6 +59,29 @@ export const listScrapeSources = createServerFn({ method: "GET" })
     return { sources: data ?? [], counts };
   });
 
+// ---------- live progress (cheap poll while a refresh is in-flight) ----------
+export const getScrapeProgress = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ sourceId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    await requireEditor(context.supabase, context.userId);
+    const { count } = await context.supabase
+      .from("vendor_scrape_items")
+      .select("id", { count: "exact", head: true })
+      .eq("source_id", data.sourceId);
+    const { data: src } = await context.supabase
+      .from("vendor_scrape_sources")
+      .select("last_scraped_at, last_scrape_status, last_item_count")
+      .eq("id", data.sourceId)
+      .maybeSingle();
+    return {
+      itemCount: count ?? 0,
+      lastScrapedAt: src?.last_scraped_at ?? null,
+      lastScrapeStatus: src?.last_scrape_status ?? null,
+      lastItemCount: src?.last_item_count ?? null,
+    };
+  });
+
 // ---------- get one source + items ----------
 export const getScrapeSource = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -264,7 +287,13 @@ type ScrapeSummary = {
  */
 export async function runScrapeForSource(
   db: any,
-  source: { id: string; kind: string; source_url: string; vendors?: { slug?: string } | null },
+  source: {
+    id: string;
+    kind: string;
+    source_url: string;
+    prefer_firecrawl?: boolean | null;
+    vendors?: { slug?: string } | null;
+  },
 ): Promise<ScrapeSummary> {
   if (source.kind !== "shopify_public") {
     throw new Error(`Only shopify_public sources are supported (got ${source.kind})`);
@@ -276,7 +305,10 @@ export async function runScrapeForSource(
   // bot-blocks our egress (403/429), transparently fall back to Firecrawl.
   const all: ShopifyProduct[] = [];
   let page = 1;
-  let transport: Transport = "direct";
+  // Known-blocked sources can be pinned to Firecrawl up front (prefer_firecrawl);
+  // everything else starts direct and auto-falls back to Firecrawl on a block.
+  let transport: Transport =
+    source.prefer_firecrawl && process.env.FIRECRAWL_API_KEY ? "firecrawl" : "direct";
   const baseUrl = source.source_url;
   const sep = baseUrl.includes("?") ? "&" : "?";
   const markError = (msg: string) =>
@@ -501,7 +533,7 @@ export const refreshScrapeSource = createServerFn({ method: "POST" })
     await requireAdmin(context.supabase, context.userId);
     const { data: source, error } = await context.supabase
       .from("vendor_scrape_sources")
-      .select("id, kind, source_url, vendors:vendor_id(slug)")
+      .select("id, kind, source_url, prefer_firecrawl, vendors:vendor_id(slug)")
       .eq("id", data.sourceId)
       .maybeSingle();
     if (error) throw new Error(error.message);
