@@ -22,8 +22,11 @@ import {
   setScrapeItemStatus,
   updateScrapeSource,
   backfillScrapeImages,
+  listTrackedCoralTypes,
+  setTrackedCoralType,
 } from "@/lib/scrape.functions";
 import { fmtMoney } from "@/lib/ops";
+import { classifyCoralType, CORAL_TYPES, coralTypeLabel } from "@/lib/coral-type";
 import { Switch } from "@/components/ui/switch";
 import {
   RefreshCw,
@@ -38,6 +41,8 @@ import {
   AlertTriangle,
   CheckCircle2,
   Download,
+  Star,
+  ArrowUpDown,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_app/vendor-watch/$sourceId")({
@@ -81,10 +86,15 @@ function ScrapeSourceDetail() {
   const setStatusFn = useServerFn(setScrapeItemStatus);
   const updateFn = useServerFn(updateScrapeSource);
   const backfillFn = useServerFn(backfillScrapeImages);
+  const trackedFn = useServerFn(listTrackedCoralTypes);
+  const setTrackedFn = useServerFn(setTrackedCoralType);
   const [savingCfg, setSavingCfg] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("new");
+  const [coralFilter, setCoralFilter] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<string>("recent");
+  const [watchlistOnly, setWatchlistOnly] = useState(false);
   const [viewMode, setViewMode] = useState<"list" | "grid">(() => {
     if (typeof window === "undefined") return "list";
     return (localStorage.getItem("vendor-watch.view") as "list" | "grid") || "list";
@@ -125,6 +135,11 @@ function ScrapeSourceDetail() {
     queryFn: () => getFn({ data: { sourceId, statusFilter } }),
   });
 
+  const { data: trackedData } = useQuery({
+    queryKey: ["tracked-coral-types"],
+    queryFn: () => trackedFn(),
+  });
+
   // Live progress poll: only runs while a refresh is in-flight.
   const { data: progress } = useQuery({
     queryKey: ["scrape-progress", sourceId],
@@ -163,7 +178,41 @@ function ScrapeSourceDetail() {
   const source = data?.source;
   const items = data?.items ?? [];
   const photoStats = (data as any)?.photoStats as { total: number; missing: number } | undefined;
-  const allSelected = items.length > 0 && items.every((it: any) => selected.has(it.id));
+
+  // Coral type per item (from title) + the tracked watchlist set.
+  const tracked = new Set<string>(trackedData?.types ?? []);
+  const decorated = items.map((it: any) => ({ ...it, coralType: classifyCoralType(it.title) }));
+  const coralOptions = CORAL_TYPES.filter((ct) => decorated.some((it: any) => it.coralType === ct.slug));
+  const hasOther = decorated.some((it: any) => !it.coralType);
+
+  const SORTS: Record<string, (a: any, b: any) => number> = {
+    recent: (a, b) => (b.last_seen_at ?? "").localeCompare(a.last_seen_at ?? ""),
+    newest: (a, b) => (b.first_seen_at ?? "").localeCompare(a.first_seen_at ?? ""),
+    price_asc: (a, b) => (a.wholesale_cost ?? Infinity) - (b.wholesale_cost ?? Infinity),
+    price_desc: (a, b) => (b.wholesale_cost ?? -Infinity) - (a.wholesale_cost ?? -Infinity),
+    name: (a, b) => (a.title ?? "").localeCompare(b.title ?? ""),
+  };
+  const view = decorated
+    .filter(
+      (it: any) =>
+        (coralFilter === "all" ||
+          (coralFilter === "other" ? !it.coralType : it.coralType === coralFilter)) &&
+        (!watchlistOnly || (it.coralType && tracked.has(it.coralType))),
+    )
+    .sort(SORTS[sortBy] ?? SORTS.recent);
+
+  const allSelected = view.length > 0 && view.every((it: any) => selected.has(it.id));
+
+  const toggleTrack = async (slug: string) => {
+    const isTracked = tracked.has(slug);
+    try {
+      await setTrackedFn({ data: { coralType: slug, tracked: !isTracked } });
+      qc.invalidateQueries({ queryKey: ["tracked-coral-types"] });
+      toast.success(isTracked ? `Untracked ${coralTypeLabel(slug)}` : `Tracking ${coralTypeLabel(slug)}`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to update watchlist");
+    }
+  };
 
   // Vendor CDN image first (always present), stored signed thumb as fallback.
   const thumbFor = (it: any): string | null =>
@@ -383,8 +432,59 @@ function ScrapeSourceDetail() {
           </SelectContent>
         </Select>
 
+        {(coralOptions.length > 0 || hasOther) && (
+          <Select value={coralFilter} onValueChange={setCoralFilter}>
+            <SelectTrigger className="w-36 h-9">
+              <SelectValue placeholder="All types" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All types</SelectItem>
+              {coralOptions.map((ct) => (
+                <SelectItem key={ct.slug} value={ct.slug}>
+                  {ct.label}
+                </SelectItem>
+              ))}
+              {hasOther && <SelectItem value="other">Other</SelectItem>}
+            </SelectContent>
+          </Select>
+        )}
+
+        <Select value={sortBy} onValueChange={setSortBy}>
+          <SelectTrigger className="w-40 h-9">
+            <ArrowUpDown className="w-3.5 h-3.5 mr-1 opacity-60" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="recent">Recently seen</SelectItem>
+            <SelectItem value="newest">Newest added</SelectItem>
+            <SelectItem value="price_asc">Price: low → high</SelectItem>
+            <SelectItem value="price_desc">Price: high → low</SelectItem>
+            <SelectItem value="name">Name A–Z</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Button
+          variant={watchlistOnly ? "default" : "outline"}
+          size="sm"
+          className="h-9"
+          onClick={() => setWatchlistOnly((v) => !v)}
+          title="Show only your tracked coral types"
+        >
+          <Star className={`w-4 h-4 mr-1 ${watchlistOnly ? "fill-current" : ""}`} />
+          Watchlist{tracked.size > 0 ? ` ${tracked.size}` : ""}
+        </Button>
+
+        {coralFilter !== "all" && coralFilter !== "other" && (
+          <Button variant="outline" size="sm" className="h-9" onClick={() => toggleTrack(coralFilter)}>
+            <Star
+              className={`w-4 h-4 mr-1 ${tracked.has(coralFilter) ? "fill-amber-400 text-amber-400" : ""}`}
+            />
+            {tracked.has(coralFilter) ? "Tracking" : `Track ${coralTypeLabel(coralFilter)}`}
+          </Button>
+        )}
+
         <div className="text-sm text-muted-foreground">
-          {items.length} item{items.length === 1 ? "" : "s"}
+          {view.length} item{view.length === 1 ? "" : "s"}
           {selected.size > 0 && ` · ${selected.size} selected`}
         </div>
 
@@ -440,21 +540,21 @@ function ScrapeSourceDetail() {
 
       {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
 
-      {!isLoading && items.length === 0 && (
+      {!isLoading && view.length === 0 && (
         <div className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">
-          {statusFilter === "new"
+          {items.length === 0 && statusFilter === "new"
             ? "Nothing new. Click Refresh to check the vendor for new drops."
-            : "No items match this filter."}
+            : "No items match these filters."}
         </div>
       )}
 
       {/* Header row — list only */}
-      {items.length > 0 && viewMode === "list" && (
+      {view.length > 0 && viewMode === "list" && (
         <div className="grid grid-cols-[auto_64px_1fr_120px_120px] gap-3 items-center px-3 py-2 text-[10px] uppercase font-semibold tracking-wider text-muted-foreground border-b">
           <Checkbox
             checked={allSelected}
             onCheckedChange={(c) => {
-              if (c) setSelected(new Set(items.map((it: any) => it.id)));
+              if (c) setSelected(new Set(view.map((it: any) => it.id)));
               else setSelected(new Set());
             }}
           />
@@ -466,7 +566,7 @@ function ScrapeSourceDetail() {
       )}
 
       {/* List view */}
-      {viewMode === "list" && items.map((it: any) => {
+      {viewMode === "list" && view.map((it: any) => {
         const isSel = selected.has(it.id);
         return (
           <div
@@ -501,7 +601,18 @@ function ScrapeSourceDetail() {
               )}
             </div>
             <div className="min-w-0">
-              <div className="font-medium truncate">{it.title}</div>
+              <div className="font-medium truncate flex items-center gap-1.5">
+                <span className="truncate">{it.title}</span>
+                {it.coralType && (
+                  <Badge
+                    variant="outline"
+                    className={`text-[9px] shrink-0 ${tracked.has(it.coralType) ? "border-amber-400 text-amber-700 dark:text-amber-300" : ""}`}
+                  >
+                    {tracked.has(it.coralType) && <Star className="w-2.5 h-2.5 mr-0.5 fill-amber-400 text-amber-400" />}
+                    {coralTypeLabel(it.coralType)}
+                  </Badge>
+                )}
+              </div>
               <div className="text-xs text-muted-foreground flex items-center gap-2">
                 <span className="font-mono">{it.external_id}</span>
                 {it.product_url && (
@@ -536,7 +647,7 @@ function ScrapeSourceDetail() {
       {/* Grid view */}
       {viewMode === "grid" && (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {items.map((it: any) => {
+          {view.map((it: any) => {
             const isSel = selected.has(it.id);
             return (
               <div
@@ -582,6 +693,15 @@ function ScrapeSourceDetail() {
                 </div>
                 <div className="p-3 space-y-1.5">
                   <div className="font-medium text-sm line-clamp-2 leading-snug">{it.title}</div>
+                  {it.coralType && (
+                    <Badge
+                      variant="outline"
+                      className={`text-[9px] ${tracked.has(it.coralType) ? "border-amber-400 text-amber-700 dark:text-amber-300" : ""}`}
+                    >
+                      {tracked.has(it.coralType) && <Star className="w-2.5 h-2.5 mr-0.5 fill-amber-400 text-amber-400" />}
+                      {coralTypeLabel(it.coralType)}
+                    </Badge>
+                  )}
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold">{fmtMoney(it.wholesale_cost)}</span>
                     {it.available_at_source ? (
