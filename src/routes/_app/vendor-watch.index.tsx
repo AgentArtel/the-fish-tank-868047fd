@@ -1,11 +1,32 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { useState } from "react";
+import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { listScrapeSources } from "@/lib/scrape.functions";
-import { Globe, ArrowRight, RefreshCw } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { listScrapeSources, createScrapeSource } from "@/lib/scrape.functions";
+import { Globe, ArrowRight, RefreshCw, Plus, Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/_app/vendor-watch/")({
   component: ScrapeSourcesPage,
@@ -29,6 +50,132 @@ const CADENCE_LABEL: Record<string, string> = {
   friday_night: "Friday night",
 };
 
+function AddSourceDialog() {
+  const qc = useQueryClient();
+  const nav = useNavigate();
+  const createFn = useServerFn(createScrapeSource);
+  const [open, setOpen] = useState(false);
+  const [vendorName, setVendorName] = useState("");
+  const [name, setName] = useState("");
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [cadence, setCadence] = useState("weekly");
+  const [preferFirecrawl, setPreferFirecrawl] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const reset = () => {
+    setVendorName("");
+    setName("");
+    setSourceUrl("");
+    setCadence("weekly");
+    setPreferFirecrawl(false);
+  };
+
+  const submit = async () => {
+    if (!vendorName.trim() || !name.trim() || !sourceUrl.trim()) {
+      toast.error("Vendor, source name, and URL are required.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await createFn({
+        data: { vendorName, name, sourceUrl, cadence: cadence as any, preferFirecrawl },
+      });
+      toast.success("Source created — click Refresh to pull its catalog.");
+      qc.invalidateQueries({ queryKey: ["scrape-sources"] });
+      setOpen(false);
+      reset();
+      nav({ to: "/vendor-watch/$sourceId", params: { sourceId: res.sourceId } });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to create source");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : (setOpen(false), reset()))}>
+      <DialogTrigger asChild>
+        <Button size="sm">
+          <Plus className="w-4 h-4 mr-1" /> Add source
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Add a vendor source</DialogTitle>
+          <DialogDescription>
+            Point at a Shopify <code>products.json</code> feed (e.g.
+            <code> store.com/products.json</code> or a collection's
+            <code> /collections/x/products.json</code>). Most livestock vendors expose one for free.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-1">
+          <div className="space-y-1.5">
+            <Label htmlFor="vendorName">Vendor</Label>
+            <Input
+              id="vendorName"
+              placeholder="e.g. Tidal Gardens"
+              value={vendorName}
+              onChange={(e) => setVendorName(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="srcName">Source name</Label>
+            <Input
+              id="srcName"
+              placeholder="e.g. All corals"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="srcUrl">products.json URL</Label>
+            <Input
+              id="srcUrl"
+              placeholder="https://store.com/products.json"
+              value={sourceUrl}
+              onChange={(e) => setSourceUrl(e.target.value)}
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="space-y-1.5 flex-1">
+              <Label>Cadence</Label>
+              <Select value={cadence} onValueChange={setCadence}>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manual">Manual only</SelectItem>
+                  <SelectItem value="daily">Daily</SelectItem>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="friday_night">Friday night</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2 pt-5">
+              <Switch checked={preferFirecrawl} onCheckedChange={setPreferFirecrawl} />
+              <span className="text-sm text-muted-foreground">Force Firecrawl</span>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Leave Firecrawl off — we try the free direct fetch first and only fall back to Firecrawl
+            if the vendor blocks us. Turn it on only for a vendor you already know blocks direct
+            fetches.
+          </p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>
+            Cancel
+          </Button>
+          <Button onClick={submit} disabled={saving}>
+            {saving && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+            Create source
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ScrapeSourcesPage() {
   const fn = useServerFn(listScrapeSources);
   const { data, isLoading } = useQuery({
@@ -39,8 +186,9 @@ function ScrapeSourcesPage() {
   return (
     <div className="p-6 md:p-8 max-w-5xl">
       <PageHeader
-        title="Vendor Scrapes"
-        description="Pull live drops from vendor websites. Scraped items become draft vendor batches — pricing still goes through admin approval before anything goes live."
+        title="Vendor Watch"
+        description="Monitor vendor catalogs — track price & availability over time and catch limited drops. Read-only: Vendor Watch never creates inventory or pricing."
+        action={<AddSourceDialog />}
       />
 
       {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}

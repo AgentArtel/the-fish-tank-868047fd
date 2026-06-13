@@ -941,3 +941,20 @@ not just displayed. Two-part fix so capture is complete and verifiable:
   now returns `photoStats {total, missing}`.
 
 No migration. Storage path/format unchanged (`scraped/<slug>/<sku>.<ext>`).
+
+---
+## 2026-06-13 — Vendor Watch: self-serve "Add source" (multi-vendor onboarding) (Claude Code)
+
+First step of the feed/multi-vendor scope. No more seeding sources via migration:
+- New admin server fn `createScrapeSource` — find-or-creates the vendor (dedupe by
+  name, unique slug) then inserts a `shopify_public` source (name, products.json
+  URL, cadence, optional prefer_firecrawl). No migration (tables + RLS exist).
+- "Add source" dialog on `/vendor-watch` index: vendor, source name,
+  products.json URL, cadence, Force-Firecrawl toggle (off by default — direct
+  first, auto-fallback). On create → invalidates list → navigates to the new
+  source so you can hit Refresh to validate the feed.
+- Refreshed the index copy to the monitor framing (was stale "draft vendor
+  batches / pricing approval" text).
+
+Next: cross-vendor feed tab (signals over snapshots), then the coral-type +
+watchlist Lovable schema hand-off.
