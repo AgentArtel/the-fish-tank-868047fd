@@ -508,7 +508,7 @@ export const refreshScrapeSource = createServerFn({ method: "POST" })
     await requireAdmin(context.supabase, context.userId);
     const { data: source, error } = await context.supabase
       .from("vendor_scrape_sources")
-      .select("id, kind, source_url, vendors:vendor_id(slug)")
+      .select("id, kind, source_url, prefer_firecrawl, vendors:vendor_id(slug)")
       .eq("id", data.sourceId)
       .maybeSingle();
     if (error) throw new Error(error.message);
