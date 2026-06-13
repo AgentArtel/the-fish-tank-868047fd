@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { classifyCoralType, coralTypeLabel } from "@/lib/coral-type";
 import { callAIChat } from "@/lib/ai-call.server";
 import { suggestRetail } from "@/lib/ops";
 
@@ -2309,4 +2310,45 @@ export const setColonyGone = createServerFn({ method: "POST" })
       .eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
+  });
+
+// Sold-by-coral-type rollup over the sale ledger (for the dashboard report).
+export const getCoralSalesByType = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ days: z.number().int().min(1).max(365).default(30) }).parse(d))
+  .handler(async ({ data, context }) => {
+    await requireEditor(context.supabase, context.userId);
+    const cutoff = new Date(Date.now() - data.days * 86_400_000).toISOString();
+    const { data: rows, error } = await (context.supabase as any)
+      .from("inventory_sale_events")
+      .select("qty, total_cents, sold_at, item:inventory_item_id(item_type, item_name)")
+      .eq("kind", "sale")
+      .gte("sold_at", cutoff)
+      .limit(5000);
+    if (error) throw new Error(error.message);
+
+    const byType = new Map<string, { qty: number; revenueCents: number; sales: number }>();
+    for (const r of rows ?? []) {
+      const it = (r as any).item;
+      if (!it || it.item_type !== "coral") continue;
+      const slug = classifyCoralType(it.item_name) ?? "other";
+      const agg = byType.get(slug) ?? { qty: 0, revenueCents: 0, sales: 0 };
+      agg.qty += Number(r.qty ?? 0);
+      agg.revenueCents += Number(r.total_cents ?? 0);
+      agg.sales += 1;
+      byType.set(slug, agg);
+    }
+    const result = [...byType.entries()]
+      .map(([slug, v]) => ({
+        type: slug,
+        label: coralTypeLabel(slug === "other" ? null : slug),
+        ...v,
+      }))
+      .sort((a, b) => b.qty - a.qty);
+    return {
+      rows: result,
+      totalQty: result.reduce((n, r) => n + r.qty, 0),
+      totalRevenueCents: result.reduce((n, r) => n + r.revenueCents, 0),
+      days: data.days,
+    };
   });
