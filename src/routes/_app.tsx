@@ -42,6 +42,11 @@ import {
 
 export const Route = createFileRoute("/_app")({
   beforeLoad: async () => {
+    // The Supabase session lives in localStorage (client-only), so the server
+    // can't see it. Running this check during SSR always finds "no user" and
+    // redirects to /login — which then flashes the logged-out view before the
+    // client hydrates with the real session. Gate the auth check to the client.
+    if (typeof window === "undefined") return;
     const { data, error } = await supabase.auth.getUser();
     if (error || !data.user) throw redirect({ to: "/login" });
   },

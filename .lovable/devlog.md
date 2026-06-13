@@ -998,3 +998,19 @@ migration (vendors + sources), all `prefer_firecrawl=true` (datacenter-blocked),
 additive extension (Vault creds + auth_method + runScrapeForSource wiring) with no
 re-seed. Boss refreshes each after it ships and reports which need auth / aren't
 Shopify.
+
+---
+## 2026-06-13 — App-shell: fix auth loading flash / view-switching (Claude Code)
+
+Boss reported the app flashing a default/logged-out view then switching to the
+real one, with loading flicker while navigating. Two root causes, both fixed
+(app-shell only — no routing/SSR-mode change):
+1. **SSR ran the auth gate.** `_app.beforeLoad` called `supabase.auth.getUser()`
+   on the server, but the session is localStorage-only → server always saw "no
+   user" and redirected to /login, flashing the logged-out view before the
+   client hydrated with the real session. Now gated to the client
+   (`typeof window`); SSR renders the loading state instead of a login bounce.
+2. **AuthSync nuked everything on every auth event.** `onAuthStateChange` called
+   `router.invalidate()` + `qc.invalidateQueries()` (ALL queries) on
+   INITIAL_SESSION (every load) and TOKEN_REFRESHED (periodic) → refetch storms /
+   flashing. Now only reacts to SIGNED_IN / SIGNED_OUT and invalidates just `["me"]`.

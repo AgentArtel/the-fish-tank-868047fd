@@ -90,9 +90,15 @@ function AuthSync() {
   const router = useRouter();
   const qc = useQueryClient();
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
-      router.invalidate();
-      qc.invalidateQueries();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      // Only react to real sign-in / sign-out. INITIAL_SESSION fires on every
+      // page load and TOKEN_REFRESHED fires periodically — invalidating ALL
+      // queries on those caused refetch storms and view flashing. Re-evaluate
+      // routes and refresh the identity query; React Query handles the rest.
+      if (event === "SIGNED_IN" || event === "SIGNED_OUT") {
+        router.invalidate();
+        qc.invalidateQueries({ queryKey: ["me"] });
+      }
     });
     return () => subscription.unsubscribe();
   }, [router, qc]);
