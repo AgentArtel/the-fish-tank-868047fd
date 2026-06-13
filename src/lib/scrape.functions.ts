@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { slugify } from "@/lib/ops";
 
 // ---------- guards (mirrors ops.functions.ts) ----------
 async function isAdmin(supabase: any, userId: string) {
@@ -689,4 +690,75 @@ export const backfillScrapeImages = createServerFn({ method: "POST" })
       .is("photo_path", null);
 
     return { downloaded, failed, remaining: remaining ?? 0 };
+  });
+
+// ---------- create a new scrape source (+ vendor) — admin only ----------
+export const createScrapeSource = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        vendorName: z.string().trim().min(1).max(120),
+        name: z.string().trim().min(1).max(120),
+        sourceUrl: z.string().trim().url(),
+        cadence: z.enum(["manual", "daily", "weekly", "friday_night"]).default("weekly"),
+        preferFirecrawl: z.boolean().default(false),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await requireAdmin(context.supabase, context.userId);
+    const { supabase } = context;
+
+    // Find-or-create the vendor (dedupe by name, unique slug).
+    let vendorId: string;
+    const { data: existing } = await supabase
+      .from("vendors")
+      .select("id")
+      .ilike("name", data.vendorName)
+      .maybeSingle();
+    if (existing) {
+      vendorId = existing.id;
+    } else {
+      const base = (slugify(data.vendorName) || "vendor").slice(0, 60);
+      let slug = base;
+      for (let i = 0; i < 5; i++) {
+        const { data: clash } = await supabase
+          .from("vendors")
+          .select("id")
+          .eq("slug", slug)
+          .maybeSingle();
+        if (!clash) break;
+        slug = `${base}-${Math.random().toString(36).slice(2, 6)}`;
+      }
+      const { data: v, error: ve } = await supabase
+        .from("vendors")
+        .insert({ name: data.vendorName, slug, is_active: true })
+        .select("id")
+        .single();
+      if (ve) throw new Error(ve.message);
+      vendorId = v.id;
+    }
+
+    const { data: src, error: se } = await supabase
+      .from("vendor_scrape_sources")
+      .insert({
+        vendor_id: vendorId,
+        name: data.name,
+        kind: "shopify_public",
+        source_url: data.sourceUrl,
+        cadence: data.cadence,
+        prefer_firecrawl: data.preferFirecrawl,
+      })
+      .select("id")
+      .maybeSingle();
+    if (se) {
+      throw new Error(
+        /duplicate|unique/i.test(se.message)
+          ? "A source with this URL already exists for this vendor."
+          : se.message,
+      );
+    }
+    if (!src) throw new Error("Failed to create source");
+    return { sourceId: src.id };
   });
