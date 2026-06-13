@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -85,6 +85,16 @@ function ScrapeSourceDetail() {
       .createSignedUrl(it.photo_path, 3600);
     if (signed?.signedUrl) setLightbox({ url: signed.signedUrl, title: it.title });
   };
+
+  // Close the lightbox on Escape (backdrop-click also closes).
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightbox(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightbox]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["scrape-source", sourceId, statusFilter],
