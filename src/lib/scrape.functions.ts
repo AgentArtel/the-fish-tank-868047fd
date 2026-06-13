@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { slugify } from "@/lib/ops";
-import { classifyCoralType } from "@/lib/coral-type";
+import { classifyCoralType, CORAL_TYPES } from "@/lib/coral-type";
 
 // ---------- guards (mirrors ops.functions.ts) ----------
 async function isAdmin(supabase: any, userId: string) {
@@ -891,4 +891,47 @@ export const getVendorFeed = createServerFn({ method: "POST" })
         sold: gone?.length ?? 0,
       },
     };
+  });
+
+// ---------- coral-type watchlist (shop-wide) ----------
+const CORAL_TYPE_SLUGS = new Set(CORAL_TYPES.map((t) => t.slug));
+
+export const listTrackedCoralTypes = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireEditor(context.supabase, context.userId);
+    // `as any`: tracked_coral_types may not be in the generated types yet.
+    const { data, error } = await (context.supabase as any)
+      .from("tracked_coral_types")
+      .select("coral_type");
+    if (error) throw new Error(error.message);
+    return { types: (data ?? []).map((r: any) => r.coral_type as string) };
+  });
+
+export const setTrackedCoralType = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        coralType: z.string().refine((s) => CORAL_TYPE_SLUGS.has(s), "Unknown coral type"),
+        tracked: z.boolean(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await requireEditor(context.supabase, context.userId);
+    const db = context.supabase as any;
+    if (data.tracked) {
+      const { error } = await db
+        .from("tracked_coral_types")
+        .upsert({ coral_type: data.coralType, created_by: context.userId }, { onConflict: "coral_type" });
+      if (error) throw new Error(error.message);
+    } else {
+      const { error } = await db
+        .from("tracked_coral_types")
+        .delete()
+        .eq("coral_type", data.coralType);
+      if (error) throw new Error(error.message);
+    }
+    return { ok: true };
   });

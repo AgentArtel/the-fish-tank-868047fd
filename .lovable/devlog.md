@@ -1044,3 +1044,15 @@ Hand-off `.lovable/handoff-vendor-watch-watchlist.md` — one small `tracked_cor
 table (shop-wide) to back the "track a type across all vendors" watchlist. Once it
 ships I add the ★ Watchlist filter + track/untrack. `coral_type` column deferred
 (on-the-fly classification covers it for now).
+
+---
+## 2026-06-13 — Vendor Watch: coral-type watchlist (Phase 2) (Claude Code)
+
+On Lovable's `tracked_coral_types` table:
+- Server fns `listTrackedCoralTypes` / `setTrackedCoralType(type, tracked)`
+  (editor-gated; slug validated against the classifier). Cast to `any` since the
+  table isn't in generated types yet.
+- Feed UI: **★ Watchlist** toggle (show only tracked types), a **Track {Type}**
+  button when a coral type is selected, and a ★ highlight on tracked-type rows.
+  Shop-wide list (any editor manages it). One-click "show me new acros/chalices
+  anywhere" — the base for loud alerts (SMS/push) later.

@@ -25,7 +25,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { listScrapeSources, createScrapeSource, getVendorFeed } from "@/lib/scrape.functions";
+import {
+  listScrapeSources,
+  createScrapeSource,
+  getVendorFeed,
+  listTrackedCoralTypes,
+  setTrackedCoralType,
+} from "@/lib/scrape.functions";
 import { CORAL_TYPES, coralTypeLabel } from "@/lib/coral-type";
 import {
   Globe,
@@ -38,6 +44,7 @@ import {
   Tag,
   Archive,
   ExternalLink,
+  Star,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_app/vendor-watch/")({
@@ -293,22 +300,46 @@ function SourcesTab() {
 
 function FeedTab() {
   const feedFn = useServerFn(getVendorFeed);
+  const trackedFn = useServerFn(listTrackedCoralTypes);
+  const setTrackedFn = useServerFn(setTrackedCoralType);
+  const qc = useQueryClient();
   const [filter, setFilter] = useState<"all" | FeedType>("all");
   const [coral, setCoral] = useState<string>("all");
+  const [watchlistOnly, setWatchlistOnly] = useState(false);
   const { data, isLoading } = useQuery({
     queryKey: ["vendor-feed", 14],
     queryFn: () => feedFn({ data: { days: 14 } }),
   });
+  const { data: trackedData } = useQuery({
+    queryKey: ["tracked-coral-types"],
+    queryFn: () => trackedFn(),
+  });
+  const tracked = new Set(trackedData?.types ?? []);
+
   const allEvents = data?.events ?? [];
   const events = allEvents.filter(
     (e: any) =>
       (filter === "all" || e.type === filter) &&
-      (coral === "all" || (coral === "other" ? !e.coralType : e.coralType === coral)),
+      (coral === "all" || (coral === "other" ? !e.coralType : e.coralType === coral)) &&
+      (!watchlistOnly || (e.coralType && tracked.has(e.coralType))),
   );
   const counts = data?.counts;
   // Only offer coral-type options that actually appear in the feed.
   const coralOptions = CORAL_TYPES.filter((ct) => allEvents.some((e: any) => e.coralType === ct.slug));
   const hasOther = allEvents.some((e: any) => !e.coralType);
+
+  const toggleTrack = async (slug: string) => {
+    const isTracked = tracked.has(slug);
+    try {
+      await setTrackedFn({ data: { coralType: slug, tracked: !isTracked } });
+      qc.invalidateQueries({ queryKey: ["tracked-coral-types"] });
+      toast.success(
+        isTracked ? `Untracked ${coralTypeLabel(slug)}` : `Tracking ${coralTypeLabel(slug)} — you'll see it in your watchlist`,
+      );
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to update watchlist");
+    }
+  };
 
   const chip = (key: "all" | FeedType, label: string, n?: number) => (
     <button
@@ -331,6 +362,19 @@ function FeedTab() {
         {chip("price_drop", "Price drops", counts?.price_drop)}
         {chip("on_sale", "On sale", counts?.on_sale)}
         {chip("sold", "Sold / gone", counts?.sold)}
+        <button
+          type="button"
+          onClick={() => setWatchlistOnly((v) => !v)}
+          className={`px-2.5 py-1 rounded-full text-xs border inline-flex items-center gap-1 transition-colors ${
+            watchlistOnly
+              ? "bg-amber-500 text-white border-amber-500"
+              : "bg-background hover:bg-muted"
+          }`}
+          title="Show only your tracked coral types"
+        >
+          <Star className={`w-3 h-3 ${watchlistOnly ? "fill-white" : ""}`} />
+          Watchlist{tracked.size > 0 ? ` ${tracked.size}` : ""}
+        </button>
         {(coralOptions.length > 0 || hasOther) && (
           <Select value={coral} onValueChange={setCoral}>
             <SelectTrigger className="h-7 w-36 text-xs">
@@ -346,6 +390,19 @@ function FeedTab() {
               {hasOther && <SelectItem value="other">Other</SelectItem>}
             </SelectContent>
           </Select>
+        )}
+        {coral !== "all" && coral !== "other" && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => toggleTrack(coral)}
+          >
+            <Star
+              className={`w-3.5 h-3.5 mr-1 ${tracked.has(coral) ? "fill-amber-400 text-amber-400" : ""}`}
+            />
+            {tracked.has(coral) ? "Tracking" : `Track ${coralTypeLabel(coral)}`}
+          </Button>
         )}
         <span className="text-xs text-muted-foreground self-center ml-auto">last 14 days</span>
       </div>
@@ -385,7 +442,13 @@ function FeedTab() {
                   </Badge>
                   <span className="text-xs text-muted-foreground">{e.vendorName}</span>
                   {e.coralType && (
-                    <Badge variant="outline" className="text-[10px]">
+                    <Badge
+                      variant="outline"
+                      className={`text-[10px] ${tracked.has(e.coralType) ? "border-amber-400 text-amber-700 dark:text-amber-300" : ""}`}
+                    >
+                      {tracked.has(e.coralType) && (
+                        <Star className="w-2.5 h-2.5 mr-0.5 fill-amber-400 text-amber-400" />
+                      )}
                       {coralTypeLabel(e.coralType)}
                     </Badge>
                   )}
