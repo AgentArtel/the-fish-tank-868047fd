@@ -59,6 +59,7 @@ function ScrapeSourceDetail() {
   const qc = useQueryClient();
   const getFn = useServerFn(getScrapeSource);
   const refreshFn = useServerFn(refreshScrapeSource);
+  const progressFn = useServerFn(getScrapeProgress);
   const setStatusFn = useServerFn(setScrapeItemStatus);
   const updateFn = useServerFn(updateScrapeSource);
   const [savingCfg, setSavingCfg] = useState(false);
