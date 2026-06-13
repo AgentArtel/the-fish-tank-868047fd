@@ -1014,3 +1014,17 @@ real one, with loading flicker while navigating. Two root causes, both fixed
    `router.invalidate()` + `qc.invalidateQueries()` (ALL queries) on
    INITIAL_SESSION (every load) and TOKEN_REFRESHED (periodic) → refetch storms /
    flashing. Now only reacts to SIGNED_IN / SIGNED_OUT and invalidates just `["me"]`.
+
+---
+## 2026-06-13 — Parked idea: Firecrawl Monitoring (explore later)
+
+Firecrawl shipped a **Monitoring / changeTracking** feature: it re-checks a URL on
+*its own* schedule (configurable, ~60-min minimum) and webhooks us **only when the
+page changes**, with a full diff payload. Could replace our `pg_cron` trigger and
+cut alert latency (catch drops within ~an hour vs daily/weekly), only scraping on
+real change. Trade-offs: **charges ~1 credit per check** (not per change), and a
+monitor watches one URL (products.json paginates → monitor page-1, webhook → full
+scrape). NOT true website push — still managed polling. **Parked** per boss; revisit
+for the high-value WYSIWYG sources (WWC, Furnace) on the Firecrawl Team plan.
+Seed status: WWC + Top Shelf returning listings; **Rubio's empty** (password-walled
+wholesale → needs the authenticated tier).
