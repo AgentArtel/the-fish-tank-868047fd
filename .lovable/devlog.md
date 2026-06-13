@@ -979,3 +979,22 @@ rule).
 
 No migration. Coral-type classification + watchlist is the next step (Lovable
 schema hand-off).
+
+---
+## 2026-06-13 — Vendor Watch: seed 3 vendors hand-off (Claude Code research)
+
+Researched 4 vendor URLs from the boss (can't fetch from the sandbox — all
+datacenter-bot-blocked like Furnace; platform calls from web research):
+- **World Wide Corals** — Shopify ✅. `…/collections/wysiwyg/products.json`.
+- **SoFlo Rubio's Corals** — Shopify (`…myshopify.com`), wholesale; may be
+  password-walled.
+- **Top Shelf Aquatics** — mixed Shopify/Woo signals; verify on refresh.
+- **Quality Marine** — login-walled B2B, no public products.json → NOT seeded
+  (stays on the invoice-parser path).
+
+Hand-off `.lovable/handoff-vendor-watch-seed-vendors.md` — idempotent seed
+migration (vendors + sources), all `prefer_firecrawl=true` (datacenter-blocked),
+`auth_method='none'` (try public first). Designed so authenticated scraping is an
+additive extension (Vault creds + auth_method + runScrapeForSource wiring) with no
+re-seed. Boss refreshes each after it ships and reports which need auth / aren't
+Shopify.
