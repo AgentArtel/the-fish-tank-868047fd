@@ -78,6 +78,15 @@ function ScrapeSourceDetail() {
     queryFn: () => getFn({ data: { sourceId, statusFilter } }),
   });
 
+  // Live progress poll: only runs while a refresh is in-flight.
+  const { data: progress } = useQuery({
+    queryKey: ["scrape-progress", sourceId],
+    queryFn: () => progressFn({ data: { sourceId } }),
+    enabled: refreshing,
+    refetchInterval: refreshing ? 2000 : false,
+    refetchOnWindowFocus: false,
+  });
+
   // Generate signed URLs for thumbnails (private bucket)
   useMemo(() => {
     const items = data?.items ?? [];
