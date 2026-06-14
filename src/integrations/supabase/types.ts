@@ -320,6 +320,7 @@ export type Database = {
           marketing_consent: boolean
           notes: string | null
           phone: string | null
+          reef_club_enrolled_at: string | null
           updated_at: string
         }
         Insert: {
@@ -335,6 +336,7 @@ export type Database = {
           marketing_consent?: boolean
           notes?: string | null
           phone?: string | null
+          reef_club_enrolled_at?: string | null
           updated_at?: string
         }
         Update: {
@@ -350,6 +352,7 @@ export type Database = {
           marketing_consent?: boolean
           notes?: string | null
           phone?: string | null
+          reef_club_enrolled_at?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -682,6 +685,84 @@ export type Database = {
             columns: ["inventory_item_id"]
             isOneToOne: false
             referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      loyalty_config: {
+        Row: {
+          earn_percent: number
+          enabled: boolean
+          id: boolean
+          tiers: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          earn_percent?: number
+          enabled?: boolean
+          id?: boolean
+          tiers?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          earn_percent?: number
+          enabled?: boolean
+          id?: boolean
+          tiers?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      loyalty_ledger: {
+        Row: {
+          amount_cents: number
+          channel: string | null
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          id: string
+          kind: string
+          reason: string | null
+          sale_event_id: string | null
+        }
+        Insert: {
+          amount_cents: number
+          channel?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_id: string
+          id?: string
+          kind: string
+          reason?: string | null
+          sale_event_id?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          channel?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string
+          id?: string
+          kind?: string
+          reason?: string | null
+          sale_event_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loyalty_ledger_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loyalty_ledger_sale_event_id_fkey"
+            columns: ["sale_event_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_sale_events"
             referencedColumns: ["id"]
           },
         ]
