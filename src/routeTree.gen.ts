@@ -18,6 +18,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppVendorsRouteImport } from './routes/_app/vendors'
 import { Route as AppTasksRouteImport } from './routes/_app/tasks'
 import { Route as AppStoreLocationsRouteImport } from './routes/_app/store-locations'
+import { Route as AppReportsRouteImport } from './routes/_app/reports'
 import { Route as AppPublishingRouteImport } from './routes/_app/publishing'
 import { Route as AppProductsRouteImport } from './routes/_app/products'
 import { Route as AppPricingApprovalRouteImport } from './routes/_app/pricing-approval'
@@ -87,6 +88,11 @@ const AppTasksRoute = AppTasksRouteImport.update({
 const AppStoreLocationsRoute = AppStoreLocationsRouteImport.update({
   id: '/store-locations',
   path: '/store-locations',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppReportsRoute = AppReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
   getParentRoute: () => AppRoute,
 } as any)
 const AppPublishingRoute = AppPublishingRouteImport.update({
@@ -238,6 +244,7 @@ export interface FileRoutesByFullPath {
   '/pricing-approval': typeof AppPricingApprovalRoute
   '/products': typeof AppProductsRoute
   '/publishing': typeof AppPublishingRoute
+  '/reports': typeof AppReportsRoute
   '/store-locations': typeof AppStoreLocationsRoute
   '/tasks': typeof AppTasksRoute
   '/vendors': typeof AppVendorsRoute
@@ -272,6 +279,7 @@ export interface FileRoutesByTo {
   '/pricing-approval': typeof AppPricingApprovalRoute
   '/products': typeof AppProductsRoute
   '/publishing': typeof AppPublishingRoute
+  '/reports': typeof AppReportsRoute
   '/store-locations': typeof AppStoreLocationsRoute
   '/tasks': typeof AppTasksRoute
   '/vendors': typeof AppVendorsRoute
@@ -310,6 +318,7 @@ export interface FileRoutesById {
   '/_app/pricing-approval': typeof AppPricingApprovalRoute
   '/_app/products': typeof AppProductsRoute
   '/_app/publishing': typeof AppPublishingRoute
+  '/_app/reports': typeof AppReportsRoute
   '/_app/store-locations': typeof AppStoreLocationsRoute
   '/_app/tasks': typeof AppTasksRoute
   '/_app/vendors': typeof AppVendorsRoute
@@ -348,6 +357,7 @@ export interface FileRouteTypes {
     | '/pricing-approval'
     | '/products'
     | '/publishing'
+    | '/reports'
     | '/store-locations'
     | '/tasks'
     | '/vendors'
@@ -382,6 +392,7 @@ export interface FileRouteTypes {
     | '/pricing-approval'
     | '/products'
     | '/publishing'
+    | '/reports'
     | '/store-locations'
     | '/tasks'
     | '/vendors'
@@ -419,6 +430,7 @@ export interface FileRouteTypes {
     | '/_app/pricing-approval'
     | '/_app/products'
     | '/_app/publishing'
+    | '/_app/reports'
     | '/_app/store-locations'
     | '/_app/tasks'
     | '/_app/vendors'
@@ -515,6 +527,13 @@ declare module '@tanstack/react-router' {
       path: '/store-locations'
       fullPath: '/store-locations'
       preLoaderRoute: typeof AppStoreLocationsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/reports': {
+      id: '/_app/reports'
+      path: '/reports'
+      fullPath: '/reports'
+      preLoaderRoute: typeof AppReportsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/publishing': {
@@ -744,6 +763,7 @@ interface AppRouteChildren {
   AppPricingApprovalRoute: typeof AppPricingApprovalRoute
   AppProductsRoute: typeof AppProductsRoute
   AppPublishingRoute: typeof AppPublishingRoute
+  AppReportsRoute: typeof AppReportsRoute
   AppStoreLocationsRoute: typeof AppStoreLocationsRoute
   AppTasksRoute: typeof AppTasksRoute
   AppVendorsRoute: typeof AppVendorsRoute
@@ -768,6 +788,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppPricingApprovalRoute: AppPricingApprovalRoute,
   AppProductsRoute: AppProductsRoute,
   AppPublishingRoute: AppPublishingRoute,
+  AppReportsRoute: AppReportsRoute,
   AppStoreLocationsRoute: AppStoreLocationsRoute,
   AppTasksRoute: AppTasksRoute,
   AppVendorsRoute: AppVendorsRoute,
