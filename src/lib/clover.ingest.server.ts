@@ -12,7 +12,7 @@
 // Used by the admin "Sync sales now" button (user-scoped client) and the
 // scheduled /api/public/hooks/clover-poll cron (service-role client).
 import { applyInventorySale } from "@/lib/ops.functions";
-import { cloverListRecentOrders } from "@/lib/clover.api";
+import { cloverListRecentOrders, requireCloverCreds } from "@/lib/clover.api";
 
 const DEFAULT_LOOKBACK_DAYS = 7;
 const OVERLAP_MS = 60 * 60 * 1000; // re-scan the last hour to catch late-edited orders
