@@ -1238,3 +1238,25 @@ sync is to **create the workspace items from Clover, linked**.
   failing even though import/sync worked.
 Build ✅ · tsc clean. Boss action: re-run **Import / re-sync** to create+link the 1258,
 then **Test connection** should pass.
+
+---
+## 2026-06-14 — Clover import: bulk + orphan-safe (fix timeout) (Claude Code)
+
+Boss re-ran import on prod → still 0 linked, "last import 30m ago" (timestamp never
+advanced) = the handler **timed out before finishing**. Cause: for the boss's case all
+1258 Clover items already had (unlinked) links, so the create-and-link code did ~1258
+**sequential one-by-one** clover_item_links updates → blew the function timeout. The
+earlier inserts had likely already created orphan inventory_items (created before the
+link step), compounding the risk of duplicates on retry.
+- Rewrote `importCloverCatalog` to be **fully bulk**: build all link rows and `upsert`
+  them (onConflict clover_item_id) in chunks of 500 — a handful of round-trips instead
+  of 1258.
+- **Orphan-safe / idempotent**: items are now matched back to Clover via
+  `attrs.clover_item_id` (new `invByCloverId` index), so a re-run — or a partial run
+  that created items but didn't finish linking — **re-links existing rows instead of
+  duplicating**. Created-batch links are upserted immediately after each insert so a
+  later failure can't orphan a completed batch.
+- New return shape: `{ fetched, created, relinked, autoLinked, updated, linkedNow,
+  stillUnlinked }`; toast updated to "N linked (X new, Y re-linked), Z refreshed".
+Build ✅ · tsc clean. Boss: re-run Import once — it'll re-link the orphans from the
+timed-out run and finish (no duplicate items).
