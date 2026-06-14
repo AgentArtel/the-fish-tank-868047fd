@@ -16,6 +16,23 @@ knowing regulars by name** — things online vendors can't copy. The program sho
 
 ---
 
+## 0.5 LOCKED DECISIONS (owner, 2026-06-14)
+- **Earn:** **5%** of qualifying spend → **Reef Credit** (store credit, tracked in cents), boosted by tier.
+- **Tiers:** **3 reef-themed tiers** (proposed: **Tide Pool → Reef Builder → Apex Reefer**; thresholds +
+  perks tunable in config — owner to finalize numbers).
+- **v1 build order:** **Reef Credit ledger + Tiers backbone first**; Reef Passport + Arrive-Alive next.
+- **⭐ Marquee redemption channel — LIVE SALE AUCTIONS.** The owner runs live coral auctions, which the
+  store controls end-to-end (not the Clover register). So **Reef Credit is redeemable against corals a
+  member wins at a live auction** — a redemption path with **no POS-integration seam at all**, and the
+  emotional centerpiece of the program ("earn credit → spend it on the coral you win live"). In-store
+  manual redemption (cashier lookup → manual discount) remains a secondary channel. Both are just
+  `redeem` ledger rows tagged with a `channel` — no extra schema.
+
+This single decision neutralizes the program's one hard problem (§2): the highest-engagement
+redemption channel is one we already own.
+
+---
+
 ## 1. Program identity: **The Reef Club**
 A free club a customer *joins* (the enrollment moment matters — it's the "I'm part of this" hook).
 Five pillars, each tied to a proven emotional driver:
@@ -89,6 +106,7 @@ CREATE TABLE public.loyalty_ledger (
   customer_id uuid NOT NULL REFERENCES public.customers(id) ON DELETE CASCADE,
   kind text NOT NULL CHECK (kind IN ('earn','redeem','doa','bonus','adjust','expire')),
   amount_cents integer NOT NULL,                     -- + earns, − redemptions
+  channel text,                                      -- 'live_sale' | 'in_store' | 'online' | null
   reason text,
   sale_event_id uuid REFERENCES public.inventory_sale_events(id) ON DELETE SET NULL,
   created_by uuid, created_at timestamptz NOT NULL DEFAULT now(),
