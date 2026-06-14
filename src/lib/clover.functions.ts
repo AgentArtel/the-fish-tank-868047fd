@@ -24,6 +24,11 @@ async function requireEditor(supabase: any, userId: string) {
   if (!ok) throw new Error("Forbidden: editor role required");
 }
 
+// Run a count-only (head) query and return the count.
+async function countRows(q: any): Promise<number> {
+  return (await q).count ?? 0;
+}
+
 // ---------- connection status + counts (editor) ----------
 export const getCloverOverview = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -130,18 +135,14 @@ export const testCloverConnection = createServerFn({ method: "POST" })
     return { merchant };
   });
 
-// ---------- import Clover catalog → inventory_items + clover_item_links (admin) ----------
-// Creates a workspace inventory item for every Clover item and links them, so the
-// whole catalog lands in the workspace ready to track. Created items are DRAFTS:
-// quantity 0 (the admin sets real stock during manual inventory), retail price =
-// the live Clover/POS price, and availability `not_for_sale` so nothing goes live
-// without the photo-on-file review (the DB trigger also enforces that).
-//
-// Fully bulk (no per-row round-trips — that timed out at ~1258 items) and
-// idempotent/orphan-safe: items are matched back to Clover by attrs.clover_item_id,
-// so a re-run (or a partial run that created items but didn't finish linking)
-// re-links the existing rows instead of creating duplicates. Re-running never
-// overwrites workspace retail — the workspace is the source of truth.
+// ---------- import Clover catalog → clover_item_links (admin) ----------
+// STEP 1 of the import. Fetches every Clover item and upserts the link rows ONLY
+// (no inventory item creation here). This is cheap — a few bulk upserts — so it
+// stays well inside the Cloudflare Worker request budget. Item creation is done
+// separately in small, browser-driven chunks (`createWorkspaceItemsFromClover`)
+// because creating ~1258 items in one request blows the Worker time limit and the
+// runtime kills it with no catchable error. Links carry the Clover name/price and
+// auto-link to a pre-existing workspace item (by Clover-id provenance or by name).
 export const importCloverCatalog = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -159,8 +160,8 @@ export const importCloverCatalog = createServerFn({ method: "POST" })
       (existingLinks ?? []).map((r: any) => [r.clover_item_id, r]),
     );
 
-    // Existing workspace items, indexed by Clover id (provenance, for orphan-safe
-    // re-link) and by name (so a hand-catalogued item links instead of duplicating).
+    // Pre-existing workspace items, indexed by Clover-id provenance and by name, so
+    // an item that already exists links instead of getting duplicated later.
     const { data: inv } = await db.from("inventory_items").select("id, item_name, attrs");
     const invByName = new Map<string, string>();
     const invByCloverId = new Map<string, string>();
@@ -171,103 +172,25 @@ export const importCloverCatalog = createServerFn({ method: "POST" })
       if (cid && !invByCloverId.has(cid)) invByCloverId.set(cid, it.id);
     }
 
-    // Build the full set of link rows to upsert (insert-or-update on clover_item_id),
-    // creating workspace items only for Clover items that don't have one yet.
     const linkRows: any[] = [];
-    const toCreate: (typeof items) = [];
-    let updated = 0; // already linked → refresh name/price
-    let autoLinked = 0; // linked to a pre-existing workspace item by name
-    let relinked = 0; // re-linked to an item created by an earlier (partial) run
-
-    const pushLink = (cloverId: string, invId: string | null, ci: any) =>
+    let alreadyLinked = 0;
+    for (const ci of items) {
+      const invId =
+        linkByClover.get(ci.id)?.inventory_item_id ??
+        invByCloverId.get(ci.id) ??
+        invByName.get(ci.name.trim().toLowerCase()) ??
+        null;
+      if (invId) alreadyLinked++;
       linkRows.push({
-        clover_item_id: cloverId,
+        clover_item_id: ci.id,
         inventory_item_id: invId,
         clover_name: ci.name,
         clover_price_cents: ci.priceCents,
         link_status: invId ? "linked" : "unlinked",
         last_synced_at: nowIso,
       });
-
-    for (const ci of items) {
-      const existingInvId = linkByClover.get(ci.id)?.inventory_item_id ?? null;
-      if (existingInvId) {
-        pushLink(ci.id, existingInvId, ci);
-        updated++;
-        continue;
-      }
-      const byClover = invByCloverId.get(ci.id);
-      if (byClover) {
-        pushLink(ci.id, byClover, ci);
-        relinked++;
-        continue;
-      }
-      const byName = invByName.get(ci.name.trim().toLowerCase());
-      if (byName) {
-        pushLink(ci.id, byName, ci);
-        autoLinked++;
-        continue;
-      }
-      toCreate.push(ci);
     }
 
-    // Bulk-create draft workspace items, then push their links. Link rows for each
-    // created batch are upserted immediately after creation so a later failure can't
-    // orphan an already-created batch (the next run re-links it via attrs).
-    let created = 0;
-    for (let i = 0; i < toCreate.length; i += 500) {
-      const chunk = toCreate.slice(i, i + 500);
-      const rows = chunk.map((ci) => {
-        const hasPrice = typeof ci.priceCents === "number";
-        return {
-          item_name: ci.name,
-          // Only tag corals we're confident about; everything else stays null for
-          // the admin to set during manual inventory (the classifier is conservative).
-          item_type: classifyCoralType(ci.name) ? "coral" : null,
-          quantity_received: 0,
-          quantity_available: 0,
-          wholesale_cost: null,
-          retail_price: hasPrice ? (ci.priceCents as number) / 100 : null,
-          // The Clover price is the real, live POS retail price (admin-run import).
-          pricing_status: hasPrice ? "approved" : "not_priced",
-          availability_status: "not_for_sale", // never auto-live; no photo yet
-          live_sale_status: "not_eligible",
-          needs_photo: true,
-          notes: "Imported from Clover POS",
-          attrs: { source: "clover", clover_item_id: ci.id },
-          created_by: context.userId,
-        };
-      });
-      const { data: createdRows, error } = await db
-        .from("inventory_items")
-        .insert(rows)
-        .select("id, attrs");
-      if (error) throw new Error(error.message);
-      const idByClover = new Map<string, string>();
-      for (const r of createdRows ?? []) {
-        const cid = (r.attrs as any)?.clover_item_id;
-        if (cid) idByClover.set(cid, r.id);
-      }
-      const batchLinks: any[] = [];
-      for (const ci of chunk) {
-        const invId = idByClover.get(ci.id) ?? null;
-        batchLinks.push({
-          clover_item_id: ci.id,
-          inventory_item_id: invId,
-          clover_name: ci.name,
-          clover_price_cents: ci.priceCents,
-          link_status: invId ? "linked" : "unlinked",
-          last_synced_at: nowIso,
-        });
-        if (invId) created++;
-      }
-      const { error: le } = await db
-        .from("clover_item_links")
-        .upsert(batchLinks, { onConflict: "clover_item_id" });
-      if (le) throw new Error(le.message);
-    }
-
-    // Upsert the rest (already-linked refresh + name/provenance matches) in bulk.
     for (let i = 0; i < linkRows.length; i += 500) {
       const { error } = await db
         .from("clover_item_links")
@@ -280,14 +203,126 @@ export const importCloverCatalog = createServerFn({ method: "POST" })
       .update({ connected: true, last_import_at: nowIso })
       .eq("id", true);
 
-    const linkedNow = created + relinked + autoLinked;
     return {
       fetched: items.length,
-      created, // brand-new workspace items created this run
-      relinked, // re-linked to items from an earlier (partial) run
-      autoLinked, // linked to a pre-existing workspace item by name
-      updated, // already-linked items refreshed
-      linkedNow,
-      stillUnlinked: toCreate.length - created,
+      alreadyLinked,
+      remainingToCreate: items.length - alreadyLinked,
+    };
+  });
+
+// ---------- create workspace items for unlinked Clover items (admin, CHUNKED) ----------
+// STEP 2 of the import, called repeatedly by the browser until `done`. Each call
+// processes up to `limit` still-unlinked links — small enough to finish inside the
+// Cloudflare Worker budget. Items are created as DRAFTS (qty 0, retail = Clover/POS
+// price, `not_for_sale` so nothing goes live without a photo; the admin sets real
+// stock during manual inventory). Idempotent + orphan-safe: a link whose item was
+// already created by a prior (possibly half-finished) call is re-linked via
+// attrs.clover_item_id rather than duplicated.
+export const createWorkspaceItemsFromClover = createServerFn({ method: "POST" })
+  .inputValidator((d: { limit?: number }) => ({
+    limit: Math.min(Math.max(Math.floor(d?.limit ?? 200), 1), 500),
+  }))
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ data, context }) => {
+    await requireAdmin(context.supabase, context.userId);
+    const db = context.supabase as any;
+    const nowIso = new Date().toISOString();
+
+    // Next slice of links that still have no workspace item.
+    const { data: pending } = await db
+      .from("clover_item_links")
+      .select("clover_item_id, clover_name, clover_price_cents")
+      .is("inventory_item_id", null)
+      .order("clover_item_id")
+      .limit(data.limit);
+    const batch = pending ?? [];
+
+    if (batch.length === 0) {
+      return { processed: 0, created: 0, relinked: 0, remaining: 0, done: true };
+    }
+
+    // Orphan-safety: some of these Clover items may already have an inventory item
+    // from an earlier interrupted run — re-link those instead of duplicating.
+    const cloverIds = batch.map((b: any) => b.clover_item_id);
+    const { data: orphans } = await db
+      .from("inventory_items")
+      .select("id, attrs")
+      .in("attrs->>clover_item_id", cloverIds);
+    const itemByClover = new Map<string, string>();
+    for (const it of orphans ?? []) {
+      const cid = (it.attrs as any)?.clover_item_id;
+      if (cid && !itemByClover.has(cid)) itemByClover.set(cid, it.id);
+    }
+
+    const toCreate = batch.filter((b: any) => !itemByClover.has(b.clover_item_id));
+    let created = 0;
+    if (toCreate.length) {
+      const rows = toCreate.map((b: any) => {
+        const hasPrice = typeof b.clover_price_cents === "number";
+        return {
+          item_name: b.clover_name ?? "(unnamed)",
+          item_type: classifyCoralType(b.clover_name ?? "") ? "coral" : null,
+          quantity_received: 0,
+          quantity_available: 0,
+          wholesale_cost: null,
+          retail_price: hasPrice ? b.clover_price_cents / 100 : null,
+          pricing_status: hasPrice ? "approved" : "not_priced",
+          availability_status: "not_for_sale",
+          live_sale_status: "not_eligible",
+          needs_photo: true,
+          notes: "Imported from Clover POS",
+          attrs: { source: "clover", clover_item_id: b.clover_item_id },
+          created_by: context.userId,
+        };
+      });
+      const { data: createdRows, error } = await db
+        .from("inventory_items")
+        .insert(rows)
+        .select("id, attrs");
+      if (error) throw new Error(error.message);
+      for (const r of createdRows ?? []) {
+        const cid = (r.attrs as any)?.clover_item_id;
+        if (cid) {
+          itemByClover.set(cid, r.id);
+          created++;
+        }
+      }
+    }
+
+    // Link every item in this batch (created + re-linked orphans).
+    const linkUpserts = batch
+      .map((b: any) => {
+        const invId = itemByClover.get(b.clover_item_id) ?? null;
+        if (!invId) return null;
+        return {
+          clover_item_id: b.clover_item_id,
+          inventory_item_id: invId,
+          clover_name: b.clover_name,
+          clover_price_cents: b.clover_price_cents,
+          link_status: "linked",
+          last_synced_at: nowIso,
+        };
+      })
+      .filter(Boolean);
+    if (linkUpserts.length) {
+      const { error } = await db
+        .from("clover_item_links")
+        .upsert(linkUpserts, { onConflict: "clover_item_id" });
+      if (error) throw new Error(error.message);
+    }
+
+    // Checkpoint progress on every chunk so a stop mid-import is never silent.
+    await db.from("clover_connection").update({ last_import_at: nowIso }).eq("id", true);
+
+    const remaining = await countRows(
+      db.from("clover_item_links").select("id", { count: "exact", head: true }).is("inventory_item_id", null),
+    );
+
+    return {
+      processed: batch.length,
+      created,
+      relinked: linkUpserts.length - created,
+      remaining,
+      done: remaining === 0,
     };
   });

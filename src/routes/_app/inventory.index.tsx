@@ -99,7 +99,7 @@ function InventoryPage() {
         .from("inventory_items")
         .select("*, store_locations(name,is_live_sale), vendors(name)")
         .order("updated_at", { ascending: false })
-        .limit(500);
+        .limit(2000);
       if (statusFilter !== "all") query = query.eq("availability_status", statusFilter as any);
       if (q) query = query.ilike("item_name", `%${q}%`);
       if (type) query = query.eq("item_type", type);
@@ -146,6 +146,7 @@ function InventoryPage() {
             ))}
           </SelectContent>
         </Select>
+        <span className="text-xs text-muted-foreground">{data?.length ?? 0} items</span>
         <div className="ml-auto flex gap-2">
           <Button asChild size="sm" variant="outline">
             <Link to="/inventory/missing-tags">
