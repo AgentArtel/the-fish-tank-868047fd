@@ -12,7 +12,7 @@
 // Used by the admin "Sync sales now" button (user-scoped client) and the
 // scheduled /api/public/hooks/clover-poll cron (service-role client).
 import { applyInventorySale } from "@/lib/ops.functions";
-import { cloverListRecentOrders } from "@/lib/clover.api";
+import { cloverListRecentOrders, requireCloverCreds } from "@/lib/clover.api";
 
 const DEFAULT_LOOKBACK_DAYS = 7;
 const OVERLAP_MS = 60 * 60 * 1000; // re-scan the last hour to catch late-edited orders
@@ -47,7 +47,8 @@ export async function ingestCloverSales(
       : runStart - DEFAULT_LOOKBACK_DAYS * 86_400_000;
   }
 
-  const orders = await cloverListRecentOrders(sinceMs);
+  const creds = await requireCloverCreds();
+  const orders = await cloverListRecentOrders(creds, sinceMs);
   const saleOrders = orders.filter((o) => o.paid); // completed sales only
 
   // clover item id → linked workspace inventory item id (null when unlinked)

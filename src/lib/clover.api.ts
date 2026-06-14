@@ -1,31 +1,57 @@
-// Clover REST API client (server-only — reads credentials from env). Money is in
-// cents throughout. Used by the Clover import + (later) the sale-ingest poll.
-// Configured via CLOVER_API_TOKEN / CLOVER_MERCHANT_ID / CLOVER_BASE_URL.
+// Clover REST API client (server-only). Credentials are loaded from the
+// admin-only `clover_credentials` table at call time and passed in here —
+// nothing is read from process.env so admins can rotate creds via the UI.
+// Money is in cents throughout.
 
-function cfg() {
-  const token = process.env.CLOVER_API_TOKEN;
-  const mid = process.env.CLOVER_MERCHANT_ID;
-  const base = process.env.CLOVER_BASE_URL || "https://api.clover.com";
-  if (!token || !mid) {
+export type CloverCreds = {
+  token: string;
+  merchantId: string;
+  baseUrl: string;
+};
+
+// Load creds via the service-role client. Caller MUST have already authorized
+// the request (admin or editor) before invoking this.
+export async function loadCloverCreds(): Promise<CloverCreds | null> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data } = await supabaseAdmin
+    .from("clover_credentials")
+    .select("api_token, merchant_id, base_url")
+    .maybeSingle();
+  const token = (data as any)?.api_token?.trim();
+  const merchantId = (data as any)?.merchant_id?.trim();
+  if (!token || !merchantId) return null;
+  return {
+    token,
+    merchantId,
+    baseUrl: ((data as any)?.base_url ?? "https://api.clover.com").replace(/\/$/, ""),
+  };
+}
+
+export async function requireCloverCreds(): Promise<CloverCreds> {
+  const c = await loadCloverCreds();
+  if (!c) {
     throw new Error(
-      "Clover not configured — set CLOVER_API_TOKEN and CLOVER_MERCHANT_ID in the app secrets.",
+      "Clover not configured — enter the API token and merchant ID under Settings → Clover.",
     );
   }
-  return { token, mid, base: base.replace(/\/$/, "") };
+  return c;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function cloverGet(path: string, params?: Record<string, string | number>): Promise<any> {
-  const { token, base } = cfg();
-  const url = new URL(`${base}${path}`);
+async function cloverGet(
+  creds: CloverCreds,
+  path: string,
+  params?: Record<string, string | number>,
+): Promise<any> {
+  const url = new URL(`${creds.baseUrl}${path}`);
   for (const [k, v] of Object.entries(params ?? {})) url.searchParams.set(k, String(v));
   for (let attempt = 0; attempt < 4; attempt++) {
     const res = await fetch(url.toString(), {
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      headers: { Authorization: `Bearer ${creds.token}`, Accept: "application/json" },
     });
     if (res.status === 429) {
-      await sleep(600 * (attempt + 1)); // rate limit (16 req/s) — back off
+      await sleep(600 * (attempt + 1));
       continue;
     }
     if (!res.ok) {
@@ -45,20 +71,19 @@ export type CloverItem = {
   hidden: boolean;
 };
 
-// Confirm the token/merchant work; returns the merchant name.
-export async function cloverTestConnection(): Promise<{ id: string; name: string }> {
-  const { mid } = cfg();
-  const j = await cloverGet(`/v3/merchants/${mid}`);
+export async function cloverTestConnection(creds: CloverCreds): Promise<{ id: string; name: string }> {
+  const j = await cloverGet(creds, `/v3/merchants/${creds.merchantId}`);
   return { id: j.id, name: j.name };
 }
 
-// Paginate all inventory items (limit 100/page).
-export async function cloverListItems(): Promise<CloverItem[]> {
-  const { mid } = cfg();
+export async function cloverListItems(creds: CloverCreds): Promise<CloverItem[]> {
   const out: CloverItem[] = [];
   let offset = 0;
   while (offset < 50_000) {
-    const j = await cloverGet(`/v3/merchants/${mid}/items`, { limit: 100, offset });
+    const j = await cloverGet(creds, `/v3/merchants/${creds.merchantId}/items`, {
+      limit: 100,
+      offset,
+    });
     const els: any[] = j.elements ?? [];
     for (const e of els) {
       out.push({
@@ -78,7 +103,7 @@ export async function cloverListItems(): Promise<CloverItem[]> {
 export type CloverLineItem = {
   id: string;
   name: string | null;
-  cloverItemId: string | null; // the catalog item this line refers to (null = ad-hoc/custom)
+  cloverItemId: string | null;
   priceCents: number | null;
   refunded: boolean;
 };
@@ -88,21 +113,18 @@ export type CloverOrder = {
   createdTime: number | null;
   modifiedTime: number | null;
   paymentId: string | null;
-  // A completed sale: has at least one payment, or Clover marked the order locked.
   paid: boolean;
   lineItems: CloverLineItem[];
 };
 
-// Pull orders modified at/after `sinceMs` (epoch ms), line items + payments
-// expanded. Clover splits a quantity of N into N separate line items, each with
-// its own globally-unique id — so one line item == one unit sold, which makes
-// per-line ingestion naturally idempotent (UNIQUE(order_id, line_item_id)).
-export async function cloverListRecentOrders(sinceMs: number): Promise<CloverOrder[]> {
-  const { mid } = cfg();
+export async function cloverListRecentOrders(
+  creds: CloverCreds,
+  sinceMs: number,
+): Promise<CloverOrder[]> {
   const out: CloverOrder[] = [];
   let offset = 0;
   while (offset < 50_000) {
-    const j = await cloverGet(`/v3/merchants/${mid}/orders`, {
+    const j = await cloverGet(creds, `/v3/merchants/${creds.merchantId}/orders`, {
       filter: `modifiedTime>=${sinceMs}`,
       expand: "lineItems,payments",
       limit: 100,
