@@ -13,6 +13,7 @@ import {
   getCloverOverview,
   testCloverConnection,
   importCloverCatalog,
+  createWorkspaceItemsFromClover,
   syncCloverSales,
   getCloverSettings,
   saveCloverSettings,
@@ -48,11 +49,13 @@ function CloverSettings() {
   const overviewFn = useServerFn(getCloverOverview);
   const testFn = useServerFn(testCloverConnection);
   const importFn = useServerFn(importCloverCatalog);
+  const createItemsFn = useServerFn(createWorkspaceItemsFromClover);
   const syncSalesFn = useServerFn(syncCloverSales);
   const { data } = useQuery({ queryKey: ["clover-overview"], queryFn: () => overviewFn() });
 
   const [testing, setTesting] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [importStatus, setImportStatus] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
 
   const test = async () => {
@@ -70,16 +73,35 @@ function CloverSettings() {
 
   const runImport = async () => {
     setImporting(true);
+    setImportStatus("Syncing Clover catalog…");
     try {
+      // Step 1 — sync the link rows (cheap, one request).
       const r = await importFn();
+      // Step 2 — create the workspace items in small chunks the Worker can finish,
+      // looping from the browser until nothing is left to create.
+      let createdTotal = 0;
+      let guard = 0;
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const c = await createItemsFn({ data: { limit: 200 } });
+        createdTotal += c.created + c.relinked;
+        setImportStatus(
+          `Creating workspace items… ${createdTotal} linked, ${c.remaining} to go`,
+        );
+        qc.invalidateQueries({ queryKey: ["clover-overview"] });
+        if (c.done || c.processed === 0) break;
+        if (++guard > 100) break; // safety: never loop forever
+      }
       toast.success(
-        `Imported ${r.fetched} Clover items — ${r.linkedNow} linked (${r.created} new${r.relinked ? `, ${r.relinked} re-linked` : ""}), ${r.updated} refreshed`,
+        `Imported ${r.fetched} Clover items — ${createdTotal} created/linked this run`,
       );
       qc.invalidateQueries({ queryKey: ["clover-overview"] });
+      qc.invalidateQueries({ queryKey: ["inventory"] });
     } catch (e: any) {
       toast.error(e?.message ?? "Import failed");
     } finally {
       setImporting(false);
+      setImportStatus(null);
     }
   };
 
@@ -155,11 +177,15 @@ function CloverSettings() {
             )}
             Import / re-sync Clover catalog
           </Button>
+          {importStatus && (
+            <p className="text-xs text-primary mt-2 font-medium">{importStatus}</p>
+          )}
           <p className="text-xs text-muted-foreground mt-2">
             Pulls every Clover item and <span className="font-medium">creates a linked workspace
             item</span> for it (read-only against Clover). New items come in as drafts — quantity 0,
             priced from Clover, <span className="font-medium">not for sale</span> until you add a
-            photo. You set real stock counts during inventory. Re-run anytime to pick up Clover
+            photo. Items are created in small batches with a live count above, so it's safe even for
+            large catalogs — keep this tab open until it finishes. Re-run anytime to pick up Clover
             changes (already-linked items keep your workspace edits).
           </p>
         </div>

@@ -1260,3 +1260,30 @@ link step), compounding the risk of duplicates on retry.
   stillUnlinked }`; toast updated to "N linked (X new, Y re-linked), Z refreshed".
 Build ✅ · tsc clean. Boss: re-run Import once — it'll re-link the orphans from the
 timed-out run and finish (no duplicate items).
+
+---
+## 2026-06-14 — Clover import: chunked for Cloudflare Workers (root-cause fix) (Claude Code)
+
+Audit (`.lovable/audit-clover-import-visibility.md`) found the real cause the bulk
+rewrite couldn't fix: **the app runs on Cloudflare Workers** (tight per-request CPU/time
+budget). Creating ~1258 inventory_items in one request (each insert also firing the
+`log_inventory_activity` AFTER-INSERT trigger) exceeds the budget; the runtime **kills
+the Worker with no catchable error** → no toast, `last_import_at` never advances, 0
+linked. Also: Stock page hard-capped at `.limit(500)`.
+- Split the import into two Worker-safe steps:
+  - `importCloverCatalog` → STEP 1: fetch Clover + upsert `clover_item_links` ONLY
+    (cheap; auto-links to existing items by clover-id provenance / name). Returns
+    `{ fetched, alreadyLinked, remainingToCreate }`.
+  - `createWorkspaceItemsFromClover({ limit })` → STEP 2: creates up to `limit` (default
+    200) draft items for still-unlinked links, links them, **checkpoints last_import_at
+    every chunk**, returns `{ processed, created, relinked, remaining, done }`.
+    Orphan-safe via `attrs->>clover_item_id` (re-links items from an earlier half-run
+    instead of duplicating).
+- `settings.clover.tsx`: import now runs step 1 then **loops step 2 from the browser**
+  with a live "Creating… N linked, M to go" status, invalidating caches each pass.
+- Stock page `.limit(500)` → `2000` + an items count, so the full catalog is visible.
+Build ✅ · tsc clean. Boss: re-run Import — watch the live progress; it can't time out
+silently now (each chunk is small + checkpointed).
+
+(Also landed: agent-authored scope docs — scope-sales-analytics, scope-customer-profiles,
+scope-loyalty-program — for the visualization/customers/loyalty vision.)
