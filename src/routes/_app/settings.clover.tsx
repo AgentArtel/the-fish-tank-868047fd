@@ -1,16 +1,21 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useMe } from "@/hooks/use-me";
 import {
   getCloverOverview,
   testCloverConnection,
   importCloverCatalog,
   syncCloverSales,
+  getCloverSettings,
+  saveCloverSettings,
 } from "@/lib/clover.functions";
 import {
   Loader2,
@@ -19,6 +24,8 @@ import {
   CheckCircle2,
   AlertTriangle,
   RefreshCw,
+  Save,
+  KeyRound,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_app/settings/clover")({ component: CloverSettings });
@@ -35,11 +42,15 @@ function fmtRel(iso: string | null | undefined) {
 
 function CloverSettings() {
   const qc = useQueryClient();
+  const me = useMe();
+  const isAdmin = (me.data?.roles ?? []).includes("admin");
+
   const overviewFn = useServerFn(getCloverOverview);
   const testFn = useServerFn(testCloverConnection);
   const importFn = useServerFn(importCloverCatalog);
   const syncSalesFn = useServerFn(syncCloverSales);
   const { data } = useQuery({ queryKey: ["clover-overview"], queryFn: () => overviewFn() });
+
   const [testing, setTesting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -89,7 +100,7 @@ function CloverSettings() {
   };
 
   return (
-    <div className="p-6 md:p-8 max-w-3xl">
+    <div className="p-6 md:p-8 max-w-3xl space-y-6">
       <PageHeader
         title="Clover POS"
         description="Sync your Clover catalog and sales into the workspace. The workspace is the source of truth; Clover sales flow back here."
@@ -109,7 +120,9 @@ function CloverSettings() {
             <div className="text-xs text-muted-foreground">
               {data?.configured
                 ? `Last import ${fmtRel(data?.lastImportAt)}`
-                : "Set CLOVER_API_TOKEN / CLOVER_MERCHANT_ID in the app secrets to enable."}
+                : isAdmin
+                  ? "Enter your Clover API token and merchant ID below to enable."
+                  : "An admin needs to enter Clover API credentials below."}
             </div>
           </div>
           <Button variant="outline" size="sm" onClick={test} disabled={testing || !data?.configured}>
@@ -176,6 +189,118 @@ function CloverSettings() {
             them. Safe to re-run — already-recorded sales are skipped.
           </p>
         </div>
+      </div>
+
+      {isAdmin && <CloverApiSettingsCard onSaved={() => qc.invalidateQueries({ queryKey: ["clover-overview"] })} />}
+    </div>
+  );
+}
+
+function CloverApiSettingsCard({ onSaved }: { onSaved: () => void }) {
+  const getSettingsFn = useServerFn(getCloverSettings);
+  const saveSettingsFn = useServerFn(saveCloverSettings);
+  const qc = useQueryClient();
+  const { data: settings } = useQuery({
+    queryKey: ["clover-settings"],
+    queryFn: () => getSettingsFn(),
+  });
+
+  const [merchantId, setMerchantId] = useState("");
+  const [baseUrl, setBaseUrl] = useState("https://api.clover.com");
+  const [apiToken, setApiToken] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (settings) {
+      setMerchantId(settings.merchantId);
+      setBaseUrl(settings.baseUrl);
+    }
+  }, [settings]);
+
+  const save = async () => {
+    if (!merchantId.trim()) {
+      toast.error("Merchant ID is required");
+      return;
+    }
+    if (!settings?.hasToken && !apiToken.trim()) {
+      toast.error("API token is required on first save");
+      return;
+    }
+    setSaving(true);
+    try {
+      await saveSettingsFn({ data: { merchantId, baseUrl, apiToken } });
+      setApiToken("");
+      toast.success("Clover API settings saved");
+      qc.invalidateQueries({ queryKey: ["clover-settings"] });
+      onSaved();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border bg-card p-4 space-y-4">
+      <div className="flex items-center gap-2">
+        <KeyRound className="w-4 h-4 text-muted-foreground" />
+        <div className="flex-1">
+          <div className="font-medium text-sm">API credentials</div>
+          <div className="text-xs text-muted-foreground">
+            Admin-only. Stored encrypted at rest in your backend with admin-only access policies.
+          </div>
+        </div>
+        {settings?.hasToken && (
+          <Badge variant="outline" className="text-xs">
+            Token on file
+          </Badge>
+        )}
+      </div>
+
+      <div className="grid gap-3">
+        <div className="grid gap-1.5">
+          <Label htmlFor="clover-merchant">Merchant ID</Label>
+          <Input
+            id="clover-merchant"
+            value={merchantId}
+            onChange={(e) => setMerchantId(e.target.value)}
+            placeholder="e.g. A1B2C3D4E5F6G"
+          />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="clover-base">Base URL</Label>
+          <Input
+            id="clover-base"
+            value={baseUrl}
+            onChange={(e) => setBaseUrl(e.target.value)}
+            placeholder="https://api.clover.com"
+          />
+          <p className="text-xs text-muted-foreground">
+            Use <code>https://apisandbox.dev.clover.com</code> for sandbox / test credentials.
+          </p>
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="clover-token">API token</Label>
+          <Input
+            id="clover-token"
+            type="password"
+            value={apiToken}
+            onChange={(e) => setApiToken(e.target.value)}
+            placeholder={settings?.hasToken ? "•••••••• (leave blank to keep current)" : "Paste API token"}
+            autoComplete="new-password"
+          />
+          <p className="text-xs text-muted-foreground">
+            From Clover Dashboard → Setup → API Tokens. Needs read access to <em>Inventory</em> and{" "}
+            <em>Orders</em>.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex justify-end">
+        <Button onClick={save} disabled={saving} size="sm">
+          {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+          Save credentials
+        </Button>
       </div>
     </div>
   );
