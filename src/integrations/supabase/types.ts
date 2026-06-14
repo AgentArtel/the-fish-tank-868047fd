@@ -306,6 +306,54 @@ export type Database = {
           },
         ]
       }
+      customers: {
+        Row: {
+          clover_customer_id: string | null
+          created_at: string
+          created_by: string | null
+          email: string | null
+          first_name: string | null
+          first_seen_at: string
+          id: string
+          last_name: string | null
+          last_seen_at: string | null
+          marketing_consent: boolean
+          notes: string | null
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          clover_customer_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          first_name?: string | null
+          first_seen_at?: string
+          id?: string
+          last_name?: string | null
+          last_seen_at?: string | null
+          marketing_consent?: boolean
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          clover_customer_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          first_name?: string | null
+          first_seen_at?: string
+          id?: string
+          last_name?: string | null
+          last_seen_at?: string | null
+          marketing_consent?: boolean
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       inventory_activity_logs: {
         Row: {
           action: Database["public"]["Enums"]["inventory_activity_action"]
@@ -571,6 +619,7 @@ export type Database = {
           clover_payment_id: string | null
           created_at: string
           created_by: string | null
+          customer_id: string | null
           id: string
           inventory_item_id: string | null
           kind: string
@@ -589,6 +638,7 @@ export type Database = {
           clover_payment_id?: string | null
           created_at?: string
           created_by?: string | null
+          customer_id?: string | null
           id?: string
           inventory_item_id?: string | null
           kind?: string
@@ -607,6 +657,7 @@ export type Database = {
           clover_payment_id?: string | null
           created_at?: string
           created_by?: string | null
+          customer_id?: string | null
           id?: string
           inventory_item_id?: string | null
           kind?: string
@@ -619,6 +670,13 @@ export type Database = {
           unit_price_cents?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "inventory_sale_events_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "inventory_sale_events_inventory_item_id_fkey"
             columns: ["inventory_item_id"]
