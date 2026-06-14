@@ -72,8 +72,18 @@ export type CloverItem = {
 };
 
 export async function cloverTestConnection(creds: CloverCreds): Promise<{ id: string; name: string }> {
-  const j = await cloverGet(creds, `/v3/merchants/${creds.merchantId}`);
-  return { id: j.id, name: j.name };
+  try {
+    const j = await cloverGet(creds, `/v3/merchants/${creds.merchantId}`);
+    return { id: j.id, name: j.name };
+  } catch (e: any) {
+    // Some Clover API tokens carry Inventory + Orders read scope but NOT
+    // merchant-info read — so /merchants/{mid} 401s even though the creds are
+    // valid for everything we actually use. Fall back to an endpoint we rely on
+    // (items); if that works, the connection is good.
+    if (!/HTTP 401|HTTP 403/.test(e?.message ?? "")) throw e;
+    await cloverGet(creds, `/v3/merchants/${creds.merchantId}/items`, { limit: 1 });
+    return { id: creds.merchantId, name: `merchant ${creds.merchantId}` };
+  }
 }
 
 export async function cloverListItems(creds: CloverCreds): Promise<CloverItem[]> {
