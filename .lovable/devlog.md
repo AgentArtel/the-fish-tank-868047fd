@@ -1322,3 +1322,26 @@ On Lovable's `customers` table + `inventory_sale_events.customer_id` FK.
   (purchase-history timeline, lifetime spend, contact). New `customers.functions.ts` (requireEditor,
   JS aggregation). Nav: "Customers" under Inventory.
 Build ✅ · tsc clean. This is the keystone for loyalty next.
+
+---
+## 2026-06-14 — Reef Club loyalty v1 backbone (Claude Code)
+
+On Lovable's `loyalty_config` + `loyalty_ledger` tables + `customers.reef_club_enrolled_at`
+(handoff-loyalty-migration.md, applied with full RLS). Owner-locked decisions: 5% earn, 3 reef
+tiers, **live-sale auctions as the controlled redemption channel** (no POS seam).
+- **Earn-on-sync**: `applyInventorySale` now returns the sale-event id and, when loyalty is enabled
+  + the sale is linked to a customer, writes an `earn` row to `loyalty_ledger`. Idempotent via the
+  ledger's `UNIQUE(sale_event_id, kind)` — re-syncs never double-credit. Config is read once per
+  batch in `clover.ingest.server.ts` and passed in (no per-line read). Manual `logInventorySale`
+  has no customer attribution, so it doesn't earn (nothing to credit).
+- **New libs**: `loyalty.ts` (pure: tiers, earn math, Reef Passport badges via `classifyCoralType`),
+  `loyalty.server.ts` (`loadLoyaltyConfig`), `loyalty.functions.ts` (server fns: getLoyaltyConfig
+  [editor], saveLoyaltyConfig [admin], getCustomerLoyalty [editor], recordLoyaltyEntry [admin]).
+- **Reef Club card** on `/customers/$id`: balance, tier + progress to next tier, perks, Reef Passport
+  coral-type badges, ledger activity. Admin inline form: add credit / record redemption (channel =
+  live_sale / in_store / online) / Arrive-Alive credit / adjustment; over-redemption is blocked.
+- **Settings → Reef Club** (`settings.loyalty.tsx`, admin-only nav, Waves icon): enable toggle, earn
+  %, tiers JSON editor (server normalizes). Defaults seeded disabled — flip on when ready.
+- **Invariants honored**: AI never touches this; tier/badges are derived (zero new storage beyond the
+  ledger); all server fns check is_active + role. New settings nav item flagged for sign-off.
+Build ✅ · tsc clean · prettier clean. (Lint `no-explicit-any` matches house style across the repo.)

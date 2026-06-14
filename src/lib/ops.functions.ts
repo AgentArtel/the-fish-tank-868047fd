@@ -1303,9 +1303,13 @@ export const parseTagPhoto = createServerFn({ method: "POST" })
             scientific_name: { type: "string" },
             vendor_item_code: {
               type: "string",
-              description: "Vendor SKU / item code printed on the bag/tag, e.g. Quality Marine or SDC code. Omit if not clearly visible.",
+              description:
+                "Vendor SKU / item code printed on the bag/tag, e.g. Quality Marine or SDC code. Omit if not clearly visible.",
             },
-            size: { type: "string", description: "Size grade if shown (S/M/L, 'Sm', '2-3\"', etc.)" },
+            size: {
+              type: "string",
+              description: "Size grade if shown (S/M/L, 'Sm', '2-3\"', etc.)",
+            },
             item_type: {
               type: "string",
               enum: ["fish", "coral", "invert", "dry_good", "live_rock", "equipment", "other"],
@@ -2217,6 +2221,9 @@ export async function applyInventorySale(
     cloverRefs?: { orderId?: string; lineItemId?: string; paymentId?: string; itemName?: string };
     customerId?: string | null;
     userId?: string;
+    // Reef Club earn config, passed in by the caller (read once per sync batch).
+    // null/omitted = loyalty off; no earn row is written.
+    loyalty?: { earnPercent: number } | null;
   },
 ) {
   const { data: item, error } = await supabase
@@ -2233,23 +2240,56 @@ export async function applyInventorySale(
   const stockMode = (item.attrs as any)?.stock_mode ?? null;
   const isColony = item.item_type === "coral" && stockMode === "colony";
 
-  const { error: le } = await supabase.from("inventory_sale_events").insert({
-    inventory_item_id: opts.inventoryItemId,
-    qty: opts.qty,
-    unit_price_cents: unit,
-    total_cents: unit != null ? Math.round(unit * opts.qty) : null,
-    source,
-    kind,
-    // refunds/voids land in the review queue (no auto-reverse, per decision)
-    status: kind === "sale" ? "applied" : "needs_review",
-    clover_order_id: opts.cloverRefs?.orderId ?? null,
-    clover_line_item_id: opts.cloverRefs?.lineItemId ?? null,
-    clover_payment_id: opts.cloverRefs?.paymentId ?? null,
-    clover_item_name: opts.cloverRefs?.itemName ?? null,
-    customer_id: opts.customerId ?? null,
-    created_by: opts.userId ?? null,
-  });
+  const totalCents = unit != null ? Math.round(unit * opts.qty) : null;
+  const { data: saleRow, error: le } = await supabase
+    .from("inventory_sale_events")
+    .insert({
+      inventory_item_id: opts.inventoryItemId,
+      qty: opts.qty,
+      unit_price_cents: unit,
+      total_cents: totalCents,
+      source,
+      kind,
+      // refunds/voids land in the review queue (no auto-reverse, per decision)
+      status: kind === "sale" ? "applied" : "needs_review",
+      clover_order_id: opts.cloverRefs?.orderId ?? null,
+      clover_line_item_id: opts.cloverRefs?.lineItemId ?? null,
+      clover_payment_id: opts.cloverRefs?.paymentId ?? null,
+      clover_item_name: opts.cloverRefs?.itemName ?? null,
+      customer_id: opts.customerId ?? null,
+      created_by: opts.userId ?? null,
+    })
+    .select("id")
+    .single();
   if (le) throw new Error(le.message);
+
+  // Reef Club: earn store credit on a member's purchase. Only when loyalty is
+  // enabled, the sale is linked to a customer, and the line has a value. The
+  // ledger's UNIQUE (sale_event_id, kind) makes re-runs idempotent — a repeated
+  // sync that hits the duplicate is ignored, never double-credited.
+  if (
+    kind === "sale" &&
+    opts.customerId &&
+    opts.loyalty &&
+    opts.loyalty.earnPercent > 0 &&
+    totalCents &&
+    totalCents > 0
+  ) {
+    const earnCents = Math.round((totalCents * opts.loyalty.earnPercent) / 100);
+    if (earnCents > 0) {
+      const { error: ee } = await supabase.from("loyalty_ledger").insert({
+        customer_id: opts.customerId,
+        kind: "earn",
+        amount_cents: earnCents,
+        channel: "in_store",
+        reason: `${opts.loyalty.earnPercent}% Reef Credit on purchase`,
+        sale_event_id: saleRow.id,
+        created_by: opts.userId ?? null,
+      });
+      // A concurrent/overlapping sync may have already written this earn.
+      if (ee && !/duplicate key|unique/i.test(ee.message)) throw new Error(ee.message);
+    }
+  }
 
   if (kind === "sale" && !isColony) {
     const avail = Number(item.quantity_available ?? 0);
@@ -2267,7 +2307,7 @@ export async function applyInventorySale(
       .eq("id", opts.inventoryItemId);
     if (ue) throw new Error(ue.message);
   }
-  return { ok: true };
+  return { ok: true, saleEventId: saleRow.id as string };
 }
 
 // Manual "log a sale" (editor). Heads/frags + optional per-head price (cents).

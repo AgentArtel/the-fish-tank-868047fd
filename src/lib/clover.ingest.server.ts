@@ -56,7 +56,8 @@ export async function ingestCloverSales(
   // Capture the buyer where an order has one (most are anonymous walk-ins → null).
   // Upsert each distinct Clover customer once, then map order → workspace customer id.
   const distinctCustomers = new Map<string, any>();
-  for (const o of saleOrders) if (o.customer) distinctCustomers.set(o.customer.cloverId, o.customer);
+  for (const o of saleOrders)
+    if (o.customer) distinctCustomers.set(o.customer.cloverId, o.customer);
   const customersSeen = distinctCustomers.size;
   const customerIdByClover = new Map<string, string>();
   let customersUpserted = 0;
@@ -106,6 +107,12 @@ export async function ingestCloverSales(
     .select("clover_item_id, inventory_item_id");
   const invByClover = new Map<string, string | null>();
   for (const l of links ?? []) invByClover.set(l.clover_item_id, l.inventory_item_id ?? null);
+
+  // Reef Club: load loyalty config once for the whole batch. When enabled, each
+  // linked member sale earns store credit via applyInventorySale (idempotent).
+  const { loadLoyaltyConfig } = await import("@/lib/loyalty.server");
+  const loyaltyCfg = await loadLoyaltyConfig(db);
+  const loyalty = loyaltyCfg.enabled ? { earnPercent: loyaltyCfg.earnPercent } : null;
 
   // Dedupe up front: which line items are already recorded?
   const allLineIds = saleOrders.flatMap((o) => o.lineItems.map((li) => li.id));
@@ -159,6 +166,7 @@ export async function ingestCloverSales(
             cloverRefs: refs,
             customerId,
             userId: opts.userId,
+            loyalty,
           });
           applied++;
         } else {
