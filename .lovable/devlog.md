@@ -1287,3 +1287,20 @@ silently now (each chunk is small + checkpointed).
 
 (Also landed: agent-authored scope docs — scope-sales-analytics, scope-customer-profiles,
 scope-loyalty-program — for the visualization/customers/loyalty vision.)
+
+---
+## 2026-06-14 — Sales Reports dashboard v1 + customers migration handoff (Claude Code)
+
+Built both parallel tracks the owner picked.
+- **/reports route** (`reports.tsx` + `reports.functions.ts`): one `getSalesReport({days})`
+  server fn (single ledger+catalog read, aggregated in JS — Worker-friendly), rendered as KPI
+  strip (revenue / orders / AOV / units), revenue-over-time bars, top sellers (revenue, falls back
+  to clover_item_name for unlinked rows), sales by item type, embedded CoralSalesReport, and slow
+  movers (available + zero sales). Honest disclosure banner for unlinked/needs-review sales — totals
+  are complete, product breakdowns are partial until linking. CSS bars (no recharts) to stay safe in
+  the SSR path. Nav: "Reports" added under Today. Read-only insight (CLAUDE.md invariant); zero schema.
+- **Customer capture** handed to Lovable: `.lovable/handoff-customers-migration.md` — `customers`
+  table + nullable `inventory_sale_events.customer_id` FK + RLS (mirrors sale-event policies).
+  Safe to ship ahead of app code. Once live, Claude wires the ingest (expand=customers → upsert →
+  stamp customer_id) + the /customers UI. Per scope-customer-profiles.md.
+Build ✅ · tsc clean.

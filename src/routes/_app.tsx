@@ -38,6 +38,7 @@ import {
   Store,
   Waves,
   Globe,
+  BarChart3,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_app")({
@@ -69,6 +70,7 @@ const GROUPS: NavGroup[] = [
     label: "Today",
     items: [
       { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { to: "/reports", label: "Reports", icon: BarChart3 },
       { to: "/calendar", label: "Calendar", icon: Calendar },
       { to: "/tasks", label: "Tasks / SOPs", icon: ListChecks, soon: true },
     ],
