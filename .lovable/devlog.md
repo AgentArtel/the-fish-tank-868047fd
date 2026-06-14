@@ -1189,3 +1189,30 @@ On Lovable's clover tables + secrets. App-side, read-only against Clover:
   Import/re-sync catalog, link counts.
 Next: sale ingest (poll route → applyInventorySale), the mapping editor + unmatched
 queue, then Phase 2 push.
+
+---
+## 2026-06-13 — Clover Phase 1b: sale ingest (Claude Code)
+
+Clover sales now flow into the workspace. Read-only against Clover; the only
+writes are workspace-side (sale ledger + stock).
+- `clover.api.ts` — `cloverListRecentOrders(sinceMs)`: pulls orders modified since
+  a watermark, `expand=lineItems,payments`. Clover splits qty N into N line items
+  (each a unique id) → one line item = one unit, so per-line ingest is naturally
+  idempotent.
+- `clover.ingest.server.ts` (server-only) — `ingestCloverSales(db, {sinceMs?,userId?})`:
+  resumes from `clover_connection.last_sale_synced_at` (−1h overlap; 7d on first run),
+  dedupes against existing `clover_line_item_id`s, then per line item: **linked sale**
+  → `applyInventorySale` (decrement stock / log colony frag-off); **refund/void or
+  unmatched** → `inventory_sale_events` as `needs_review` (no stock change). Idempotent
+  via UNIQUE(order,line) + up-front dedupe; per-line try/catch so one bad row can't
+  abort the batch. Stamps `last_sale_synced_at`.
+- `clover.functions.ts` — `syncCloverSales` (admin, manual trigger); `getCloverOverview`
+  now also returns `salesNeedingReview`.
+- `/api/public/hooks/clover-poll` — service-role cron entry, bearer `SCRAPE_CRON_SECRET`
+  (shared cron token), runs the same ingest. **Cron not scheduled yet** — Lovable to
+  add the pg_cron job when we're ready.
+- `/settings/clover` — "Sync sales now" button + last-sale-sync time + "N sales need
+  review" badge.
+Domain decision honored: refunds/voids never auto-reverse — they're held for review.
+Next: mapping editor (hand-link unlinked items) + the unmatched/refund review queue UI,
+then Phase 2 (push workspace→Clover).

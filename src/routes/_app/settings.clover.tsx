@@ -10,8 +10,16 @@ import {
   getCloverOverview,
   testCloverConnection,
   importCloverCatalog,
+  syncCloverSales,
 } from "@/lib/clover.functions";
-import { Loader2, Plug, DownloadCloud, CheckCircle2, AlertTriangle } from "lucide-react";
+import {
+  Loader2,
+  Plug,
+  DownloadCloud,
+  CheckCircle2,
+  AlertTriangle,
+  RefreshCw,
+} from "lucide-react";
 
 export const Route = createFileRoute("/_app/settings/clover")({ component: CloverSettings });
 
@@ -30,9 +38,11 @@ function CloverSettings() {
   const overviewFn = useServerFn(getCloverOverview);
   const testFn = useServerFn(testCloverConnection);
   const importFn = useServerFn(importCloverCatalog);
+  const syncSalesFn = useServerFn(syncCloverSales);
   const { data } = useQuery({ queryKey: ["clover-overview"], queryFn: () => overviewFn() });
   const [testing, setTesting] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   const test = async () => {
     setTesting(true);
@@ -59,6 +69,22 @@ function CloverSettings() {
       toast.error(e?.message ?? "Import failed");
     } finally {
       setImporting(false);
+    }
+  };
+
+  const runSyncSales = async () => {
+    setSyncing(true);
+    try {
+      const r = await syncSalesFn();
+      toast.success(
+        `Synced ${r.lineItemsSeen} Clover line items — ${r.applied} applied to stock, ${r.needsReview} need review`,
+      );
+      if (r.errors.length) toast.warning(`${r.errors.length} line items errored — check logs`);
+      qc.invalidateQueries({ queryKey: ["clover-overview"] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Sale sync failed");
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -100,6 +126,11 @@ function CloverSettings() {
               {data?.unlinked} unlinked
             </Badge>
           )}
+          {(data?.salesNeedingReview ?? 0) > 0 && (
+            <Badge variant="outline" className="border-amber-400 text-amber-700 dark:text-amber-300">
+              {data?.salesNeedingReview} sales need review
+            </Badge>
+          )}
         </div>
 
         <div className="border-t pt-3">
@@ -115,6 +146,34 @@ function CloverSettings() {
             Pulls every Clover item and maps it to a workspace item by name (read-only — nothing is
             written to Clover). Items it can't match stay <span className="font-medium">unlinked</span>{" "}
             for you to map. Re-run anytime to pick up Clover changes.
+          </p>
+        </div>
+
+        <div className="border-t pt-3">
+          <div className="flex items-center justify-between gap-2">
+            <Button
+              onClick={runSyncSales}
+              disabled={syncing || !data?.configured}
+              size="sm"
+              variant="outline"
+            >
+              {syncing ? (
+                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4 mr-1" />
+              )}
+              Sync sales now
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              Last sale sync {fmtRel(data?.lastSaleSyncedAt)}
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            Pulls recent Clover orders and records each sale. Sales of{" "}
+            <span className="font-medium">linked</span> items decrement workspace stock; refunds,
+            voids, and sales of unmatched items are held as{" "}
+            <span className="font-medium">need review</span> (no stock change) until you reconcile
+            them. Safe to re-run — already-recorded sales are skipped.
           </p>
         </div>
       </div>

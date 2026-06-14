@@ -35,6 +35,13 @@ export const getCloverOverview = createServerFn({ method: "GET" })
     const linked = await count(
       db.from("clover_item_links").select("id", { count: "exact", head: true }).eq("link_status", "linked"),
     );
+    const salesNeedingReview = await count(
+      db
+        .from("inventory_sale_events")
+        .select("id", { count: "exact", head: true })
+        .eq("source", "clover")
+        .eq("status", "needs_review"),
+    );
     return {
       configured: !!process.env.CLOVER_MERCHANT_ID,
       connected: !!conn?.connected,
@@ -43,7 +50,19 @@ export const getCloverOverview = createServerFn({ method: "GET" })
       total,
       linked,
       unlinked: total - linked,
+      salesNeedingReview,
     };
+  });
+
+// ---------- pull recent Clover sales → inventory_sale_events (admin) ----------
+// Manual trigger for the same ingest the scheduled poll runs. Linked items
+// decrement stock; refunds/voids and unmatched items land in the review queue.
+export const syncCloverSales = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireAdmin(context.supabase, context.userId);
+    const { ingestCloverSales } = await import("@/lib/clover.ingest.server");
+    return await ingestCloverSales(context.supabase as any, { userId: context.userId });
   });
 
 // ---------- test the API token/merchant (admin) ----------

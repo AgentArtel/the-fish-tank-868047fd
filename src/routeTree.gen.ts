@@ -43,6 +43,7 @@ import { Route as AppContentNewRouteImport } from './routes/_app/content.new'
 import { Route as AppContentIdRouteImport } from './routes/_app/content.$id'
 import { Route as AppBatchesIdRouteImport } from './routes/_app/batches.$id'
 import { Route as ApiPublicHooksRefreshScrapeSourcesRouteImport } from './routes/api/public/hooks/refresh-scrape-sources'
+import { Route as ApiPublicHooksCloverPollRouteImport } from './routes/api/public/hooks/clover-poll'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -215,6 +216,12 @@ const ApiPublicHooksRefreshScrapeSourcesRoute =
     path: '/api/public/hooks/refresh-scrape-sources',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksCloverPollRoute =
+  ApiPublicHooksCloverPollRouteImport.update({
+    id: '/api/public/hooks/clover-poll',
+    path: '/api/public/hooks/clover-poll',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -249,6 +256,7 @@ export interface FileRoutesByFullPath {
   '/content/': typeof AppContentIndexRoute
   '/inventory/': typeof AppInventoryIndexRoute
   '/vendor-watch/': typeof AppVendorWatchIndexRoute
+  '/api/public/hooks/clover-poll': typeof ApiPublicHooksCloverPollRoute
   '/api/public/hooks/refresh-scrape-sources': typeof ApiPublicHooksRefreshScrapeSourcesRoute
 }
 export interface FileRoutesByTo {
@@ -282,6 +290,7 @@ export interface FileRoutesByTo {
   '/content': typeof AppContentIndexRoute
   '/inventory': typeof AppInventoryIndexRoute
   '/vendor-watch': typeof AppVendorWatchIndexRoute
+  '/api/public/hooks/clover-poll': typeof ApiPublicHooksCloverPollRoute
   '/api/public/hooks/refresh-scrape-sources': typeof ApiPublicHooksRefreshScrapeSourcesRoute
 }
 export interface FileRoutesById {
@@ -319,6 +328,7 @@ export interface FileRoutesById {
   '/_app/content/': typeof AppContentIndexRoute
   '/_app/inventory/': typeof AppInventoryIndexRoute
   '/_app/vendor-watch/': typeof AppVendorWatchIndexRoute
+  '/api/public/hooks/clover-poll': typeof ApiPublicHooksCloverPollRoute
   '/api/public/hooks/refresh-scrape-sources': typeof ApiPublicHooksRefreshScrapeSourcesRoute
 }
 export interface FileRouteTypes {
@@ -356,6 +366,7 @@ export interface FileRouteTypes {
     | '/content/'
     | '/inventory/'
     | '/vendor-watch/'
+    | '/api/public/hooks/clover-poll'
     | '/api/public/hooks/refresh-scrape-sources'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -389,6 +400,7 @@ export interface FileRouteTypes {
     | '/content'
     | '/inventory'
     | '/vendor-watch'
+    | '/api/public/hooks/clover-poll'
     | '/api/public/hooks/refresh-scrape-sources'
   id:
     | '__root__'
@@ -425,6 +437,7 @@ export interface FileRouteTypes {
     | '/_app/content/'
     | '/_app/inventory/'
     | '/_app/vendor-watch/'
+    | '/api/public/hooks/clover-poll'
     | '/api/public/hooks/refresh-scrape-sources'
   fileRoutesById: FileRoutesById
 }
@@ -435,6 +448,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   PendingApprovalRoute: typeof PendingApprovalRoute
   SignupRoute: typeof SignupRoute
+  ApiPublicHooksCloverPollRoute: typeof ApiPublicHooksCloverPollRoute
   ApiPublicHooksRefreshScrapeSourcesRoute: typeof ApiPublicHooksRefreshScrapeSourcesRoute
 }
 
@@ -678,6 +692,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksRefreshScrapeSourcesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/clover-poll': {
+      id: '/api/public/hooks/clover-poll'
+      path: '/api/public/hooks/clover-poll'
+      fullPath: '/api/public/hooks/clover-poll'
+      preLoaderRoute: typeof ApiPublicHooksCloverPollRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -770,6 +791,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   PendingApprovalRoute: PendingApprovalRoute,
   SignupRoute: SignupRoute,
+  ApiPublicHooksCloverPollRoute: ApiPublicHooksCloverPollRoute,
   ApiPublicHooksRefreshScrapeSourcesRoute:
     ApiPublicHooksRefreshScrapeSourcesRoute,
 }
