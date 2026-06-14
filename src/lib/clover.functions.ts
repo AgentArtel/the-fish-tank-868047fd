@@ -99,7 +99,7 @@ export const saveCloverSettings = createServerFn({ method: "POST" })
     }
     const { error } = await supabaseAdmin
       .from("clover_credentials")
-      .update(patch)
+      .update(patch as any)
       .eq("id", true);
     if (error) throw new Error(error.message);
     return { ok: true };
