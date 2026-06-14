@@ -156,9 +156,11 @@ function CloverSettings() {
             Import / re-sync Clover catalog
           </Button>
           <p className="text-xs text-muted-foreground mt-2">
-            Pulls every Clover item and maps it to a workspace item by name (read-only — nothing is
-            written to Clover). Items it can't match stay <span className="font-medium">unlinked</span>{" "}
-            for you to map. Re-run anytime to pick up Clover changes.
+            Pulls every Clover item and <span className="font-medium">creates a linked workspace
+            item</span> for it (read-only against Clover). New items come in as drafts — quantity 0,
+            priced from Clover, <span className="font-medium">not for sale</span> until you add a
+            photo. You set real stock counts during inventory. Re-run anytime to pick up Clover
+            changes (already-linked items keep your workspace edits).
           </p>
         </div>
 

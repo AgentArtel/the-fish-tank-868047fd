@@ -1216,3 +1216,25 @@ writes are workspace-side (sale ledger + stock).
 Domain decision honored: refunds/voids never auto-reverse — they're held for review.
 Next: mapping editor (hand-link unlinked items) + the unmatched/refund review queue UI,
 then Phase 2 (push workspace→Clover).
+
+---
+## 2026-06-14 — Clover import: create-and-link + test-connection fallback (Claude Code)
+
+Boss ran import/sync on prod: 1258 Clover items pulled, but **0 linked / 567 need
+review** — the workspace was empty so name auto-match found nothing, and every sale
+fell to the review bucket (safe, no stock moved). Reframed per boss: the point of the
+sync is to **create the workspace items from Clover, linked**.
+- `importCloverCatalog` now **create-and-links**: every unmatched Clover item gets a
+  draft `inventory_items` row (qty 0, retail = Clover/POS price, `pricing_status`
+  approved when priced, `availability_status` not_for_sale so it's never auto-live
+  without a photo; corals tagged via the conservative classifier, else item_type null,
+  `attrs.source='clover'`). Then linked. Pre-existing workspace items still auto-match
+  by name first (no dupes). **Self-heals**: existing `unlinked` links from the earlier
+  read-only import get an item created + the link upgraded in place on re-run.
+- Held `needs_review` sales are NOT retroactively applied (boss sets stock manually
+  after import); new sales going forward decrement.
+- `cloverTestConnection` now falls back to the items endpoint on 401/403 — the boss's
+  token has Inventory+Orders read but not merchant-info read, so the health check was
+  failing even though import/sync worked.
+Build ✅ · tsc clean. Boss action: re-run **Import / re-sync** to create+link the 1258,
+then **Test connection** should pass.

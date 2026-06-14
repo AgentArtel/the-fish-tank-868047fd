@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { classifyCoralType } from "@/lib/coral-type";
 
 // ---------- guards (mirror ops.functions.ts) ----------
 async function isAdmin(supabase: any, userId: string) {
@@ -129,7 +130,14 @@ export const testCloverConnection = createServerFn({ method: "POST" })
     return { merchant };
   });
 
-// ---------- import Clover catalog → clover_item_links (admin) ----------
+// ---------- import Clover catalog → inventory_items + clover_item_links (admin) ----------
+// Creates a workspace inventory item for every Clover item and links them, so the
+// whole catalog lands in the workspace ready to track. Created items are DRAFTS:
+// quantity 0 (the admin sets real stock during manual inventory), retail price =
+// the live Clover/POS price, and availability `not_for_sale` so nothing goes live
+// without the photo-on-file review (the DB trigger also enforces that). Re-running
+// only refreshes name/price on already-linked items — the workspace is the source
+// of truth and we never overwrite workspace retail on re-sync.
 export const importCloverCatalog = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -146,6 +154,8 @@ export const importCloverCatalog = createServerFn({ method: "POST" })
       (existingLinks ?? []).map((r: any) => [r.clover_item_id, r]),
     );
 
+    // Pre-existing workspace items, for name auto-match (so we link instead of
+    // creating a duplicate when the admin already catalogued an item by hand).
     const { data: inv } = await db.from("inventory_items").select("id, item_name");
     const invByName = new Map<string, string>();
     for (const it of inv ?? []) {
@@ -153,35 +163,114 @@ export const importCloverCatalog = createServerFn({ method: "POST" })
       if (key && !invByName.has(key)) invByName.set(key, it.id);
     }
 
-    const toInsert: any[] = [];
+    const linksToInsert: any[] = [];
+    // Clover items needing a freshly-created workspace item. `existed` marks rows
+    // whose clover_item_link already exists but is still unlinked (from an earlier
+    // import) — we create the item and UPGRADE that link rather than insert a new one.
+    const toCreate: { ci: (typeof items)[number]; existed: boolean }[] = [];
     let updated = 0;
-    let newlyMatched = 0;
+    let autoLinked = 0; // linked to a pre-existing workspace item by name
     const nowIso = new Date().toISOString();
 
     for (const ci of items) {
       const existing = linkByClover.get(ci.id);
       if (existing) {
-        await db
-          .from("clover_item_links")
-          .update({ clover_name: ci.name, clover_price_cents: ci.priceCents, last_synced_at: nowIso })
-          .eq("clover_item_id", ci.id);
-        updated++;
+        if (existing.inventory_item_id) {
+          // Already linked — just refresh the Clover-side name/price.
+          await db
+            .from("clover_item_links")
+            .update({ clover_name: ci.name, clover_price_cents: ci.priceCents, last_synced_at: nowIso })
+            .eq("clover_item_id", ci.id);
+          updated++;
+        } else {
+          // Existing but unlinked (e.g. the first read-only import) — self-heal by
+          // creating a workspace item and upgrading this link below.
+          toCreate.push({ ci, existed: true });
+        }
         continue;
       }
       const match = invByName.get(ci.name.trim().toLowerCase()) ?? null;
-      if (match) newlyMatched++;
-      toInsert.push({
-        clover_item_id: ci.id,
-        inventory_item_id: match,
-        clover_name: ci.name,
-        clover_price_cents: ci.priceCents,
-        link_status: match ? "linked" : "unlinked",
-        last_synced_at: nowIso,
-      });
+      if (match) {
+        autoLinked++;
+        linksToInsert.push({
+          clover_item_id: ci.id,
+          inventory_item_id: match,
+          clover_name: ci.name,
+          clover_price_cents: ci.priceCents,
+          link_status: "linked",
+          last_synced_at: nowIso,
+        });
+      } else {
+        toCreate.push({ ci, existed: false });
+      }
     }
 
-    if (toInsert.length) {
-      const { error } = await db.from("clover_item_links").insert(toInsert);
+    // Bulk-create draft workspace items for the unmatched Clover items, then link
+    // each to the row we just made (mapped back via attrs.clover_item_id).
+    let created = 0;
+    for (let i = 0; i < toCreate.length; i += 500) {
+      const chunk = toCreate.slice(i, i + 500);
+      const rows = chunk.map(({ ci }) => {
+        const hasPrice = typeof ci.priceCents === "number";
+        return {
+          item_name: ci.name,
+          // Only tag corals we're confident about; everything else stays null for
+          // the admin to set during manual inventory (the classifier is conservative).
+          item_type: classifyCoralType(ci.name) ? "coral" : null,
+          quantity_received: 0,
+          quantity_available: 0,
+          wholesale_cost: null,
+          retail_price: hasPrice ? (ci.priceCents as number) / 100 : null,
+          // The Clover price is the real, live POS retail price (admin-run import).
+          pricing_status: hasPrice ? "approved" : "not_priced",
+          availability_status: "not_for_sale", // never auto-live; no photo yet
+          live_sale_status: "not_eligible",
+          needs_photo: true,
+          notes: "Imported from Clover POS",
+          attrs: { source: "clover", clover_item_id: ci.id },
+          created_by: context.userId,
+        };
+      });
+      const { data: createdRows, error } = await db
+        .from("inventory_items")
+        .insert(rows)
+        .select("id, attrs");
+      if (error) throw new Error(error.message);
+      const idByClover = new Map<string, string>();
+      for (const r of createdRows ?? []) {
+        const cid = (r.attrs as any)?.clover_item_id;
+        if (cid) idByClover.set(cid, r.id);
+      }
+      for (const { ci, existed } of chunk) {
+        const invId = idByClover.get(ci.id) ?? null;
+        if (existed) {
+          // Upgrade the pre-existing unlinked link in place.
+          await db
+            .from("clover_item_links")
+            .update({
+              inventory_item_id: invId,
+              clover_name: ci.name,
+              clover_price_cents: ci.priceCents,
+              link_status: invId ? "linked" : "unlinked",
+              last_synced_at: nowIso,
+            })
+            .eq("clover_item_id", ci.id);
+        } else {
+          linksToInsert.push({
+            clover_item_id: ci.id,
+            inventory_item_id: invId,
+            clover_name: ci.name,
+            clover_price_cents: ci.priceCents,
+            link_status: invId ? "linked" : "unlinked",
+            last_synced_at: nowIso,
+          });
+        }
+        if (invId) created++;
+      }
+    }
+
+    if (linksToInsert.length) {
+      const { error } = await db.from("clover_item_links").insert(linksToInsert);
       if (error) throw new Error(error.message);
     }
     await db
@@ -191,9 +280,9 @@ export const importCloverCatalog = createServerFn({ method: "POST" })
 
     return {
       fetched: items.length,
-      created: toInsert.length,
-      updated,
-      autoLinked: newlyMatched,
-      unlinkedNew: toInsert.length - newlyMatched,
+      created, // new workspace items created + linked
+      updated, // already-linked items refreshed
+      autoLinked, // linked to a pre-existing workspace item by name
+      unlinkedNew: linksToInsert.length - created - autoLinked,
     };
   });
