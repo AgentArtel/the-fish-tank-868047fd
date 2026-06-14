@@ -108,9 +108,10 @@ function CloverSettings() {
   const runSyncSales = async () => {
     setSyncing(true);
     try {
-      const r = await syncSalesFn();
+      const r = await syncSalesFn({ data: { lookbackDays: 30 } });
       toast.success(
-        `Synced ${r.lineItemsSeen} Clover line items — ${r.applied} applied to stock, ${r.needsReview} need review`,
+        `Synced ${r.lineItemsSeen} Clover line items — ${r.applied} applied to stock, ${r.needsReview} need review` +
+          (r.customersSeen ? ` · ${r.customersSeen} customers captured` : ""),
       );
       if (r.errors.length) toast.warning(`${r.errors.length} line items errored — check logs`);
       qc.invalidateQueries({ queryKey: ["clover-overview"] });

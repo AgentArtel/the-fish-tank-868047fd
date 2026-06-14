@@ -30,6 +30,7 @@ import { Route as AppCalendarRouteImport } from './routes/_app/calendar'
 import { Route as AppBatchesRouteImport } from './routes/_app/batches'
 import { Route as AppVendorWatchIndexRouteImport } from './routes/_app/vendor-watch.index'
 import { Route as AppInventoryIndexRouteImport } from './routes/_app/inventory.index'
+import { Route as AppCustomersIndexRouteImport } from './routes/_app/customers.index'
 import { Route as AppContentIndexRouteImport } from './routes/_app/content.index'
 import { Route as AppBatchesIndexRouteImport } from './routes/_app/batches.index'
 import { Route as AppVendorWatchSourceIdRouteImport } from './routes/_app/vendor-watch.$sourceId'
@@ -40,6 +41,7 @@ import { Route as AppSettingsAiRouteImport } from './routes/_app/settings.ai'
 import { Route as AppInventoryMissingTagsRouteImport } from './routes/_app/inventory.missing-tags'
 import { Route as AppInventoryCoralDiscoveryRouteImport } from './routes/_app/inventory.coral-discovery'
 import { Route as AppInventoryIdRouteImport } from './routes/_app/inventory.$id'
+import { Route as AppCustomersIdRouteImport } from './routes/_app/customers.$id'
 import { Route as AppContentNewRouteImport } from './routes/_app/content.new'
 import { Route as AppContentIdRouteImport } from './routes/_app/content.$id'
 import { Route as AppBatchesIdRouteImport } from './routes/_app/batches.$id'
@@ -150,6 +152,11 @@ const AppInventoryIndexRoute = AppInventoryIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppInventoryRoute,
 } as any)
+const AppCustomersIndexRoute = AppCustomersIndexRouteImport.update({
+  id: '/customers/',
+  path: '/customers/',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppContentIndexRoute = AppContentIndexRouteImport.update({
   id: '/content/',
   path: '/content/',
@@ -201,6 +208,11 @@ const AppInventoryIdRoute = AppInventoryIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AppInventoryRoute,
 } as any)
+const AppCustomersIdRoute = AppCustomersIdRouteImport.update({
+  id: '/customers/$id',
+  path: '/customers/$id',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppContentNewRoute = AppContentNewRouteImport.update({
   id: '/content/new',
   path: '/content/new',
@@ -251,6 +263,7 @@ export interface FileRoutesByFullPath {
   '/batches/$id': typeof AppBatchesIdRoute
   '/content/$id': typeof AppContentIdRoute
   '/content/new': typeof AppContentNewRoute
+  '/customers/$id': typeof AppCustomersIdRoute
   '/inventory/$id': typeof AppInventoryIdRoute
   '/inventory/coral-discovery': typeof AppInventoryCoralDiscoveryRoute
   '/inventory/missing-tags': typeof AppInventoryMissingTagsRoute
@@ -261,6 +274,7 @@ export interface FileRoutesByFullPath {
   '/vendor-watch/$sourceId': typeof AppVendorWatchSourceIdRoute
   '/batches/': typeof AppBatchesIndexRoute
   '/content/': typeof AppContentIndexRoute
+  '/customers/': typeof AppCustomersIndexRoute
   '/inventory/': typeof AppInventoryIndexRoute
   '/vendor-watch/': typeof AppVendorWatchIndexRoute
   '/api/public/hooks/clover-poll': typeof ApiPublicHooksCloverPollRoute
@@ -286,6 +300,7 @@ export interface FileRoutesByTo {
   '/batches/$id': typeof AppBatchesIdRoute
   '/content/$id': typeof AppContentIdRoute
   '/content/new': typeof AppContentNewRoute
+  '/customers/$id': typeof AppCustomersIdRoute
   '/inventory/$id': typeof AppInventoryIdRoute
   '/inventory/coral-discovery': typeof AppInventoryCoralDiscoveryRoute
   '/inventory/missing-tags': typeof AppInventoryMissingTagsRoute
@@ -296,6 +311,7 @@ export interface FileRoutesByTo {
   '/vendor-watch/$sourceId': typeof AppVendorWatchSourceIdRoute
   '/batches': typeof AppBatchesIndexRoute
   '/content': typeof AppContentIndexRoute
+  '/customers': typeof AppCustomersIndexRoute
   '/inventory': typeof AppInventoryIndexRoute
   '/vendor-watch': typeof AppVendorWatchIndexRoute
   '/api/public/hooks/clover-poll': typeof ApiPublicHooksCloverPollRoute
@@ -325,6 +341,7 @@ export interface FileRoutesById {
   '/_app/batches/$id': typeof AppBatchesIdRoute
   '/_app/content/$id': typeof AppContentIdRoute
   '/_app/content/new': typeof AppContentNewRoute
+  '/_app/customers/$id': typeof AppCustomersIdRoute
   '/_app/inventory/$id': typeof AppInventoryIdRoute
   '/_app/inventory/coral-discovery': typeof AppInventoryCoralDiscoveryRoute
   '/_app/inventory/missing-tags': typeof AppInventoryMissingTagsRoute
@@ -335,6 +352,7 @@ export interface FileRoutesById {
   '/_app/vendor-watch/$sourceId': typeof AppVendorWatchSourceIdRoute
   '/_app/batches/': typeof AppBatchesIndexRoute
   '/_app/content/': typeof AppContentIndexRoute
+  '/_app/customers/': typeof AppCustomersIndexRoute
   '/_app/inventory/': typeof AppInventoryIndexRoute
   '/_app/vendor-watch/': typeof AppVendorWatchIndexRoute
   '/api/public/hooks/clover-poll': typeof ApiPublicHooksCloverPollRoute
@@ -364,6 +382,7 @@ export interface FileRouteTypes {
     | '/batches/$id'
     | '/content/$id'
     | '/content/new'
+    | '/customers/$id'
     | '/inventory/$id'
     | '/inventory/coral-discovery'
     | '/inventory/missing-tags'
@@ -374,6 +393,7 @@ export interface FileRouteTypes {
     | '/vendor-watch/$sourceId'
     | '/batches/'
     | '/content/'
+    | '/customers/'
     | '/inventory/'
     | '/vendor-watch/'
     | '/api/public/hooks/clover-poll'
@@ -399,6 +419,7 @@ export interface FileRouteTypes {
     | '/batches/$id'
     | '/content/$id'
     | '/content/new'
+    | '/customers/$id'
     | '/inventory/$id'
     | '/inventory/coral-discovery'
     | '/inventory/missing-tags'
@@ -409,6 +430,7 @@ export interface FileRouteTypes {
     | '/vendor-watch/$sourceId'
     | '/batches'
     | '/content'
+    | '/customers'
     | '/inventory'
     | '/vendor-watch'
     | '/api/public/hooks/clover-poll'
@@ -437,6 +459,7 @@ export interface FileRouteTypes {
     | '/_app/batches/$id'
     | '/_app/content/$id'
     | '/_app/content/new'
+    | '/_app/customers/$id'
     | '/_app/inventory/$id'
     | '/_app/inventory/coral-discovery'
     | '/_app/inventory/missing-tags'
@@ -447,6 +470,7 @@ export interface FileRouteTypes {
     | '/_app/vendor-watch/$sourceId'
     | '/_app/batches/'
     | '/_app/content/'
+    | '/_app/customers/'
     | '/_app/inventory/'
     | '/_app/vendor-watch/'
     | '/api/public/hooks/clover-poll'
@@ -613,6 +637,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppInventoryIndexRouteImport
       parentRoute: typeof AppInventoryRoute
     }
+    '/_app/customers/': {
+      id: '/_app/customers/'
+      path: '/customers'
+      fullPath: '/customers/'
+      preLoaderRoute: typeof AppCustomersIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/content/': {
       id: '/_app/content/'
       path: '/content'
@@ -682,6 +713,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/inventory/$id'
       preLoaderRoute: typeof AppInventoryIdRouteImport
       parentRoute: typeof AppInventoryRoute
+    }
+    '/_app/customers/$id': {
+      id: '/_app/customers/$id'
+      path: '/customers/$id'
+      fullPath: '/customers/$id'
+      preLoaderRoute: typeof AppCustomersIdRouteImport
+      parentRoute: typeof AppRoute
     }
     '/_app/content/new': {
       id: '/_app/content/new'
@@ -769,12 +807,14 @@ interface AppRouteChildren {
   AppVendorsRoute: typeof AppVendorsRoute
   AppContentIdRoute: typeof AppContentIdRoute
   AppContentNewRoute: typeof AppContentNewRoute
+  AppCustomersIdRoute: typeof AppCustomersIdRoute
   AppSettingsAiRoute: typeof AppSettingsAiRoute
   AppSettingsCloverRoute: typeof AppSettingsCloverRoute
   AppSettingsMetaRoute: typeof AppSettingsMetaRoute
   AppSettingsUsersRoute: typeof AppSettingsUsersRoute
   AppVendorWatchSourceIdRoute: typeof AppVendorWatchSourceIdRoute
   AppContentIndexRoute: typeof AppContentIndexRoute
+  AppCustomersIndexRoute: typeof AppCustomersIndexRoute
   AppVendorWatchIndexRoute: typeof AppVendorWatchIndexRoute
 }
 
@@ -794,12 +834,14 @@ const AppRouteChildren: AppRouteChildren = {
   AppVendorsRoute: AppVendorsRoute,
   AppContentIdRoute: AppContentIdRoute,
   AppContentNewRoute: AppContentNewRoute,
+  AppCustomersIdRoute: AppCustomersIdRoute,
   AppSettingsAiRoute: AppSettingsAiRoute,
   AppSettingsCloverRoute: AppSettingsCloverRoute,
   AppSettingsMetaRoute: AppSettingsMetaRoute,
   AppSettingsUsersRoute: AppSettingsUsersRoute,
   AppVendorWatchSourceIdRoute: AppVendorWatchSourceIdRoute,
   AppContentIndexRoute: AppContentIndexRoute,
+  AppCustomersIndexRoute: AppCustomersIndexRoute,
   AppVendorWatchIndexRoute: AppVendorWatchIndexRoute,
 }
 
@@ -819,3 +861,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

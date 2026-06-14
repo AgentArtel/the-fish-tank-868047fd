@@ -2215,6 +2215,7 @@ export async function applyInventorySale(
     source?: "manual" | "clover";
     kind?: "sale" | "refund" | "void";
     cloverRefs?: { orderId?: string; lineItemId?: string; paymentId?: string; itemName?: string };
+    customerId?: string | null;
     userId?: string;
   },
 ) {
@@ -2245,6 +2246,7 @@ export async function applyInventorySale(
     clover_line_item_id: opts.cloverRefs?.lineItemId ?? null,
     clover_payment_id: opts.cloverRefs?.paymentId ?? null,
     clover_item_name: opts.cloverRefs?.itemName ?? null,
+    customer_id: opts.customerId ?? null,
     created_by: opts.userId ?? null,
   });
   if (le) throw new Error(le.message);

@@ -1304,3 +1304,21 @@ Built both parallel tracks the owner picked.
   Safe to ship ahead of app code. Once live, Claude wires the ingest (expand=customers → upsert →
   stamp customer_id) + the /customers UI. Per scope-customer-profiles.md.
 Build ✅ · tsc clean.
+
+---
+## 2026-06-14 — Customer capture + profiles UI (Claude Code)
+
+On Lovable's `customers` table + `inventory_sale_events.customer_id` FK.
+- **Ingest capture** (`clover.api.ts` + `clover.ingest.server.ts`): orders now `expand=customers`;
+  each distinct Clover customer is upserted into `customers` (on `clover_customer_id`), and
+  `customer_id` is stamped onto every sale event (applied + needs_review paths) via a new
+  `customerId` arg on `applyInventorySale`. Anonymous walk-ins → null (zero behavior change).
+  `CloverIngestResult` gains `customersSeen`/`customersUpserted`; sync toast shows the attach count.
+- **Backfill**: a re-sync also stamps `customer_id` onto already-ingested events for orders in the
+  window (one update per customer, idempotent), so historical sales attach to their buyer.
+- **Manual sync widened**: `syncCloverSales` now re-scans 30d by default (catches misses + backfills
+  customers); the cron keeps the tight overlap window.
+- **UI**: `/customers` list (lifetime spend, orders, last seen, search) + `/customers/$id` detail
+  (purchase-history timeline, lifetime spend, contact). New `customers.functions.ts` (requireEditor,
+  JS aggregation). Nav: "Customers" under Inventory.
+Build ✅ · tsc clean. This is the keystone for loyalty next.
