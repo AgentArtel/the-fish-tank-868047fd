@@ -73,7 +73,7 @@ function CloverSettings() {
     try {
       const r = await importFn();
       toast.success(
-        `Imported ${r.fetched} Clover items — ${r.created} new (${r.autoLinked} auto-linked), ${r.updated} updated`,
+        `Imported ${r.fetched} Clover items — ${r.linkedNow} linked (${r.created} new${r.relinked ? `, ${r.relinked} re-linked` : ""}), ${r.updated} refreshed`,
       );
       qc.invalidateQueries({ queryKey: ["clover-overview"] });
     } catch (e: any) {
