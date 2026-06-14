@@ -80,6 +80,33 @@ export type Database = {
         }
         Relationships: []
       }
+      clover_credentials: {
+        Row: {
+          api_token: string | null
+          base_url: string | null
+          id: boolean
+          merchant_id: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          api_token?: string | null
+          base_url?: string | null
+          id?: boolean
+          merchant_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          api_token?: string | null
+          base_url?: string | null
+          id?: boolean
+          merchant_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       clover_item_links: {
         Row: {
           clover_item_id: string
