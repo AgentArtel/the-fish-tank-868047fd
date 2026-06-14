@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { loadLoyaltyConfig } from "@/lib/loyalty.server";
+import { loadLoyaltyConfig, customerBalanceCents, recordSaleEarn } from "@/lib/loyalty.server";
 import { deriveTier, nextTier, normalizeTiers, passportBadges } from "@/lib/loyalty";
 
 // ---------- guards (mirror clover.functions.ts) ----------
@@ -59,16 +59,19 @@ export const saveLoyaltyConfig = createServerFn({ method: "POST" })
     await requireAdmin(context.supabase, context.userId);
     const db = context.supabase as any;
     const tiers = normalizeTiers(data.tiers);
-    const { error } = await db
-      .from("loyalty_config")
-      .update({
+    // Upsert (not update) so saving still persists if the seed row is ever missing
+    // — an `.update().eq("id", true)` would silently no-op on zero rows.
+    const { error } = await db.from("loyalty_config").upsert(
+      {
+        id: true,
         enabled: data.enabled,
         earn_percent: data.earnPercent,
         tiers,
         updated_by: context.userId,
         updated_at: new Date().toISOString(),
-      })
-      .eq("id", true);
+      },
+      { onConflict: "id" },
+    );
     if (error) throw new Error(error.message);
     return { ok: true, tiers };
   });
@@ -90,6 +93,7 @@ export const getCustomerLoyalty = createServerFn({ method: "POST" })
       .eq("id", data.id)
       .maybeSingle();
 
+    // Recent activity for display (capped) …
     const { data: ledgerRows } = await db
       .from("loyalty_ledger")
       .select("id, kind, amount_cents, channel, reason, created_at")
@@ -104,23 +108,26 @@ export const getCustomerLoyalty = createServerFn({ method: "POST" })
       reason: r.reason as string | null,
       createdAt: r.created_at as string,
     }));
-    const balanceCents = ledger.reduce((n: number, r: any) => n + r.amountCents, 0);
+    // … but the balance is summed over the FULL ledger, not the capped page.
+    const balanceCents = await customerBalanceCents(db, data.id);
 
-    // Sale history → rolling-12-mo spend (tier) + item labels (passport).
+    // Sale history (rolling 12 months) → tier spend + Reef Passport labels. The
+    // sold_at window bounds the read and matches the tier definition; passport
+    // badges therefore reflect the member's last-12-months collection.
+    const sinceIso = new Date(Date.now() - YEAR_MS).toISOString();
     const { data: events } = await db
       .from("inventory_sale_events")
       .select("total_cents, sold_at, kind, clover_item_name, item:inventory_item_id(item_name)")
       .eq("customer_id", data.id)
       .eq("kind", "sale")
+      .gte("sold_at", sinceIso)
+      .order("sold_at", { ascending: false })
       .limit(2000);
-    const cutoff = Date.now() - YEAR_MS;
     let annualSpendCents = 0;
     const labels: (string | null)[] = [];
     for (const e of events ?? []) {
       labels.push(e.item?.item_name ?? e.clover_item_name ?? null);
-      if (e.sold_at && new Date(e.sold_at).getTime() >= cutoff) {
-        annualSpendCents += Number(e.total_cents ?? 0);
-      }
+      annualSpendCents += Number(e.total_cents ?? 0);
     }
 
     const tier = deriveTier(annualSpendCents, cfg.tiers);
@@ -163,14 +170,7 @@ export const recordLoyaltyEntry = createServerFn({ method: "POST" })
     const db = context.supabase as any;
 
     // Current balance — used to block over-redemption.
-    const { data: rows } = await db
-      .from("loyalty_ledger")
-      .select("amount_cents")
-      .eq("customer_id", data.customerId);
-    const balanceCents = (rows ?? []).reduce(
-      (n: number, r: any) => n + Number(r.amount_cents ?? 0),
-      0,
-    );
+    const balanceCents = await customerBalanceCents(db, data.customerId);
 
     if (data.kind === "redeem" && data.amountCents > balanceCents) {
       throw new Error(
@@ -197,4 +197,113 @@ export const recordLoyaltyEntry = createServerFn({ method: "POST" })
       .is("reef_club_enrolled_at", null);
 
     return { ok: true, balanceCents: balanceCents + signed };
+  });
+
+// ---------- attribution: recent sales with no buyer attached (editor) ----------
+// The attribution gap: most walk-in Clover sales are anonymous, so they never
+// earn. This lists recent unattributed sales (grouped by order) so staff can
+// attach the member who actually bought them. Bounded by a time window + row cap.
+export const listUnattributedSales = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        days: z.number().int().min(1).max(365).optional(),
+        limit: z.number().int().min(1).max(200).optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await requireEditor(context.supabase, context.userId);
+    const db = context.supabase as any;
+    const sinceIso = new Date(Date.now() - (data.days ?? 60) * 86_400_000).toISOString();
+
+    const { data: events } = await db
+      .from("inventory_sale_events")
+      .select(
+        "id, total_cents, sold_at, clover_order_id, clover_item_name, item:inventory_item_id(item_name)",
+      )
+      .is("customer_id", null)
+      .eq("kind", "sale")
+      .gte("sold_at", sinceIso)
+      .order("sold_at", { ascending: false })
+      .limit(data.limit ?? 100);
+
+    // Group line items into their order (standalone manual sales keep their own id).
+    type OrderAcc = {
+      key: string;
+      soldAt: string;
+      totalCents: number;
+      lines: { id: string; label: string }[];
+    };
+    const orders = new Map<string, OrderAcc>();
+    for (const e of events ?? []) {
+      const key = e.clover_order_id ?? `sale:${e.id}`;
+      const o: OrderAcc = orders.get(key) ?? { key, soldAt: e.sold_at, totalCents: 0, lines: [] };
+      o.totalCents += Number(e.total_cents ?? 0);
+      o.lines.push({ id: e.id, label: e.item?.item_name ?? e.clover_item_name ?? "(item)" });
+      if (e.sold_at > o.soldAt) o.soldAt = e.sold_at;
+      orders.set(key, o);
+    }
+    const rows = [...orders.values()].sort((a, b) => (a.soldAt < b.soldAt ? 1 : -1));
+    return { orders: rows };
+  });
+
+// ---------- attribution: attach a buyer to unattributed sales (editor) ----------
+// Stamps customer_id onto the given sale events (only those still unattributed,
+// so we never steal a sale from another customer) and retro-earns Reef Credit for
+// each, idempotently via the shared helper. Doubles as the earn-backfill recovery
+// path for sales whose live earn was missed.
+export const attachSaleToCustomer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        customerId: z.string().uuid(),
+        saleEventIds: z.array(z.string().uuid()).min(1).max(200),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await requireEditor(context.supabase, context.userId);
+    const db = context.supabase as any;
+    const cfg = await loadLoyaltyConfig(db);
+
+    // Only touch sales that are still unattributed (guards against races / re-tags).
+    const { data: targets } = await db
+      .from("inventory_sale_events")
+      .select("id, total_cents, kind")
+      .in("id", data.saleEventIds)
+      .is("customer_id", null)
+      .eq("kind", "sale");
+    const ids = (targets ?? []).map((t: any) => t.id);
+    if (ids.length === 0) return { attached: 0, earnedCents: 0 };
+
+    const { error: ue } = await db
+      .from("inventory_sale_events")
+      .update({ customer_id: data.customerId })
+      .in("id", ids)
+      .is("customer_id", null);
+    if (ue) throw new Error(ue.message);
+
+    let earnedCents = 0;
+    if (cfg.enabled && cfg.earnPercent > 0) {
+      for (const t of targets ?? []) {
+        earnedCents += await recordSaleEarn(db, {
+          customerId: data.customerId,
+          saleEventId: t.id,
+          totalCents: t.total_cents,
+          earnPercent: cfg.earnPercent,
+          userId: context.userId,
+        });
+      }
+    }
+
+    await db
+      .from("customers")
+      .update({ reef_club_enrolled_at: new Date().toISOString() })
+      .eq("id", data.customerId)
+      .is("reef_club_enrolled_at", null);
+
+    return { attached: ids.length, earnedCents };
   });

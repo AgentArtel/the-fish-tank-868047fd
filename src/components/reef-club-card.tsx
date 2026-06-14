@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Waves, Plus, Loader2 } from "lucide-react";
+import { Waves, Plus, Loader2, Link2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +16,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useMe } from "@/hooks/use-me";
-import { getCustomerLoyalty, recordLoyaltyEntry } from "@/lib/loyalty.functions";
+import {
+  getCustomerLoyalty,
+  recordLoyaltyEntry,
+  listUnattributedSales,
+  attachSaleToCustomer,
+} from "@/lib/loyalty.functions";
 import { fmtMoney } from "@/lib/ops";
 
 const money = (cents: number) => fmtMoney(cents / 100);
@@ -181,6 +186,15 @@ export function ReefClubCard({ customerId }: { customerId: string }) {
           </div>
         )}
 
+        <AttachPurchasePanel
+          customerId={customerId}
+          onDone={() => {
+            qc.invalidateQueries({ queryKey: ["customer-loyalty", customerId] });
+            qc.invalidateQueries({ queryKey: ["customer", customerId] });
+            qc.invalidateQueries({ queryKey: ["unattributed-sales"] });
+          }}
+        />
+
         {isAdmin && (
           <AdminCreditForm
             customerId={customerId}
@@ -192,6 +206,114 @@ export function ReefClubCard({ customerId }: { customerId: string }) {
         )}
       </div>
     </section>
+  );
+}
+
+// Close the attribution gap: most walk-in Clover sales are anonymous and never
+// earn. Staff opens this, picks the member's recent unattributed purchases, and
+// attaches them — which retro-earns Reef Credit through the idempotent path.
+function AttachPurchasePanel({ customerId, onDone }: { customerId: string; onDone: () => void }) {
+  const listFn = useServerFn(listUnattributedSales);
+  const attachFn = useServerFn(attachSaleToCustomer);
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<Record<string, string[]>>({}); // orderKey -> saleIds
+  const [saving, setSaving] = useState(false);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["unattributed-sales"],
+    queryFn: () => listFn({ data: {} }),
+    enabled: open,
+  });
+
+  const toggle = (key: string, ids: string[]) =>
+    setSelected((s) => ({ ...s, [key]: s[key] ? [] : ids }));
+
+  const chosenIds = Object.values(selected).flat();
+
+  const submit = async () => {
+    if (chosenIds.length === 0) {
+      toast.error("Select at least one purchase");
+      return;
+    }
+    setSaving(true);
+    try {
+      const r = await attachFn({ data: { customerId, saleEventIds: chosenIds } });
+      toast.success(
+        `Attached ${r.attached} sale${r.attached === 1 ? "" : "s"}` +
+          (r.earnedCents > 0 ? ` · +${money(r.earnedCents)} Reef Credit` : ""),
+      );
+      setSelected({});
+      setOpen(false);
+      onDone();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not attach purchases");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <div className="border-t pt-3">
+        <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
+          <Link2 className="w-4 h-4 mr-1" /> Attach a past purchase
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-t pt-3 space-y-3">
+      <div className="text-xs text-muted-foreground">
+        Recent purchases with no member attached. Tick the ones this customer made to credit them.
+      </div>
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="w-4 h-4 animate-spin" /> Loading recent sales…
+        </div>
+      ) : (data?.orders.length ?? 0) === 0 ? (
+        <p className="text-xs text-muted-foreground">No unattributed sales in the last 60 days.</p>
+      ) : (
+        <div className="max-h-64 overflow-auto rounded-md border divide-y">
+          {data!.orders.map((o) => {
+            const ids = o.lines.map((l) => l.id);
+            const checked = (selected[o.key]?.length ?? 0) > 0;
+            return (
+              <label
+                key={o.key}
+                className="flex items-start gap-2 p-2.5 text-xs cursor-pointer hover:bg-muted/40"
+              >
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={checked}
+                  onChange={() => toggle(o.key, ids)}
+                />
+                <span className="flex-1 min-w-0">
+                  <span className="block truncate font-medium">
+                    {o.lines.map((l) => l.label).join(", ")}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {new Date(o.soldAt).toLocaleDateString()} · {o.lines.length} item
+                    {o.lines.length === 1 ? "" : "s"}
+                  </span>
+                </span>
+                <span className="tabular-nums text-muted-foreground">{money(o.totalCents)}</span>
+              </label>
+            );
+          })}
+        </div>
+      )}
+      <div className="flex justify-end gap-2">
+        <Button size="sm" variant="ghost" onClick={() => setOpen(false)} disabled={saving}>
+          Cancel
+        </Button>
+        <Button size="sm" onClick={submit} disabled={saving || chosenIds.length === 0}>
+          {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
+          Attach{chosenIds.length > 0 ? ` ${chosenIds.length}` : ""}
+        </Button>
+      </div>
+    </div>
   );
 }
 

@@ -1345,3 +1345,23 @@ tiers, **live-sale auctions as the controlled redemption channel** (no POS seam)
 - **Invariants honored**: AI never touches this; tier/badges are derived (zero new storage beyond the
   ledger); all server fns check is_active + role. New settings nav item flagged for sign-off.
 Build ✅ · tsc clean · prettier clean. (Lint `no-explicit-any` matches house style across the repo.)
+
+---
+## 2026-06-14 — Reef Club: attribution gap + audit hardening (Claude Code)
+
+Closing the gap where earn only fires for customer-linked Clover sales (most walk-ins are anonymous).
+- **Attribution** (app lane, no migration): `listUnattributedSales` + `attachSaleToCustomer` (both
+  editor) + an "Attach a past purchase" panel on the existing Reef Club card. Staff tick a member's
+  recent anonymous purchases → `customer_id` is stamped (only if still unattributed) and Reef Credit is
+  retro-earned idempotently. See scope-loyalty-attribution.md.
+- **One earn path**: extracted `recordSaleEarn` (loyalty.server.ts), now the single source of truth for
+  earning — used by both the live sync and attribution, routed through the unit-tested `computeEarnCents`,
+  idempotent via `UNIQUE(sale_event_id, kind)`. Live earn in `applyInventorySale` is now BEST-EFFORT so a
+  loyalty failure can never break the sale/stock write (attribution backfills any miss).
+- **Audit fixes folded in** (5 read-only auditors ran against the new code): balance now summed over the
+  FULL ledger via shared `customerBalanceCents` (was capped at 200 rows → wrong); tier spend now SQL-
+  bounded to a rolling 12 months (`.gte sold_at`, was unbounded 2000-row read); `saveLoyaltyConfig` is an
+  upsert (was a silent no-op if the seed row was missing).
+- **Deferred to Lovable** (handoff-loyalty-hardening.md): commit loyalty tables as a migration; DB-level
+  ledger sign/RLS/atomic-redemption; DB-side balance/spend aggregation + the `sold_at` report index.
+Build ✅ · tsc clean · prettier clean · earn-math assertions ✅.

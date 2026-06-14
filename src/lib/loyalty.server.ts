@@ -1,7 +1,12 @@
 // Reef Club — server-only DB helpers shared by the earn-on-sync path
 // (ops.functions.ts / clover.ingest.server.ts) and the loyalty server fns.
 
-import { DEFAULT_EARN_PERCENT, normalizeTiers, type LoyaltyTier } from "@/lib/loyalty";
+import {
+  DEFAULT_EARN_PERCENT,
+  computeEarnCents,
+  normalizeTiers,
+  type LoyaltyTier,
+} from "@/lib/loyalty";
 
 export type LoyaltyConfig = {
   enabled: boolean;
@@ -22,4 +27,53 @@ export async function loadLoyaltyConfig(db: any): Promise<LoyaltyConfig> {
     earnPercent: Number(data?.earn_percent ?? DEFAULT_EARN_PERCENT),
     tiers: normalizeTiers(data?.tiers),
   };
+}
+
+// True Reef Credit balance for a customer = SUM of all ledger amounts. Reads the
+// single `amount_cents` column (no row cap) so the balance is always correct —
+// summing a capped page would understate long-tenured members. NOTE: at very high
+// per-customer ledger volume this should move to a DB-side SUM (RPC) or a
+// denormalized running total on `customers`; tracked as a scalability follow-up.
+export async function customerBalanceCents(db: any, customerId: string): Promise<number> {
+  const { data } = await db
+    .from("loyalty_ledger")
+    .select("amount_cents")
+    .eq("customer_id", customerId);
+  return (data ?? []).reduce((n: number, r: any) => n + Number(r.amount_cents ?? 0), 0);
+}
+
+// Write the `earn` ledger row for one linked member sale. Single source of truth
+// for earning, used by both the live sync (applyInventorySale) and retroactive
+// attribution (attachSaleToCustomer). Idempotent: the ledger's
+// UNIQUE(sale_event_id, kind) means a repeat is swallowed, never double-credited.
+// Returns the cents credited, or 0 when nothing was written (no value, or already
+// earned for this sale).
+export async function recordSaleEarn(
+  db: any,
+  opts: {
+    customerId: string;
+    saleEventId: string;
+    totalCents: number | null | undefined;
+    earnPercent: number;
+    channel?: string;
+    userId?: string | null;
+  },
+): Promise<number> {
+  const earnCents = computeEarnCents(opts.totalCents ?? 0, opts.earnPercent);
+  if (earnCents <= 0) return 0;
+  const { error } = await db.from("loyalty_ledger").insert({
+    customer_id: opts.customerId,
+    kind: "earn",
+    amount_cents: earnCents,
+    channel: opts.channel ?? "in_store",
+    reason: `${opts.earnPercent}% Reef Credit on purchase`,
+    sale_event_id: opts.saleEventId,
+    created_by: opts.userId ?? null,
+  });
+  if (error) {
+    // Already earned for this sale (idempotent re-run) → no-op.
+    if (/duplicate key|unique/i.test(error.message)) return 0;
+    throw new Error(error.message);
+  }
+  return earnCents;
 }

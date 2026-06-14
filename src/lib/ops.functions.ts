@@ -2263,31 +2263,24 @@ export async function applyInventorySale(
     .single();
   if (le) throw new Error(le.message);
 
-  // Reef Club: earn store credit on a member's purchase. Only when loyalty is
-  // enabled, the sale is linked to a customer, and the line has a value. The
-  // ledger's UNIQUE (sale_event_id, kind) makes re-runs idempotent — a repeated
-  // sync that hits the duplicate is ignored, never double-credited.
-  if (
-    kind === "sale" &&
-    opts.customerId &&
-    opts.loyalty &&
-    opts.loyalty.earnPercent > 0 &&
-    totalCents &&
-    totalCents > 0
-  ) {
-    const earnCents = Math.round((totalCents * opts.loyalty.earnPercent) / 100);
-    if (earnCents > 0) {
-      const { error: ee } = await supabase.from("loyalty_ledger").insert({
-        customer_id: opts.customerId,
-        kind: "earn",
-        amount_cents: earnCents,
-        channel: "in_store",
-        reason: `${opts.loyalty.earnPercent}% Reef Credit on purchase`,
-        sale_event_id: saleRow.id,
-        created_by: opts.userId ?? null,
+  // Reef Club: earn store credit on a member's purchase, via the shared idempotent
+  // helper (same path retroactive attribution uses). Only fires when loyalty is
+  // enabled and the sale is linked to a customer. BEST-EFFORT BY DESIGN: a loyalty
+  // failure must never break the sale-of-record or stock decrement. Any miss is
+  // recoverable — `attachSaleToCustomer` / the earn backfill re-credit applied
+  // sales that lack an `earn` ledger row, idempotently.
+  if (kind === "sale" && opts.customerId && opts.loyalty && opts.loyalty.earnPercent > 0) {
+    try {
+      const { recordSaleEarn } = await import("@/lib/loyalty.server");
+      await recordSaleEarn(supabase, {
+        customerId: opts.customerId,
+        saleEventId: saleRow.id,
+        totalCents,
+        earnPercent: opts.loyalty.earnPercent,
+        userId: opts.userId ?? null,
       });
-      // A concurrent/overlapping sync may have already written this earn.
-      if (ee && !/duplicate key|unique/i.test(ee.message)) throw new Error(ee.message);
+    } catch {
+      // swallow — the sale is committed; credit is recovered by backfill.
     }
   }
 
