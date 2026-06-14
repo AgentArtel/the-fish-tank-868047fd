@@ -112,12 +112,22 @@ export const saveCloverSettings = createServerFn({ method: "POST" })
   });
 
 // ---------- pull recent Clover sales → inventory_sale_events (admin) ----------
+// The manual button re-scans a wide window (default 30d) so it both catches any
+// missed sales and backfills customers onto already-ingested orders. Idempotent —
+// re-scanning never double-counts. (The cron uses the tight overlap window instead.)
 export const syncCloverSales = createServerFn({ method: "POST" })
+  .inputValidator((d: { lookbackDays?: number }) => ({
+    lookbackDays: Math.min(Math.max(Math.floor(d?.lookbackDays ?? 30), 1), 365),
+  }))
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .handler(async ({ data, context }) => {
     await requireAdmin(context.supabase, context.userId);
     const { ingestCloverSales } = await import("@/lib/clover.ingest.server");
-    return await ingestCloverSales(context.supabase as any, { userId: context.userId });
+    const sinceMs = Date.now() - data.lookbackDays * 86_400_000;
+    return await ingestCloverSales(context.supabase as any, {
+      userId: context.userId,
+      sinceMs,
+    });
   });
 
 // ---------- test the API token/merchant (admin) ----------

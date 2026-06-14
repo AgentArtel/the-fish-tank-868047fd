@@ -117,6 +117,13 @@ export type CloverLineItem = {
   priceCents: number | null;
   refunded: boolean;
 };
+export type CloverCustomer = {
+  cloverId: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
+};
 export type CloverOrder = {
   id: string;
   state: string | null;
@@ -124,6 +131,7 @@ export type CloverOrder = {
   modifiedTime: number | null;
   paymentId: string | null;
   paid: boolean;
+  customer: CloverCustomer | null;
   lineItems: CloverLineItem[];
 };
 
@@ -136,7 +144,10 @@ export async function cloverListRecentOrders(
   while (offset < 50_000) {
     const j = await cloverGet(creds, `/v3/merchants/${creds.merchantId}/orders`, {
       filter: `modifiedTime>=${sinceMs}`,
-      expand: "lineItems,payments",
+      // `customers` attaches the buyer when the order has one (most POS orders are
+      // anonymous walk-ins → no customer). Email/phone come through only if the API
+      // token carries the customer-PII read scopes; we read them defensively.
+      expand: "lineItems,payments,customers",
       limit: 100,
       offset,
     });
@@ -144,6 +155,16 @@ export async function cloverListRecentOrders(
     for (const o of els) {
       const payEls: any[] = o.payments?.elements ?? [];
       const liEls: any[] = o.lineItems?.elements ?? [];
+      const c0: any = o.customers?.elements?.[0] ?? null;
+      const customer: CloverCustomer | null = c0
+        ? {
+            cloverId: c0.id,
+            firstName: c0.firstName ?? null,
+            lastName: c0.lastName ?? null,
+            email: c0.emailAddresses?.elements?.[0]?.emailAddress ?? null,
+            phone: c0.phoneNumbers?.elements?.[0]?.phoneNumber ?? null,
+          }
+        : null;
       out.push({
         id: o.id,
         state: o.state ?? null,
@@ -151,6 +172,7 @@ export async function cloverListRecentOrders(
         modifiedTime: typeof o.modifiedTime === "number" ? o.modifiedTime : null,
         paymentId: payEls[0]?.id ?? null,
         paid: payEls.length > 0 || o.state === "locked",
+        customer,
         lineItems: liEls.map((li) => ({
           id: li.id,
           name: li.name ?? null,

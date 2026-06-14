@@ -24,6 +24,8 @@ export type CloverIngestResult = {
   needsReview: number; // refunds, voids, and unmatched line items
   unmatched: number; // subset of needsReview with no linked workspace item
   skippedDuplicates: number;
+  customersSeen: number; // distinct customers attached to orders this run
+  customersUpserted: number; // customers written/refreshed in the workspace
   errors: { lineItemId: string; error: string }[];
   syncedThroughIso: string;
 };
@@ -50,6 +52,53 @@ export async function ingestCloverSales(
   const creds = await requireCloverCreds();
   const orders = await cloverListRecentOrders(creds, sinceMs);
   const saleOrders = orders.filter((o) => o.paid); // completed sales only
+
+  // Capture the buyer where an order has one (most are anonymous walk-ins → null).
+  // Upsert each distinct Clover customer once, then map order → workspace customer id.
+  const distinctCustomers = new Map<string, any>();
+  for (const o of saleOrders) if (o.customer) distinctCustomers.set(o.customer.cloverId, o.customer);
+  const customersSeen = distinctCustomers.size;
+  const customerIdByClover = new Map<string, string>();
+  let customersUpserted = 0;
+  if (distinctCustomers.size) {
+    const rows = [...distinctCustomers.values()].map((c) => ({
+      clover_customer_id: c.cloverId,
+      first_name: c.firstName,
+      last_name: c.lastName,
+      email: c.email,
+      phone: c.phone,
+      last_seen_at: new Date(runStart).toISOString(),
+    }));
+    const { data: up, error: ce } = await db
+      .from("customers")
+      .upsert(rows, { onConflict: "clover_customer_id" })
+      .select("id, clover_customer_id");
+    if (ce) throw new Error(ce.message);
+    for (const r of up ?? []) customerIdByClover.set(r.clover_customer_id, r.id);
+    customersUpserted = up?.length ?? 0;
+
+    // Backfill customer_id onto any already-ingested sale events for these orders,
+    // so a re-sync attaches the buyer to sales whose line items were recorded
+    // before customer capture existed (one update per customer; idempotent).
+    const orderIdsByCustomer = new Map<string, string[]>();
+    for (const o of saleOrders) {
+      const cid = o.customer ? customerIdByClover.get(o.customer.cloverId) : null;
+      if (cid) {
+        const arr = orderIdsByCustomer.get(cid) ?? [];
+        arr.push(o.id);
+        orderIdsByCustomer.set(cid, arr);
+      }
+    }
+    for (const [cid, oids] of orderIdsByCustomer) {
+      for (let i = 0; i < oids.length; i += 100) {
+        await db
+          .from("inventory_sale_events")
+          .update({ customer_id: cid })
+          .in("clover_order_id", oids.slice(i, i + 100))
+          .is("customer_id", null);
+      }
+    }
+  }
 
   // clover item id → linked workspace inventory item id (null when unlinked)
   const { data: links } = await db
@@ -79,6 +128,7 @@ export async function ingestCloverSales(
   const errors: { lineItemId: string; error: string }[] = [];
 
   for (const o of saleOrders) {
+    const customerId = o.customer ? (customerIdByClover.get(o.customer.cloverId) ?? null) : null;
     for (const li of o.lineItems) {
       lineItemsSeen++;
       if (seen.has(li.id)) {
@@ -107,6 +157,7 @@ export async function ingestCloverSales(
             source: "clover",
             kind: "sale",
             cloverRefs: refs,
+            customerId,
             userId: opts.userId,
           });
           applied++;
@@ -124,6 +175,7 @@ export async function ingestCloverSales(
             clover_line_item_id: li.id,
             clover_payment_id: o.paymentId,
             clover_item_name: li.name,
+            customer_id: customerId,
             created_by: opts.userId ?? null,
           });
           // A concurrent run may have inserted the same (order, line) pair.
@@ -159,6 +211,8 @@ export async function ingestCloverSales(
     needsReview,
     unmatched,
     skippedDuplicates,
+    customersSeen,
+    customersUpserted,
     errors,
     syncedThroughIso,
   };
