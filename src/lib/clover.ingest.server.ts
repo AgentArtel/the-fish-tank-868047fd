@@ -47,7 +47,8 @@ export async function ingestCloverSales(
       : runStart - DEFAULT_LOOKBACK_DAYS * 86_400_000;
   }
 
-  const orders = await cloverListRecentOrders(sinceMs);
+  const creds = await requireCloverCreds();
+  const orders = await cloverListRecentOrders(creds, sinceMs);
   const saleOrders = orders.filter((o) => o.paid); // completed sales only
 
   // clover item id → linked workspace inventory item id (null when unlinked)
