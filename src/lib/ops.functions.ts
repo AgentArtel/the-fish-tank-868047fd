@@ -2206,7 +2206,7 @@ export const getCoralDiscoveryOverview = createServerFn({ method: "POST" })
 // Tables/columns (inventory_sale_events, colony_gone) cast `as any` until the
 // Phase-1a migration regenerates types. Reused by manual logging now + Clover later.
 // ============================================================================
-async function applyInventorySale(
+export async function applyInventorySale(
   supabase: any,
   opts: {
     inventoryItemId: string;

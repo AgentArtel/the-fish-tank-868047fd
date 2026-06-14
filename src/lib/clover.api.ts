@@ -74,3 +74,62 @@ export async function cloverListItems(): Promise<CloverItem[]> {
   }
   return out;
 }
+
+export type CloverLineItem = {
+  id: string;
+  name: string | null;
+  cloverItemId: string | null; // the catalog item this line refers to (null = ad-hoc/custom)
+  priceCents: number | null;
+  refunded: boolean;
+};
+export type CloverOrder = {
+  id: string;
+  state: string | null;
+  createdTime: number | null;
+  modifiedTime: number | null;
+  paymentId: string | null;
+  // A completed sale: has at least one payment, or Clover marked the order locked.
+  paid: boolean;
+  lineItems: CloverLineItem[];
+};
+
+// Pull orders modified at/after `sinceMs` (epoch ms), line items + payments
+// expanded. Clover splits a quantity of N into N separate line items, each with
+// its own globally-unique id — so one line item == one unit sold, which makes
+// per-line ingestion naturally idempotent (UNIQUE(order_id, line_item_id)).
+export async function cloverListRecentOrders(sinceMs: number): Promise<CloverOrder[]> {
+  const { mid } = cfg();
+  const out: CloverOrder[] = [];
+  let offset = 0;
+  while (offset < 50_000) {
+    const j = await cloverGet(`/v3/merchants/${mid}/orders`, {
+      filter: `modifiedTime>=${sinceMs}`,
+      expand: "lineItems,payments",
+      limit: 100,
+      offset,
+    });
+    const els: any[] = j.elements ?? [];
+    for (const o of els) {
+      const payEls: any[] = o.payments?.elements ?? [];
+      const liEls: any[] = o.lineItems?.elements ?? [];
+      out.push({
+        id: o.id,
+        state: o.state ?? null,
+        createdTime: typeof o.createdTime === "number" ? o.createdTime : null,
+        modifiedTime: typeof o.modifiedTime === "number" ? o.modifiedTime : null,
+        paymentId: payEls[0]?.id ?? null,
+        paid: payEls.length > 0 || o.state === "locked",
+        lineItems: liEls.map((li) => ({
+          id: li.id,
+          name: li.name ?? null,
+          cloverItemId: li.item?.id ?? null,
+          priceCents: typeof li.price === "number" ? li.price : null,
+          refunded: !!li.refunded,
+        })),
+      });
+    }
+    if (els.length < 100) break;
+    offset += 100;
+  }
+  return out;
+}
