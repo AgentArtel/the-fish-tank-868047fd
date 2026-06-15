@@ -473,6 +473,75 @@ export const updateInventoryItemType = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// ---------- inventory review wizard ----------
+// Save one item from the review wizard, optionally taking it live. Setting a
+// retail price approves pricing (ADMIN-ONLY, per the pricing invariant); taking
+// it live sets availability=available, which the DB gate trigger only allows
+// when photo + approved price + retail_price + location + qty>0 are all present.
+export const reviewInventoryItem = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        locationId: z.string().uuid().nullable().optional(),
+        quantityAvailable: z.number().int().nonnegative().max(1_000_000).optional(),
+        retailPrice: z.number().nonnegative().max(1_000_000).optional(),
+        takeLive: z.boolean().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    // Pricing approval + go-live are admin-only.
+    if (!(await isAdmin(context.supabase, context.userId)))
+      throw new Error("Only admins can approve pricing and take items live");
+    await requireActive(context.supabase, context.userId);
+    const db = context.supabase as any;
+
+    const patch: Record<string, any> = {};
+    if (data.locationId !== undefined) patch.location_id = data.locationId;
+    if (data.quantityAvailable !== undefined) patch.quantity_available = data.quantityAvailable;
+    if (data.retailPrice !== undefined) {
+      patch.retail_price = data.retailPrice;
+      patch.pricing_status = "approved"; // admin approving the price
+    }
+    if (data.takeLive) patch.availability_status = "available";
+    if (Object.keys(patch).length === 0) return { ok: true };
+
+    // One atomic UPDATE so the gate trigger evaluates the final row (all fields set).
+    const { error } = await db.from("inventory_items").update(patch).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true, tookLive: !!data.takeLive };
+  });
+
+// Skip-and-flag an item for later admin review. Merges a `review_flag` marker into
+// attrs (read-merge-write so existing attrs like rack_position/source are kept).
+export const flagInventoryForReview = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({ id: z.string().uuid(), reason: z.string().max(500).optional() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await requireEditor(context.supabase, context.userId);
+    const db = context.supabase as any;
+    const { data: item } = await db
+      .from("inventory_items")
+      .select("attrs")
+      .eq("id", data.id)
+      .maybeSingle();
+    const attrs = {
+      ...(item?.attrs ?? {}),
+      review_flag: {
+        reason: data.reason?.trim() || null,
+        at: new Date().toISOString(),
+        by: context.userId,
+      },
+    };
+    const { error } = await db.from("inventory_items").update({ attrs }).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 const AI_CHARGE_TYPES = [
   "freight",
   "packaging",

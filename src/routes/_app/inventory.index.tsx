@@ -17,6 +17,7 @@ import { OpsBadge, availabilityTone, liveSaleTone, pricingTone } from "@/compone
 import {
   INVENTORY_AVAILABILITY,
   INVENTORY_AVAILABILITY_LABELS,
+  INVENTORY_REVIEW_STATUSES,
   INVENTORY_LIVE_SALE,
   INVENTORY_LIVE_SALE_LABELS,
   INVENTORY_PRICING_LABELS,
@@ -27,10 +28,12 @@ import {
 } from "@/lib/ops";
 import { setInventoryAvailability, setInventoryLiveSale } from "@/lib/ops.functions";
 import { PhotoOnFileWizard, inventoryHasPhoto } from "@/components/photo-on-file-wizard";
+import { InventoryReviewWizard } from "@/components/inventory-review-wizard";
 import { QuickAddButton } from "@/components/quick-add-fab";
+import { useMe } from "@/hooks/use-me";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { PackagePlus, Tag, X } from "lucide-react";
+import { PackagePlus, Tag, X, ClipboardCheck } from "lucide-react";
 import { z } from "zod";
 
 const searchSchema = z.object({
@@ -47,12 +50,29 @@ export const Route = createFileRoute("/_app/inventory/")({
   validateSearch: (s) => searchSchema.parse(s),
 });
 
+const SORTS: Record<string, { column: string; ascending: boolean }> = {
+  updated: { column: "updated_at", ascending: false },
+  name: { column: "item_name", ascending: true },
+  qty: { column: "quantity_available", ascending: false },
+  price: { column: "retail_price", ascending: false },
+};
+const SORT_LABELS: Record<string, string> = {
+  updated: "Recently updated",
+  name: "Name (A–Z)",
+  qty: "Quantity (high→low)",
+  price: "Price (high→low)",
+};
+
 function InventoryPage() {
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [sort, setSort] = useState<string>("updated");
+  const [reviewOpen, setReviewOpen] = useState(false);
   const { location: locationId, descendants, type } = Route.useSearch();
   const nav = useNavigate({ from: "/inventory" });
   const qc = useQueryClient();
+  const me = useMe();
+  const isAdmin = (me.data?.roles ?? []).includes("admin");
 
   const { data: allLocations } = useQuery({
     queryKey: ["all-locations"],
@@ -93,14 +113,17 @@ function InventoryPage() {
   }, [locationId, descendants, allLocations]);
 
   const { data } = useQuery({
-    queryKey: ["inventory", q, statusFilter, locationIds, type],
+    queryKey: ["inventory", q, statusFilter, sort, locationIds, type],
     queryFn: async () => {
+      const s = SORTS[sort] ?? SORTS.updated;
       let query = supabase
         .from("inventory_items")
         .select("*, store_locations(name,is_live_sale), vendors(name)")
-        .order("updated_at", { ascending: false })
+        .order(s.column, { ascending: s.ascending })
         .limit(2000);
-      if (statusFilter !== "all") query = query.eq("availability_status", statusFilter as any);
+      if (statusFilter === "needs_review")
+        query = query.in("availability_status", INVENTORY_REVIEW_STATUSES);
+      else if (statusFilter !== "all") query = query.eq("availability_status", statusFilter as any);
       if (q) query = query.ilike("item_name", `%${q}%`);
       if (type) query = query.eq("item_type", type);
       if (locationIds) query = query.in("location_id", locationIds);
@@ -139,6 +162,7 @@ function InventoryPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All availability</SelectItem>
+            <SelectItem value="needs_review">Needs review</SelectItem>
             {INVENTORY_AVAILABILITY.map((s) => (
               <SelectItem key={s} value={s}>
                 {INVENTORY_AVAILABILITY_LABELS[s]}
@@ -146,8 +170,25 @@ function InventoryPage() {
             ))}
           </SelectContent>
         </Select>
+        <Select value={sort} onValueChange={setSort}>
+          <SelectTrigger className="max-w-[190px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.keys(SORTS).map((k) => (
+              <SelectItem key={k} value={k}>
+                {SORT_LABELS[k]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <span className="text-xs text-muted-foreground">{data?.length ?? 0} items</span>
         <div className="ml-auto flex gap-2">
+          {isAdmin && (
+            <Button size="sm" onClick={() => setReviewOpen(true)}>
+              <ClipboardCheck className="w-4 h-4 mr-1" /> Review stock
+            </Button>
+          )}
           <Button asChild size="sm" variant="outline">
             <Link to="/inventory/missing-tags">
               <Tag className="w-4 h-4 mr-1" /> Missing tags
@@ -156,6 +197,14 @@ function InventoryPage() {
           <QuickAddButton size="sm">Quick Add</QuickAddButton>
         </div>
       </div>
+      {isAdmin && (
+        <InventoryReviewWizard
+          open={reviewOpen}
+          onOpenChange={setReviewOpen}
+          locations={allLocations ?? []}
+          onChanged={refresh}
+        />
+      )}
       {hasActiveFilters && (
         <div className="flex gap-2 mb-4 items-center flex-wrap">
           <span className="text-xs text-muted-foreground">Filters:</span>
