@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { loadLoyaltyConfig, customerBalanceCents, recordSaleEarn } from "@/lib/loyalty.server";
+import { loadLoyaltyConfig, recordSaleEarn } from "@/lib/loyalty.server";
 import { deriveTier, nextTier, normalizeTiers, passportBadges } from "@/lib/loyalty";
 
 // ---------- guards (mirror clover.functions.ts) ----------
@@ -93,7 +93,16 @@ export const getCustomerLoyalty = createServerFn({ method: "POST" })
       .eq("id", data.id)
       .maybeSingle();
 
-    // Recent activity for display (capped) …
+    // Balance + rolling-12-mo spend come from the DB-side aggregation RPC (no JS
+    // sum, no row caps) — correct and cheap regardless of ledger/sale volume.
+    const { data: summaryRows } = await db.rpc("customer_loyalty_summary", {
+      _customer_id: data.id,
+    });
+    const summary = Array.isArray(summaryRows) ? summaryRows[0] : summaryRows;
+    const balanceCents = Number(summary?.balance_cents ?? 0);
+    const annualSpendCents = Number(summary?.annual_spend_cents ?? 0);
+
+    // Recent activity for display (capped — display only, not used for the balance).
     const { data: ledgerRows } = await db
       .from("loyalty_ledger")
       .select("id, kind, amount_cents, channel, reason, created_at")
@@ -108,27 +117,22 @@ export const getCustomerLoyalty = createServerFn({ method: "POST" })
       reason: r.reason as string | null,
       createdAt: r.created_at as string,
     }));
-    // … but the balance is summed over the FULL ledger, not the capped page.
-    const balanceCents = await customerBalanceCents(db, data.id);
 
-    // Sale history (rolling 12 months) → tier spend + Reef Passport labels. The
-    // sold_at window bounds the read and matches the tier definition; passport
-    // badges therefore reflect the member's last-12-months collection.
+    // Sale history (rolling 12 months) → Reef Passport labels only (spend now comes
+    // from the RPC above). Bounded by the sold_at window; badges reflect the
+    // member's last-12-months collection.
     const sinceIso = new Date(Date.now() - YEAR_MS).toISOString();
     const { data: events } = await db
       .from("inventory_sale_events")
-      .select("total_cents, sold_at, kind, clover_item_name, item:inventory_item_id(item_name)")
+      .select("clover_item_name, item:inventory_item_id(item_name)")
       .eq("customer_id", data.id)
       .eq("kind", "sale")
       .gte("sold_at", sinceIso)
       .order("sold_at", { ascending: false })
       .limit(2000);
-    let annualSpendCents = 0;
-    const labels: (string | null)[] = [];
-    for (const e of events ?? []) {
-      labels.push(e.item?.item_name ?? e.clover_item_name ?? null);
-      annualSpendCents += Number(e.total_cents ?? 0);
-    }
+    const labels: (string | null)[] = (events ?? []).map(
+      (e: any) => e.item?.item_name ?? e.clover_item_name ?? null,
+    );
 
     const tier = deriveTier(annualSpendCents, cfg.tiers);
     const next = nextTier(annualSpendCents, cfg.tiers);
@@ -150,8 +154,10 @@ export const getCustomerLoyalty = createServerFn({ method: "POST" })
 
 // ---------- manual ledger entry (admin) ----------
 // Add credit, record a redemption (e.g. against a coral won at a live sale), or
-// approve a DOA replacement credit. `earn` is system-only (sync path) and not
-// allowed here. amountCents is always positive; the sign follows the kind.
+// approve a DOA replacement credit. `earn` is system-only and not allowed here.
+// Redemptions go through the atomic `loyalty_redeem` RPC, which re-checks the
+// balance under a row lock so concurrent redemptions can't overdraw; other kinds
+// are positive credits inserted directly (admin-gated by RLS + the sign CHECK).
 export const recordLoyaltyEntry = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
@@ -169,25 +175,27 @@ export const recordLoyaltyEntry = createServerFn({ method: "POST" })
     await requireAdmin(context.supabase, context.userId);
     const db = context.supabase as any;
 
-    // Current balance — used to block over-redemption.
-    const balanceCents = await customerBalanceCents(db, data.customerId);
-
-    if (data.kind === "redeem" && data.amountCents > balanceCents) {
-      throw new Error(
-        `Redemption exceeds available Reef Credit ($${(balanceCents / 100).toFixed(2)}).`,
-      );
+    if (data.kind === "redeem") {
+      // Atomic: the RPC locks the customer row, re-checks balance, and rejects
+      // overdraw in-transaction (no read-then-write race).
+      const { error } = await db.rpc("loyalty_redeem", {
+        _customer_id: data.customerId,
+        _amount_cents: data.amountCents,
+        _channel: data.channel ?? "in_store",
+        _reason: data.reason?.trim() || null,
+      });
+      if (error) throw new Error(error.message);
+    } else {
+      const { error } = await db.from("loyalty_ledger").insert({
+        customer_id: data.customerId,
+        kind: data.kind,
+        amount_cents: data.amountCents, // positive credit (bonus/doa/adjust)
+        channel: data.channel ?? null,
+        reason: data.reason?.trim() || null,
+        created_by: context.userId,
+      });
+      if (error) throw new Error(error.message);
     }
-
-    const signed = data.kind === "redeem" ? -data.amountCents : data.amountCents;
-    const { error } = await db.from("loyalty_ledger").insert({
-      customer_id: data.customerId,
-      kind: data.kind,
-      amount_cents: signed,
-      channel: data.channel ?? null,
-      reason: data.reason?.trim() || null,
-      created_by: context.userId,
-    });
-    if (error) throw new Error(error.message);
 
     // First manual entry marks the explicit "joined the club" moment.
     await db
@@ -196,7 +204,12 @@ export const recordLoyaltyEntry = createServerFn({ method: "POST" })
       .eq("id", data.customerId)
       .is("reef_club_enrolled_at", null);
 
-    return { ok: true, balanceCents: balanceCents + signed };
+    // Return the fresh balance from the DB aggregate.
+    const { data: summaryRows } = await db.rpc("customer_loyalty_summary", {
+      _customer_id: data.customerId,
+    });
+    const summary = Array.isArray(summaryRows) ? summaryRows[0] : summaryRows;
+    return { ok: true, balanceCents: Number(summary?.balance_cents ?? 0) };
   });
 
 // ---------- attribution: recent sales with no buyer attached (editor) ----------

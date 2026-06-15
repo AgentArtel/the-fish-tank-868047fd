@@ -29,19 +29,6 @@ export async function loadLoyaltyConfig(db: any): Promise<LoyaltyConfig> {
   };
 }
 
-// True Reef Credit balance for a customer = SUM of all ledger amounts. Reads the
-// single `amount_cents` column (no row cap) so the balance is always correct —
-// summing a capped page would understate long-tenured members. NOTE: at very high
-// per-customer ledger volume this should move to a DB-side SUM (RPC) or a
-// denormalized running total on `customers`; tracked as a scalability follow-up.
-export async function customerBalanceCents(db: any, customerId: string): Promise<number> {
-  const { data } = await db
-    .from("loyalty_ledger")
-    .select("amount_cents")
-    .eq("customer_id", customerId);
-  return (data ?? []).reduce((n: number, r: any) => n + Number(r.amount_cents ?? 0), 0);
-}
-
 // Write the `earn` ledger row for one linked member sale. Single source of truth
 // for earning, used by both the live sync (applyInventorySale) and retroactive
 // attribution (attachSaleToCustomer). Idempotent: the ledger's

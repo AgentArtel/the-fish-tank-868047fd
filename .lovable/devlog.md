@@ -1365,3 +1365,19 @@ Closing the gap where earn only fires for customer-linked Clover sales (most wal
 - **Deferred to Lovable** (handoff-loyalty-hardening.md): commit loyalty tables as a migration; DB-level
   ledger sign/RLS/atomic-redemption; DB-side balance/spend aggregation + the `sold_at` report index.
 Build ✅ · tsc clean · prettier clean · earn-math assertions ✅.
+
+---
+## 2026-06-15 — Reef Club: wire to Lovable's hardening RPCs (Claude Code)
+
+Lovable shipped the DB hardening (sign/kind CHECK, kind-scoped INSERT RLS, atomic `loyalty_redeem`,
+`customer_loyalty_summary`, `sold_at` partial index, clover-poll cron @ */10m). Wired the app to it:
+- `getCustomerLoyalty` now gets balance + rolling-12-mo spend from **`customer_loyalty_summary`** (RPC,
+  DB-side SUM) instead of JS sums — removes the full-ledger balance read and the spend loop. Bounded
+  reads remain only for the display ledger (200) and passport labels (12-mo window).
+- `recordLoyaltyEntry` redemptions now call the atomic **`loyalty_redeem`** RPC (row-locked,
+  balance re-checked in-transaction) — closes the read-then-write over-redemption race. Other kinds
+  (bonus/doa/adjust) insert directly (admin-gated by the new kind-scoped RLS + sign CHECK). Fresh
+  balance returned from `customer_loyalty_summary`.
+- Removed the now-dead `customerBalanceCents` JS helper.
+Build ✅ · tsc clean · prettier clean. Earn path (editors may insert `kind='earn'`) unchanged — the
+attribution flow still works under the tightened RLS.
