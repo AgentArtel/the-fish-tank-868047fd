@@ -195,19 +195,22 @@ function CoralDraftRow({
   };
 
   const goLive = async () => {
+    if (busy) return;
     setBusy(true);
     try {
       const hasPhoto = await inventoryHasPhoto(item.id);
       if (!hasPhoto) {
+        // Hand off to the photo wizard; STAY busy so "Take live" can't fire again
+        // while it's open. Cleared by afterPhoto (success) or the wizard close.
         setWizardOpen(true);
         return;
       }
       await setAvail({ data: { id: item.id, status: "available" } });
       toast.success(`${item.item_name} is live`);
       onDone();
+      setBusy(false);
     } catch (e: any) {
       toast.error(e.message);
-    } finally {
       setBusy(false);
     }
   };
@@ -219,7 +222,15 @@ function CoralDraftRow({
       onDone();
     } catch (e: any) {
       toast.error(e.message);
+    } finally {
+      setBusy(false);
     }
+  };
+
+  // Wizard dismissed without completing → re-enable the button.
+  const handleWizardOpenChange = (open: boolean) => {
+    setWizardOpen(open);
+    if (!open) setBusy(false);
   };
 
   return (
@@ -281,7 +292,7 @@ function CoralDraftRow({
         )}
         <PhotoOnFileWizard
           open={wizardOpen}
-          onOpenChange={setWizardOpen}
+          onOpenChange={handleWizardOpenChange}
           inventoryItemId={item.id}
           itemName={item.item_name}
           onUploaded={afterPhoto}
@@ -301,7 +312,8 @@ function PricingRow({
   onDone: () => void;
 }) {
   const suggested = line.suggested_retail_price ?? suggestRetail(line.wholesale_cost);
-  const preset = line.override_retail_price ?? line.suggested_retail_price ?? suggestRetail(line.wholesale_cost);
+  const preset =
+    line.override_retail_price ?? line.suggested_retail_price ?? suggestRetail(line.wholesale_cost);
   const [price, setPrice] = useState<string>(preset != null ? String(preset) : "");
   const [busy, setBusy] = useState(false);
   const approve = useServerFn(approveLinePricing);
@@ -341,7 +353,9 @@ function PricingRow({
       <td className="p-3">
         {fmtMoney(suggested)}
         {line.override_retail_price != null && (
-          <div className="text-[11px] text-amber-700 mt-0.5">Receiver: {fmtMoney(line.override_retail_price)}</div>
+          <div className="text-[11px] text-amber-700 mt-0.5">
+            Receiver: {fmtMoney(line.override_retail_price)}
+          </div>
         )}
       </td>
       <td className="p-3">

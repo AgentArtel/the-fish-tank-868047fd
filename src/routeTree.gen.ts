@@ -36,6 +36,7 @@ import { Route as AppBatchesIndexRouteImport } from './routes/_app/batches.index
 import { Route as AppVendorWatchSourceIdRouteImport } from './routes/_app/vendor-watch.$sourceId'
 import { Route as AppSettingsUsersRouteImport } from './routes/_app/settings.users'
 import { Route as AppSettingsMetaRouteImport } from './routes/_app/settings.meta'
+import { Route as AppSettingsLoyaltyRouteImport } from './routes/_app/settings.loyalty'
 import { Route as AppSettingsCloverRouteImport } from './routes/_app/settings.clover'
 import { Route as AppSettingsAiRouteImport } from './routes/_app/settings.ai'
 import { Route as AppInventoryMissingTagsRouteImport } from './routes/_app/inventory.missing-tags'
@@ -182,6 +183,11 @@ const AppSettingsMetaRoute = AppSettingsMetaRouteImport.update({
   path: '/settings/meta',
   getParentRoute: () => AppRoute,
 } as any)
+const AppSettingsLoyaltyRoute = AppSettingsLoyaltyRouteImport.update({
+  id: '/settings/loyalty',
+  path: '/settings/loyalty',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppSettingsCloverRoute = AppSettingsCloverRouteImport.update({
   id: '/settings/clover',
   path: '/settings/clover',
@@ -269,6 +275,7 @@ export interface FileRoutesByFullPath {
   '/inventory/missing-tags': typeof AppInventoryMissingTagsRoute
   '/settings/ai': typeof AppSettingsAiRoute
   '/settings/clover': typeof AppSettingsCloverRoute
+  '/settings/loyalty': typeof AppSettingsLoyaltyRoute
   '/settings/meta': typeof AppSettingsMetaRoute
   '/settings/users': typeof AppSettingsUsersRoute
   '/vendor-watch/$sourceId': typeof AppVendorWatchSourceIdRoute
@@ -306,6 +313,7 @@ export interface FileRoutesByTo {
   '/inventory/missing-tags': typeof AppInventoryMissingTagsRoute
   '/settings/ai': typeof AppSettingsAiRoute
   '/settings/clover': typeof AppSettingsCloverRoute
+  '/settings/loyalty': typeof AppSettingsLoyaltyRoute
   '/settings/meta': typeof AppSettingsMetaRoute
   '/settings/users': typeof AppSettingsUsersRoute
   '/vendor-watch/$sourceId': typeof AppVendorWatchSourceIdRoute
@@ -347,6 +355,7 @@ export interface FileRoutesById {
   '/_app/inventory/missing-tags': typeof AppInventoryMissingTagsRoute
   '/_app/settings/ai': typeof AppSettingsAiRoute
   '/_app/settings/clover': typeof AppSettingsCloverRoute
+  '/_app/settings/loyalty': typeof AppSettingsLoyaltyRoute
   '/_app/settings/meta': typeof AppSettingsMetaRoute
   '/_app/settings/users': typeof AppSettingsUsersRoute
   '/_app/vendor-watch/$sourceId': typeof AppVendorWatchSourceIdRoute
@@ -388,6 +397,7 @@ export interface FileRouteTypes {
     | '/inventory/missing-tags'
     | '/settings/ai'
     | '/settings/clover'
+    | '/settings/loyalty'
     | '/settings/meta'
     | '/settings/users'
     | '/vendor-watch/$sourceId'
@@ -425,6 +435,7 @@ export interface FileRouteTypes {
     | '/inventory/missing-tags'
     | '/settings/ai'
     | '/settings/clover'
+    | '/settings/loyalty'
     | '/settings/meta'
     | '/settings/users'
     | '/vendor-watch/$sourceId'
@@ -465,6 +476,7 @@ export interface FileRouteTypes {
     | '/_app/inventory/missing-tags'
     | '/_app/settings/ai'
     | '/_app/settings/clover'
+    | '/_app/settings/loyalty'
     | '/_app/settings/meta'
     | '/_app/settings/users'
     | '/_app/vendor-watch/$sourceId'
@@ -679,6 +691,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsMetaRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/settings/loyalty': {
+      id: '/_app/settings/loyalty'
+      path: '/settings/loyalty'
+      fullPath: '/settings/loyalty'
+      preLoaderRoute: typeof AppSettingsLoyaltyRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/settings/clover': {
       id: '/_app/settings/clover'
       path: '/settings/clover'
@@ -810,6 +829,7 @@ interface AppRouteChildren {
   AppCustomersIdRoute: typeof AppCustomersIdRoute
   AppSettingsAiRoute: typeof AppSettingsAiRoute
   AppSettingsCloverRoute: typeof AppSettingsCloverRoute
+  AppSettingsLoyaltyRoute: typeof AppSettingsLoyaltyRoute
   AppSettingsMetaRoute: typeof AppSettingsMetaRoute
   AppSettingsUsersRoute: typeof AppSettingsUsersRoute
   AppVendorWatchSourceIdRoute: typeof AppVendorWatchSourceIdRoute
@@ -837,6 +857,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppCustomersIdRoute: AppCustomersIdRoute,
   AppSettingsAiRoute: AppSettingsAiRoute,
   AppSettingsCloverRoute: AppSettingsCloverRoute,
+  AppSettingsLoyaltyRoute: AppSettingsLoyaltyRoute,
   AppSettingsMetaRoute: AppSettingsMetaRoute,
   AppSettingsUsersRoute: AppSettingsUsersRoute,
   AppVendorWatchSourceIdRoute: AppVendorWatchSourceIdRoute,
@@ -861,3 +882,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

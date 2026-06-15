@@ -56,7 +56,8 @@ export async function ingestCloverSales(
   // Capture the buyer where an order has one (most are anonymous walk-ins → null).
   // Upsert each distinct Clover customer once, then map order → workspace customer id.
   const distinctCustomers = new Map<string, any>();
-  for (const o of saleOrders) if (o.customer) distinctCustomers.set(o.customer.cloverId, o.customer);
+  for (const o of saleOrders)
+    if (o.customer) distinctCustomers.set(o.customer.cloverId, o.customer);
   const customersSeen = distinctCustomers.size;
   const customerIdByClover = new Map<string, string>();
   let customersUpserted = 0;
@@ -107,7 +108,17 @@ export async function ingestCloverSales(
   const invByClover = new Map<string, string | null>();
   for (const l of links ?? []) invByClover.set(l.clover_item_id, l.inventory_item_id ?? null);
 
-  // Dedupe up front: which line items are already recorded?
+  // Reef Club: load loyalty config once for the whole batch. When enabled, each
+  // linked member sale earns store credit via applyInventorySale (idempotent).
+  const { loadLoyaltyConfig } = await import("@/lib/loyalty.server");
+  const loyaltyCfg = await loadLoyaltyConfig(db);
+  const loyalty = loyaltyCfg.enabled ? { earnPercent: loyaltyCfg.earnPercent } : null;
+
+  // Dedupe up front: which (order, line) pairs are already recorded? Keyed on the
+  // composite (clover_order_id, clover_line_item_id) to match the DB UNIQUE. Clover
+  // line-item ids are only unique WITHIN an order, so keying on the line id alone
+  // could mark a different order's line as a dup and silently drop a real sale.
+  const dedupeKey = (orderId: string, lineId: string) => `${orderId}::${lineId}`;
   const allLineIds = saleOrders.flatMap((o) => o.lineItems.map((li) => li.id));
   const seen = new Set<string>();
   for (let i = 0; i < allLineIds.length; i += 200) {
@@ -115,9 +126,11 @@ export async function ingestCloverSales(
     if (!chunk.length) continue;
     const { data: existing } = await db
       .from("inventory_sale_events")
-      .select("clover_line_item_id")
+      .select("clover_order_id, clover_line_item_id")
       .in("clover_line_item_id", chunk);
-    for (const e of existing ?? []) if (e.clover_line_item_id) seen.add(e.clover_line_item_id);
+    for (const e of existing ?? [])
+      if (e.clover_order_id && e.clover_line_item_id)
+        seen.add(dedupeKey(e.clover_order_id, e.clover_line_item_id));
   }
 
   let lineItemsSeen = 0;
@@ -131,11 +144,12 @@ export async function ingestCloverSales(
     const customerId = o.customer ? (customerIdByClover.get(o.customer.cloverId) ?? null) : null;
     for (const li of o.lineItems) {
       lineItemsSeen++;
-      if (seen.has(li.id)) {
+      const key = dedupeKey(o.id, li.id);
+      if (seen.has(key)) {
         skippedDuplicates++;
         continue;
       }
-      seen.add(li.id); // guard against duplicate ids within the same batch
+      seen.add(key); // guard against duplicate (order,line) within the same batch
 
       const invId = li.cloverItemId ? (invByClover.get(li.cloverItemId) ?? null) : null;
       const kind: "sale" | "refund" = li.refunded ? "refund" : "sale";
@@ -159,6 +173,7 @@ export async function ingestCloverSales(
             cloverRefs: refs,
             customerId,
             userId: opts.userId,
+            loyalty,
           });
           applied++;
         } else {

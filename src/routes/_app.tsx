@@ -114,6 +114,7 @@ const GROUPS: NavGroup[] = [
       { to: "/settings/meta", label: "Workspace", icon: Settings },
       { to: "/settings/ai", label: "AI keys", icon: Settings, adminOnly: true },
       { to: "/settings/clover", label: "Clover POS", icon: Store },
+      { to: "/settings/loyalty", label: "Reef Club", icon: Waves, adminOnly: true },
       { to: "/settings/users", label: "Users", icon: Users, adminOnly: true },
     ],
   },
