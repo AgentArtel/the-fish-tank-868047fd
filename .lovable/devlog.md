@@ -1381,3 +1381,20 @@ Lovable shipped the DB hardening (sign/kind CHECK, kind-scoped INSERT RLS, atomi
 - Removed the now-dead `customerBalanceCents` JS helper.
 Build ✅ · tsc clean · prettier clean. Earn path (editors may insert `kind='earn'`) unchanged — the
 attribution flow still works under the tightened RLS.
+
+---
+## 2026-06-15 — Inventory review wizard + stock filters (Claude Code)
+
+The "everything's sold out" problem: Clover imports land as drafts (`not_for_sale`, qty 0, needs_photo)
+by design — they need the review→go-live step. Built that step.
+- **Review wizard** (`inventory-review-wizard.tsx`, admin-only overlay from the stock list — no new nav):
+  one card at a time, fill location + qty + price, snap a photo (reuses `PhotoOnFileWizard`), then **swipe
+  right / → / "Save & take live"** (drag, keyboard, or button) or **left / ← / "Skip & flag"**. Deck loads
+  draft items (`INVENTORY_REVIEW_STATUSES`), skips already-flagged, shows an end-of-session summary.
+- **Server fns** (ops.functions.ts): `reviewInventoryItem` (admin — one atomic UPDATE setting location/qty/
+  price+approve and availability=available; the DB gate trigger still enforces photo+price+location+qty>0)
+  and `flagInventoryForReview` (editor — merges an `attrs.review_flag` marker, read-merge-write to preserve
+  existing attrs). Respects the invariants: pricing approval + go-live are admin-only.
+- **Stock list**: added a **"Needs review"** quick filter (the draft set) and a **sort** control
+  (recently-updated / name / qty / price). Existing status/type/location/search filters unchanged.
+Build ✅ · tsc clean · prettier clean.
