@@ -13,6 +13,7 @@ import { useMe } from "@/hooks/use-me";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { QuickAddFab } from "@/components/quick-add-fab";
+import { FeedbackDock } from "@/components/feedback-dock";
 import { getWorkload } from "@/lib/workload.functions";
 import { useState, useEffect } from "react";
 import {
@@ -94,9 +95,7 @@ const GROUPS: NavGroup[] = [
   },
   {
     label: "Vendor Watch",
-    items: [
-      { to: "/vendor-watch", label: "Watch Sources", icon: Globe },
-    ],
+    items: [{ to: "/vendor-watch", label: "Watch Sources", icon: Globe }],
   },
   {
     label: "Marketing",
@@ -339,6 +338,7 @@ function AppLayout() {
       </div>
 
       <QuickAddFab />
+      <FeedbackDock />
     </div>
   );
 }
