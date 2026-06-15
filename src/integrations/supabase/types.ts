@@ -2008,6 +2008,13 @@ export type Database = {
     }
     Functions: {
       can_edit_content: { Args: { _user_id: string }; Returns: boolean }
+      customer_loyalty_summary: {
+        Args: { _customer_id: string }
+        Returns: {
+          annual_spend_cents: number
+          balance_cents: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -2016,6 +2023,31 @@ export type Database = {
         Returns: boolean
       }
       is_active_user: { Args: { _user_id: string }; Returns: boolean }
+      loyalty_redeem: {
+        Args: {
+          _amount_cents: number
+          _channel?: string
+          _customer_id: string
+          _reason?: string
+        }
+        Returns: {
+          amount_cents: number
+          channel: string | null
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          id: string
+          kind: string
+          reason: string | null
+          sale_event_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "loyalty_ledger"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
     }
