@@ -1398,3 +1398,16 @@ by design — they need the review→go-live step. Built that step.
 - **Stock list**: added a **"Needs review"** quick filter (the draft set) and a **sort** control
   (recently-updated / name / qty / price). Existing status/type/location/search filters unchanged.
 Build ✅ · tsc clean · prettier clean.
+
+---
+## 2026-06-15 — In-app feedback dock → GitHub issues (Option B; A-ready) (Claude Code)
+
+Floating glassmorphic dock (bottom-left, global in `_app` shell, beside the Quick-Add FAB). Four types
+(bug/ui/idea/question) → Dialog with description + screenshot (file or paste). On submit captures page,
+device, viewport, app commit, submitter, and a console ring buffer (`console-buffer.ts`, last ~50
+error/warn + window errors), uploads the screenshot to a private `feedback` bucket (1-yr signed URL),
+and `submitFeedback` opens a labeled GitHub issue (`feedback`+type) via the REST API
+(`process.env.GITHUB_FEEDBACK_TOKEN`). Issue body uses fixed section headers + labels so a later
+`on: issues.opened` workflow (Option A) can auto-trigger Claude with no rework. Degrades gracefully
+("not configured yet") until Lovable provisions the bucket + token (handoff-feedback-infra.md).
+Scope: scope-feedback-dock.md. Build ✅ · tsc clean · prettier clean.
