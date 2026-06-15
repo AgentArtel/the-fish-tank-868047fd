@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { classifyCoralType } from "@/lib/coral-type";
 
@@ -8,7 +9,11 @@ async function isAdmin(supabase: any, userId: string) {
   return (data ?? []).some((r: any) => r.role === "admin");
 }
 async function requireActive(supabase: any, userId: string) {
-  const { data } = await supabase.from("profiles").select("is_active").eq("id", userId).maybeSingle();
+  const { data } = await supabase
+    .from("profiles")
+    .select("is_active")
+    .eq("id", userId)
+    .maybeSingle();
   if (!data?.is_active) throw new Error("Forbidden: account pending approval");
 }
 async function requireAdmin(supabase: any, userId: string) {
@@ -43,9 +48,14 @@ export const getCloverOverview = createServerFn({ method: "GET" })
 
     const { data: conn } = await db.from("clover_connection").select("*").maybeSingle();
     const count = async (q: any) => (await q).count ?? 0;
-    const total = await count(db.from("clover_item_links").select("id", { count: "exact", head: true }));
+    const total = await count(
+      db.from("clover_item_links").select("id", { count: "exact", head: true }),
+    );
     const linked = await count(
-      db.from("clover_item_links").select("id", { count: "exact", head: true }).eq("link_status", "linked"),
+      db
+        .from("clover_item_links")
+        .select("id", { count: "exact", head: true })
+        .eq("link_status", "linked"),
     );
     const salesNeedingReview = await count(
       db
@@ -90,7 +100,15 @@ export const getCloverSettings = createServerFn({ method: "GET" })
 // Empty/blank apiToken leaves the existing token in place — admins can update
 // merchant id / base URL without re-typing the token.
 export const saveCloverSettings = createServerFn({ method: "POST" })
-  .inputValidator((d: { merchantId: string; baseUrl: string; apiToken?: string }) => d)
+  .inputValidator((d) =>
+    z
+      .object({
+        merchantId: z.string().trim().max(120),
+        baseUrl: z.string().trim().url().max(300),
+        apiToken: z.string().max(500).optional(),
+      })
+      .parse(d),
+  )
   .middleware([requireSupabaseAuth])
   .handler(async ({ data, context }) => {
     await requireAdmin(context.supabase, context.userId);
@@ -325,7 +343,10 @@ export const createWorkspaceItemsFromClover = createServerFn({ method: "POST" })
     await db.from("clover_connection").update({ last_import_at: nowIso }).eq("id", true);
 
     const remaining = await countRows(
-      db.from("clover_item_links").select("id", { count: "exact", head: true }).is("inventory_item_id", null),
+      db
+        .from("clover_item_links")
+        .select("id", { count: "exact", head: true })
+        .is("inventory_item_id", null),
     );
 
     return {
