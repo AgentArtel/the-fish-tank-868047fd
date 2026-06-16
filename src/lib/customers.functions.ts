@@ -24,8 +24,9 @@ const displayName = (c: any) =>
   "Unnamed customer";
 
 // ---------- customer list with lifetime spend + visit counts (editor) ----------
-// Reads the customers table + their sale events, aggregating spend/visits in JS
-// (one read each — Worker-friendly). Sorted by lifetime spend desc.
+// Prefers the DB-side `customers_with_spend` RPC (search + aggregation + sort in SQL).
+// Falls back to the bounded JS aggregation if the RPC isn't deployed yet, so this is
+// non-breaking and auto-upgrades when the migration lands.
 export const listCustomers = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ q: z.string().max(200).optional() }).parse(d))
@@ -33,9 +34,31 @@ export const listCustomers = createServerFn({ method: "POST" })
     await requireEditor(context.supabase, context.userId);
     const db = context.supabase as any;
 
+    const { data: rpcRows, error: rpcErr } = await db.rpc("customers_with_spend", {
+      _q: data.q ?? null,
+      _limit: 1000,
+    });
+    if (!rpcErr && Array.isArray(rpcRows)) {
+      const rows = rpcRows.map((c: any) => ({
+        id: c.id,
+        name: displayName(c),
+        email: c.email,
+        phone: c.phone,
+        marketingConsent: c.marketing_consent,
+        lifetimeSpendCents: Number(c.spend_cents ?? 0),
+        orderCount: Number(c.order_count ?? 0),
+        lastPurchaseAt: c.last_purchase_at ?? c.last_seen_at ?? null,
+      }));
+      return { rows, total: rows.length };
+    }
+
+    // Fallback (RPC not deployed): read customers + their sale events and aggregate
+    // in JS. Bounded by .limit() — see handoff-customers-aggregation.md.
     let q = db
       .from("customers")
-      .select("id, first_name, last_name, email, phone, marketing_consent, first_seen_at, last_seen_at")
+      .select(
+        "id, first_name, last_name, email, phone, marketing_consent, first_seen_at, last_seen_at",
+      )
       .limit(1000);
     if (data.q) {
       const like = `%${data.q}%`;
@@ -107,7 +130,10 @@ export const getCustomer = createServerFn({ method: "POST" })
       .limit(2000);
 
     const sales = (events ?? []).filter((e: any) => e.kind === "sale");
-    const lifetimeSpendCents = sales.reduce((n: number, e: any) => n + Number(e.total_cents ?? 0), 0);
+    const lifetimeSpendCents = sales.reduce(
+      (n: number, e: any) => n + Number(e.total_cents ?? 0),
+      0,
+    );
     const orderIds = new Set(sales.map((e: any) => e.clover_order_id).filter(Boolean));
 
     const history = (events ?? []).map((e: any) => ({
