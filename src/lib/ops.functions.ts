@@ -4,29 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { classifyCoralType, coralTypeLabel } from "@/lib/coral-type";
 import { callAIChat } from "@/lib/ai-call.server";
 import { suggestRetail } from "@/lib/ops";
-
-async function isAdmin(supabase: any, userId: string) {
-  const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-  return (data ?? []).some((r: any) => r.role === "admin");
-}
-
-async function requireActive(supabase: any, userId: string) {
-  const { data } = await supabase
-    .from("profiles")
-    .select("is_active")
-    .eq("id", userId)
-    .maybeSingle();
-  if (!data?.is_active) throw new Error("Forbidden: account pending approval");
-}
-
-async function requireEditor(supabase: any, userId: string) {
-  await requireActive(supabase, userId);
-  const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-  const ok = (data ?? []).some(
-    (r: any) => r.role === "admin" || r.role === "creator" || r.role === "reviewer",
-  );
-  if (!ok) throw new Error("Forbidden: editor role required");
-}
+import { isAdmin, requireActive, requireEditor } from "@/lib/auth-guards";
 
 export const getSignedVendorInvoiceUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

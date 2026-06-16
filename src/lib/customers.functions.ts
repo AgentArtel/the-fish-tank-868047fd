@@ -1,21 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-
-// ---------- guards ----------
-async function requireEditor(supabase: any, userId: string) {
-  const { data: prof } = await supabase
-    .from("profiles")
-    .select("is_active")
-    .eq("id", userId)
-    .maybeSingle();
-  if (!prof?.is_active) throw new Error("Forbidden: account pending approval");
-  const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-  const ok = (data ?? []).some(
-    (r: any) => r.role === "admin" || r.role === "creator" || r.role === "reviewer",
-  );
-  if (!ok) throw new Error("Forbidden: editor role required");
-}
+import { requireEditor } from "@/lib/auth-guards";
 
 const displayName = (c: any) =>
   [c.first_name, c.last_name].filter(Boolean).join(" ").trim() ||
@@ -114,7 +100,9 @@ export const getCustomer = createServerFn({ method: "POST" })
 
     const { data: c, error } = await db
       .from("customers")
-      .select("*")
+      .select(
+        "id, first_name, last_name, email, phone, marketing_consent, notes, first_seen_at, last_seen_at",
+      )
       .eq("id", data.id)
       .maybeSingle();
     if (error) throw new Error(error.message);

@@ -1,21 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-
-// ---------- guard (mirrors ops/clover.functions) ----------
-async function requireEditor(supabase: any, userId: string) {
-  const { data: prof } = await supabase
-    .from("profiles")
-    .select("is_active")
-    .eq("id", userId)
-    .maybeSingle();
-  if (!prof?.is_active) throw new Error("Forbidden: account pending approval");
-  const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-  const ok = (data ?? []).some(
-    (r: any) => r.role === "admin" || r.role === "creator" || r.role === "reviewer",
-  );
-  if (!ok) throw new Error("Forbidden: editor role required");
-}
+import { requireEditor } from "@/lib/auth-guards";
 
 // ============================================================================
 // Sales report — one read of the sale ledger + catalog, aggregated in JS (mirrors
@@ -47,7 +33,9 @@ export const getSalesReport = createServerFn({ method: "POST" })
 
     const { data: catalog } = await db
       .from("inventory_items")
-      .select("id, item_name, item_type, retail_price, availability_status, created_at, quantity_available")
+      .select(
+        "id, item_name, item_type, retail_price, availability_status, created_at, quantity_available",
+      )
       .limit(5000);
     const itemById = new Map<string, any>();
     for (const it of catalog ?? []) itemById.set(it.id, it);
@@ -123,9 +111,7 @@ export const getSalesReport = createServerFn({ method: "POST" })
       .sort((a, b) => b.revenueCents - a.revenueCents);
 
     // ---- slow / no movers: available items with zero sales in window ----
-    const soldIds = new Set<string>(
-      sales.map((r: any) => r.inventory_item_id).filter(Boolean),
-    );
+    const soldIds = new Set<string>(sales.map((r: any) => r.inventory_item_id).filter(Boolean));
     const slowMovers = (catalog ?? [])
       .filter((it: any) => it.availability_status === "available" && !soldIds.has(it.id))
       .map((it: any) => ({

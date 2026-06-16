@@ -3,32 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { loadLoyaltyConfig, recordSaleEarn } from "@/lib/loyalty.server";
 import { deriveTier, nextTier, normalizeTiers, passportBadges } from "@/lib/loyalty";
-
-// ---------- guards (mirror clover.functions.ts) ----------
-async function isAdmin(supabase: any, userId: string) {
-  const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-  return (data ?? []).some((r: any) => r.role === "admin");
-}
-async function requireActive(supabase: any, userId: string) {
-  const { data } = await supabase
-    .from("profiles")
-    .select("is_active")
-    .eq("id", userId)
-    .maybeSingle();
-  if (!data?.is_active) throw new Error("Forbidden: account pending approval");
-}
-async function requireAdmin(supabase: any, userId: string) {
-  await requireActive(supabase, userId);
-  if (!(await isAdmin(supabase, userId))) throw new Error("Forbidden: admin role required");
-}
-async function requireEditor(supabase: any, userId: string) {
-  await requireActive(supabase, userId);
-  const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-  const ok = (data ?? []).some(
-    (r: any) => r.role === "admin" || r.role === "creator" || r.role === "reviewer",
-  );
-  if (!ok) throw new Error("Forbidden: editor role required");
-}
+import { requireAdmin, requireEditor } from "@/lib/auth-guards";
 
 const YEAR_MS = 365 * 86_400_000;
 
