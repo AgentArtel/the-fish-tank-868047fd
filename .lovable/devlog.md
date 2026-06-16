@@ -1439,3 +1439,20 @@ SUM/COUNT aggregation + sort, all in SQL) and **falls back** to the old bounded 
 deployed yet — non-breaking, auto-upgrades when the migration lands. RPC spec handed to Lovable in
 handoff-customers-aggregation.md (backed by the existing customer_id/sold_at index; semantics match the
 JS exactly — kind='sale', distinct clover_order_id for orders). Build ✅ · tsc clean · prettier clean.
+
+---
+## 2026-06-16 — App-lane cleanups: auth-guard dedup + select(*) tightening (Claude Code)
+
+Per scope-app-lane-cleanups.md (both low-risk, TS-only, no DB).
+- **C1 — one `src/lib/auth-guards.ts`** (canonical isAdmin/requireActive/requireAdmin/requireEditor). Removed
+  the copy-pasted guards from clover, loyalty, scrape, ops, customers, reports, workload, feedback, and
+  ai-settings and imported the shared ones. Editor role-set was identical everywhere (nothing to
+  reconcile); ai-settings adopts the canonical "admin role required" string. **Preserved**: feedback's
+  requireActive-only ("any active user"), ops' bespoke admin handler messages (left inline), and cms's
+  inline checks incl. the admin||reviewer content-approval rule (left untouched).
+- **C2 — tightened `select("*")`** on the reads that cross the client boundary or touch secrets/PII:
+  getMe (profiles → id,email,display_name,avatar_url,is_active — was shipping the full row to every
+  client), getCustomer (explicit customer columns), submitFeedback (email,display_name), getAISettings
+  (explicit 13 cols before masking), getCloverOverview (3 status cols). Left the two internal/editor-gated
+  ops reads as `*` (low payoff, long lists) per scope.
+Build ✅ · tsc clean · prettier clean. No behavior change (guards equivalent; projections narrowed).

@@ -3,32 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { slugify } from "@/lib/ops";
 import { classifyCoralType, CORAL_TYPES } from "@/lib/coral-type";
-
-// ---------- guards (mirrors ops.functions.ts) ----------
-async function isAdmin(supabase: any, userId: string) {
-  const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-  return (data ?? []).some((r: any) => r.role === "admin");
-}
-async function requireActive(supabase: any, userId: string) {
-  const { data } = await supabase
-    .from("profiles")
-    .select("is_active")
-    .eq("id", userId)
-    .maybeSingle();
-  if (!data?.is_active) throw new Error("Forbidden: account pending approval");
-}
-async function requireAdmin(supabase: any, userId: string) {
-  await requireActive(supabase, userId);
-  if (!(await isAdmin(supabase, userId))) throw new Error("Forbidden: admin role required");
-}
-async function requireEditor(supabase: any, userId: string) {
-  await requireActive(supabase, userId);
-  const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-  const ok = (data ?? []).some(
-    (r: any) => r.role === "admin" || r.role === "creator" || r.role === "reviewer",
-  );
-  if (!ok) throw new Error("Forbidden: editor role required");
-}
+import { requireAdmin, requireEditor } from "@/lib/auth-guards";
 
 // ---------- list ----------
 export const listScrapeSources = createServerFn({ method: "GET" })
@@ -273,7 +248,9 @@ function imageBucketPath(vendorSlug: string, externalId: string, imgUrl: string)
 }
 
 async function downloadImage(supabaseAdmin: any, opts: { url: string; bucketPath: string }) {
-  const res = await fetch(opts.url, { headers: { "User-Agent": SCRAPE_UA, Accept: "image/*,*/*" } });
+  const res = await fetch(opts.url, {
+    headers: { "User-Agent": SCRAPE_UA, Accept: "image/*,*/*" },
+  });
   if (!res.ok) throw new Error(`Image fetch ${res.status} for ${opts.url}`);
   const buf = new Uint8Array(await res.arrayBuffer());
   const contentType = res.headers.get("content-type") || "image/jpeg";
@@ -375,8 +352,10 @@ export async function runScrapeForSource(
           throw new Error(`Scrape failed (Firecrawl) at page ${page}: ${e2?.message ?? e2}`);
         }
       } else {
-        const why = e?.status ? `HTTP ${e.status}` : e?.message ?? String(e);
-        await markError(`${why} at page ${page}${e?.blocked ? " (blocked; no Firecrawl key)" : ""}`);
+        const why = e?.status ? `HTTP ${e.status}` : (e?.message ?? String(e));
+        await markError(
+          `${why} at page ${page}${e?.blocked ? " (blocked; no Firecrawl key)" : ""}`,
+        );
         throw new Error(`Scrape failed: ${why} at page ${page}`);
       }
     }
@@ -463,7 +442,8 @@ export async function runScrapeForSource(
     const compareChanged = existing ? !priceEq(existing.compare_at_price, compareAt) : true;
     const availChanged = existing ? (existing.available_at_source ?? null) !== available : true;
     const needsBaseline = !!existing && !hasSnapshot.has(existing.id);
-    const shouldSnapshot = !existing || needsBaseline || priceChanged || compareChanged || availChanged;
+    const shouldSnapshot =
+      !existing || needsBaseline || priceChanged || compareChanged || availChanged;
 
     const base = {
       external_handle: p.handle,
@@ -476,7 +456,7 @@ export async function runScrapeForSource(
       raw_payload,
       available_at_source: available,
       last_seen_at: now,
-      last_available_at: available ? now : existing?.last_available_at ?? null,
+      last_available_at: available ? now : (existing?.last_available_at ?? null),
     };
 
     let itemId: string;
@@ -538,10 +518,7 @@ export async function runScrapeForSource(
     });
   }
   if (goneIds.length > 0) {
-    await db
-      .from("vendor_scrape_items")
-      .update({ available_at_source: false })
-      .in("id", goneIds);
+    await db.from("vendor_scrape_items").update({ available_at_source: false }).in("id", goneIds);
     gone = goneIds.length;
   }
 
@@ -777,7 +754,12 @@ export const createScrapeSource = createServerFn({ method: "POST" })
 
 // ---------- cross-vendor feed (signals over snapshots) ----------
 type FeedType = "new" | "price_drop" | "on_sale" | "sold";
-function feedEvent(i: any, type: FeedType, eventAt: string | null, extra: Record<string, any> = {}) {
+function feedEvent(
+  i: any,
+  type: FeedType,
+  eventAt: string | null,
+  extra: Record<string, any> = {},
+) {
   return {
     id: i.id,
     type,
@@ -882,7 +864,9 @@ export const getVendorFeed = createServerFn({ method: "POST" })
     for (const i of appeared ?? []) events.push(feedEvent(i, "new", i.first_seen_at));
     for (const i of changed ?? [])
       if (priorById.has(i.id))
-        events.push(feedEvent(i, "price_drop", i.last_price_change_at, { priceBefore: priorById.get(i.id) }));
+        events.push(
+          feedEvent(i, "price_drop", i.last_price_change_at, { priceBefore: priorById.get(i.id) }),
+        );
     for (const i of onSale) events.push(feedEvent(i, "on_sale", i.last_seen_at));
     for (const i of gone ?? []) events.push(feedEvent(i, "sold", i.last_available_at));
 
@@ -930,7 +914,10 @@ export const setTrackedCoralType = createServerFn({ method: "POST" })
     if (data.tracked) {
       const { error } = await db
         .from("tracked_coral_types")
-        .upsert({ coral_type: data.coralType, created_by: context.userId }, { onConflict: "coral_type" });
+        .upsert(
+          { coral_type: data.coralType, created_by: context.userId },
+          { onConflict: "coral_type" },
+        );
       if (error) throw new Error(error.message);
     } else {
       const { error } = await db

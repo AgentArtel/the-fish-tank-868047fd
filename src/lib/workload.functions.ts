@@ -1,21 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-
-// is_active + editor-role gate (mirrors the other read fns). The workload badge
-// exposes operational counts, so an unapproved/non-editor account must not read it.
-async function requireEditor(supabase: any, userId: string) {
-  const { data: prof } = await supabase
-    .from("profiles")
-    .select("is_active")
-    .eq("id", userId)
-    .maybeSingle();
-  if (!prof?.is_active) throw new Error("Forbidden: account pending approval");
-  const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-  const ok = (data ?? []).some(
-    (r: any) => r.role === "admin" || r.role === "creator" || r.role === "reviewer",
-  );
-  if (!ok) throw new Error("Forbidden: editor role required");
-}
+// The workload badge exposes operational counts, so it's gated to active editors.
+import { requireEditor } from "@/lib/auth-guards";
 
 export const getWorkload = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])

@@ -2,32 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { classifyCoralType } from "@/lib/coral-type";
-
-// ---------- guards (mirror ops.functions.ts) ----------
-async function isAdmin(supabase: any, userId: string) {
-  const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-  return (data ?? []).some((r: any) => r.role === "admin");
-}
-async function requireActive(supabase: any, userId: string) {
-  const { data } = await supabase
-    .from("profiles")
-    .select("is_active")
-    .eq("id", userId)
-    .maybeSingle();
-  if (!data?.is_active) throw new Error("Forbidden: account pending approval");
-}
-async function requireAdmin(supabase: any, userId: string) {
-  await requireActive(supabase, userId);
-  if (!(await isAdmin(supabase, userId))) throw new Error("Forbidden: admin role required");
-}
-async function requireEditor(supabase: any, userId: string) {
-  await requireActive(supabase, userId);
-  const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-  const ok = (data ?? []).some(
-    (r: any) => r.role === "admin" || r.role === "creator" || r.role === "reviewer",
-  );
-  if (!ok) throw new Error("Forbidden: editor role required");
-}
+import { requireAdmin, requireEditor } from "@/lib/auth-guards";
 
 // Run a count-only (head) query and return the count.
 async function countRows(q: any): Promise<number> {
@@ -46,7 +21,10 @@ export const getCloverOverview = createServerFn({ method: "GET" })
     const { loadCloverCreds } = await import("@/lib/clover.api");
     const creds = await loadCloverCreds();
 
-    const { data: conn } = await db.from("clover_connection").select("*").maybeSingle();
+    const { data: conn } = await db
+      .from("clover_connection")
+      .select("connected, last_import_at, last_sale_synced_at")
+      .maybeSingle();
     const count = async (q: any) => (await q).count ?? 0;
     const total = await count(
       db.from("clover_item_links").select("id", { count: "exact", head: true }),

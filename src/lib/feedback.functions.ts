@@ -1,16 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-
 // Any active (approved) user may file feedback — no editor/admin gate.
-async function requireActive(supabase: any, userId: string) {
-  const { data } = await supabase
-    .from("profiles")
-    .select("is_active")
-    .eq("id", userId)
-    .maybeSingle();
-  if (!data?.is_active) throw new Error("Forbidden: account pending approval");
-}
+import { requireActive } from "@/lib/auth-guards";
 
 const TYPE_META: Record<string, { label: string; emoji: string }> = {
   bug: { label: "Bug", emoji: "🐞" },
@@ -71,11 +63,10 @@ export const submitFeedback = createServerFn({ method: "POST" })
     // Submitter identity for the issue body.
     const { data: prof } = await (context.supabase as any)
       .from("profiles")
-      .select("*")
+      .select("email, display_name")
       .eq("id", context.userId)
       .maybeSingle();
-    const who =
-      prof?.email ?? prof?.full_name ?? prof?.display_name ?? prof?.name ?? context.userId;
+    const who = prof?.email ?? prof?.display_name ?? context.userId;
 
     const meta = TYPE_META[data.type];
     const firstLine = data.message.split("\n")[0].slice(0, 80);

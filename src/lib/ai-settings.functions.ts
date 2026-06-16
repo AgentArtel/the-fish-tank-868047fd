@@ -4,14 +4,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { callAIChat } from "@/lib/ai-call.server";
-
-async function requireAdmin(supabase: any, userId: string) {
-  const { data } = await supabase.from("profiles").select("is_active").eq("id", userId).maybeSingle();
-  if (!data?.is_active) throw new Error("Forbidden: account pending approval");
-  const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-  const isAdmin = (roles ?? []).some((r: any) => r.role === "admin");
-  if (!isAdmin) throw new Error("Forbidden: admin only");
-}
+import { requireAdmin } from "@/lib/auth-guards";
 
 function mask(key: string | null | undefined): string | null {
   if (!key) return null;
@@ -25,7 +18,9 @@ export const getAISettings = createServerFn({ method: "GET" })
     await requireAdmin(context.supabase, context.userId);
     const { data } = await supabaseAdmin
       .from("workspace_ai_settings")
-      .select("*")
+      .select(
+        "id, provider, openai_api_key, openai_model_pro, openai_model_flash, gemini_api_key, gemini_model_pro, gemini_model_flash, fallback_to_lovable, last_used_at, last_used_provider, last_error, updated_at",
+      )
       .limit(1)
       .maybeSingle();
     if (!data) return null;
@@ -84,14 +79,18 @@ export const updateAISettings = createServerFn({ method: "POST" })
     set("gemini_model_flash", data.gemini_model_flash);
 
     const { data: existing } = await supabaseAdmin
-      .from("workspace_ai_settings").select("id").limit(1).maybeSingle();
+      .from("workspace_ai_settings")
+      .select("id")
+      .limit(1)
+      .maybeSingle();
     if (existing) {
       const { error } = await supabaseAdmin
-        .from("workspace_ai_settings").update(payload as any).eq("id", (existing as any).id);
+        .from("workspace_ai_settings")
+        .update(payload as any)
+        .eq("id", (existing as any).id);
       if (error) throw new Error(error.message);
     } else {
-      const { error } = await supabaseAdmin
-        .from("workspace_ai_settings").insert(payload as any);
+      const { error } = await supabaseAdmin.from("workspace_ai_settings").insert(payload as any);
       if (error) throw new Error(error.message);
     }
     return { ok: true };
