@@ -1429,3 +1429,13 @@ line item — a big catch-up could exceed the Worker CPU/time/subrequest budget 
 - Per-chunk reads are bounded: links are fetched only for the page's Clover item ids (not the whole
   table). Idempotency unchanged (DB UNIQUE + composite dedupe), so re-runs/overlap never double-count.
 Build ✅ · tsc clean · prettier clean.
+
+---
+## 2026-06-16 — /customers list: DB-side spend aggregation (audit C1) (Claude Code)
+
+`listCustomers` no longer pulls up to 50k sale events into the Worker to sum lifetime spend in JS (which
+silently truncated past 50k). It now calls a DB-side `customers_with_spend(_q, _limit)` RPC (search +
+SUM/COUNT aggregation + sort, all in SQL) and **falls back** to the old bounded JS path if the RPC isn't
+deployed yet — non-breaking, auto-upgrades when the migration lands. RPC spec handed to Lovable in
+handoff-customers-aggregation.md (backed by the existing customer_id/sold_at index; semantics match the
+JS exactly — kind='sale', distinct clover_order_id for orders). Build ✅ · tsc clean · prettier clean.
