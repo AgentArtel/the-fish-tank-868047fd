@@ -2015,6 +2015,21 @@ export type Database = {
           balance_cents: number
         }[]
       }
+      customers_with_spend: {
+        Args: { _limit?: number; _q?: string }
+        Returns: {
+          email: string
+          first_name: string
+          id: string
+          last_name: string
+          last_purchase_at: string
+          last_seen_at: string
+          marketing_consent: boolean
+          order_count: number
+          phone: string
+          spend_cents: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
