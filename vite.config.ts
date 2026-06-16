@@ -12,12 +12,4 @@ export default defineConfig({
   tanstackStart: {
     server: { entry: "server" },
   },
-  vite: {
-    server: {
-      hmr: {
-        protocol: "wss",
-        clientPort: 443,
-      },
-    },
-  },
 });
