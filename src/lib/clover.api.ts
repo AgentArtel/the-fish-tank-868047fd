@@ -71,7 +71,9 @@ export type CloverItem = {
   hidden: boolean;
 };
 
-export async function cloverTestConnection(creds: CloverCreds): Promise<{ id: string; name: string }> {
+export async function cloverTestConnection(
+  creds: CloverCreds,
+): Promise<{ id: string; name: string }> {
   try {
     const j = await cloverGet(creds, `/v3/merchants/${creds.merchantId}`);
     return { id: j.id, name: j.name };
@@ -142,48 +144,63 @@ export async function cloverListRecentOrders(
   const out: CloverOrder[] = [];
   let offset = 0;
   while (offset < 50_000) {
-    const j = await cloverGet(creds, `/v3/merchants/${creds.merchantId}/orders`, {
-      filter: `modifiedTime>=${sinceMs}`,
-      // `customers` attaches the buyer when the order has one (most POS orders are
-      // anonymous walk-ins → no customer). Email/phone come through only if the API
-      // token carries the customer-PII read scopes; we read them defensively.
-      expand: "lineItems,payments,customers",
-      limit: 100,
-      offset,
-    });
-    const els: any[] = j.elements ?? [];
-    for (const o of els) {
-      const payEls: any[] = o.payments?.elements ?? [];
-      const liEls: any[] = o.lineItems?.elements ?? [];
-      const c0: any = o.customers?.elements?.[0] ?? null;
-      const customer: CloverCustomer | null = c0
-        ? {
-            cloverId: c0.id,
-            firstName: c0.firstName ?? null,
-            lastName: c0.lastName ?? null,
-            email: c0.emailAddresses?.elements?.[0]?.emailAddress ?? null,
-            phone: c0.phoneNumbers?.elements?.[0]?.phoneNumber ?? null,
-          }
-        : null;
-      out.push({
-        id: o.id,
-        state: o.state ?? null,
-        createdTime: typeof o.createdTime === "number" ? o.createdTime : null,
-        modifiedTime: typeof o.modifiedTime === "number" ? o.modifiedTime : null,
-        paymentId: payEls[0]?.id ?? null,
-        paid: payEls.length > 0 || o.state === "locked",
-        customer,
-        lineItems: liEls.map((li) => ({
-          id: li.id,
-          name: li.name ?? null,
-          cloverItemId: li.item?.id ?? null,
-          priceCents: typeof li.price === "number" ? li.price : null,
-          refunded: !!li.refunded,
-        })),
-      });
-    }
-    if (els.length < 100) break;
+    const page = await cloverListRecentOrdersPage(creds, sinceMs, offset, 100);
+    out.push(...page);
+    if (page.length < 100) break;
     offset += 100;
   }
   return out;
+}
+
+// One page of orders modified since `sinceMs` (for the chunked manual sync). The
+// caller advances `offset` by the returned length and stops when a short page
+// (< limit) comes back. Shares the element→CloverOrder mapping with the all-pages
+// fetch above.
+export async function cloverListRecentOrdersPage(
+  creds: CloverCreds,
+  sinceMs: number,
+  offset: number,
+  limit: number,
+): Promise<CloverOrder[]> {
+  const j = await cloverGet(creds, `/v3/merchants/${creds.merchantId}/orders`, {
+    filter: `modifiedTime>=${sinceMs}`,
+    // `customers` attaches the buyer when the order has one (most POS orders are
+    // anonymous walk-ins → no customer). Email/phone come through only if the API
+    // token carries the customer-PII read scopes; we read them defensively.
+    expand: "lineItems,payments,customers",
+    limit,
+    offset,
+  });
+  return ((j.elements ?? []) as any[]).map(mapCloverOrder);
+}
+
+function mapCloverOrder(o: any): CloverOrder {
+  const payEls: any[] = o.payments?.elements ?? [];
+  const liEls: any[] = o.lineItems?.elements ?? [];
+  const c0: any = o.customers?.elements?.[0] ?? null;
+  const customer: CloverCustomer | null = c0
+    ? {
+        cloverId: c0.id,
+        firstName: c0.firstName ?? null,
+        lastName: c0.lastName ?? null,
+        email: c0.emailAddresses?.elements?.[0]?.emailAddress ?? null,
+        phone: c0.phoneNumbers?.elements?.[0]?.phoneNumber ?? null,
+      }
+    : null;
+  return {
+    id: o.id,
+    state: o.state ?? null,
+    createdTime: typeof o.createdTime === "number" ? o.createdTime : null,
+    modifiedTime: typeof o.modifiedTime === "number" ? o.modifiedTime : null,
+    paymentId: payEls[0]?.id ?? null,
+    paid: payEls.length > 0 || o.state === "locked",
+    customer,
+    lineItems: liEls.map((li) => ({
+      id: li.id,
+      name: li.name ?? null,
+      cloverItemId: li.item?.id ?? null,
+      priceCents: typeof li.price === "number" ? li.price : null,
+      refunded: !!li.refunded,
+    })),
+  };
 }

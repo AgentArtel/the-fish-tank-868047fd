@@ -1411,3 +1411,21 @@ and `submitFeedback` opens a labeled GitHub issue (`feedback`+type) via the REST
 `on: issues.opened` workflow (Option A) can auto-trigger Claude with no rework. Degrades gracefully
 ("not configured yet") until Lovable provisions the bucket + token (handoff-feedback-infra.md).
 Scope: scope-feedback-dock.md. Build ✅ · tsc clean · prettier clean.
+
+---
+## 2026-06-16 — Chunk the wide Clover sales sync (Worker-safe) (Claude Code)
+
+Closes the last open production-reliability item from the audit (H1): the manual "Sync sales now" ran
+the entire window (up to 365d) in ONE Cloudflare Worker request, with 3–4 sequential DB round-trips per
+line item — a big catch-up could exceed the Worker CPU/time/subrequest budget and die mid-run.
+- **Chunked by order offset**, mirroring the catalog-import pattern. New `cloverListRecentOrdersPage`
+  (one page, shared mapper) + `ingestCloverSalesPage` (processes a page, returns `{nextOffset, done}`,
+  writes the watermark only on the final page). Extracted the shared `processSaleOrders` helper; the
+  cron keeps the single-shot `ingestCloverSales` (tight window, small).
+- `syncCloverSales` → **`syncCloverSalesChunk`** (admin; zod-validated sinceMs/runStartMs/offset/limit).
+  `settings.clover.tsx` now loops chunks (40 orders/page) from the browser with a live progress count,
+  exactly like the catalog import. `runStartMs` is fixed across the loop so the watermark marks when the
+  sync began.
+- Per-chunk reads are bounded: links are fetched only for the page's Clover item ids (not the whole
+  table). Idempotency unchanged (DB UNIQUE + composite dedupe), so re-runs/overlap never double-count.
+Build ✅ · tsc clean · prettier clean.

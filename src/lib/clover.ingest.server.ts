@@ -12,7 +12,12 @@
 // Used by the admin "Sync sales now" button (user-scoped client) and the
 // scheduled /api/public/hooks/clover-poll cron (service-role client).
 import { applyInventorySale } from "@/lib/ops.functions";
-import { cloverListRecentOrders, requireCloverCreds } from "@/lib/clover.api";
+import {
+  cloverListRecentOrders,
+  cloverListRecentOrdersPage,
+  requireCloverCreds,
+  type CloverOrder,
+} from "@/lib/clover.api";
 
 const DEFAULT_LOOKBACK_DAYS = 7;
 const OVERLAP_MS = 60 * 60 * 1000; // re-scan the last hour to catch late-edited orders
@@ -30,31 +35,27 @@ export type CloverIngestResult = {
   syncedThroughIso: string;
 };
 
-export async function ingestCloverSales(
+type SaleCounts = {
+  lineItemsSeen: number;
+  applied: number;
+  needsReview: number;
+  unmatched: number;
+  skippedDuplicates: number;
+  customersSeen: number;
+  customersUpserted: number;
+  errors: { lineItemId: string; error: string }[];
+};
+
+// Ingest one set of paid orders: upsert their customers, dedupe, and write a sale
+// event per line item. Reads only what this set needs (links scoped to the page's
+// Clover item ids), so it's safe to call per-page in a chunked sync OR once for the
+// whole window. Does NOT advance the sync watermark — the caller owns that.
+async function processSaleOrders(
   db: any,
-  opts: { sinceMs?: number; userId?: string } = {},
-): Promise<CloverIngestResult> {
-  const runStart = Date.now();
-
-  // Window start: explicit override → last successful sync (minus overlap) →
-  // first-run lookback.
-  let sinceMs = opts.sinceMs ?? null;
-  if (sinceMs == null) {
-    const { data: conn } = await db
-      .from("clover_connection")
-      .select("last_sale_synced_at")
-      .maybeSingle();
-    sinceMs = conn?.last_sale_synced_at
-      ? new Date(conn.last_sale_synced_at).getTime() - OVERLAP_MS
-      : runStart - DEFAULT_LOOKBACK_DAYS * 86_400_000;
-  }
-
-  const creds = await requireCloverCreds();
-  const orders = await cloverListRecentOrders(creds, sinceMs);
-  const saleOrders = orders.filter((o) => o.paid); // completed sales only
-
+  saleOrders: CloverOrder[],
+  opts: { userId?: string; runStartMs: number },
+): Promise<SaleCounts> {
   // Capture the buyer where an order has one (most are anonymous walk-ins → null).
-  // Upsert each distinct Clover customer once, then map order → workspace customer id.
   const distinctCustomers = new Map<string, any>();
   for (const o of saleOrders)
     if (o.customer) distinctCustomers.set(o.customer.cloverId, o.customer);
@@ -68,7 +69,7 @@ export async function ingestCloverSales(
       last_name: c.lastName,
       email: c.email,
       phone: c.phone,
-      last_seen_at: new Date(runStart).toISOString(),
+      last_seen_at: new Date(opts.runStartMs).toISOString(),
     }));
     const { data: up, error: ce } = await db
       .from("customers")
@@ -78,9 +79,7 @@ export async function ingestCloverSales(
     for (const r of up ?? []) customerIdByClover.set(r.clover_customer_id, r.id);
     customersUpserted = up?.length ?? 0;
 
-    // Backfill customer_id onto any already-ingested sale events for these orders,
-    // so a re-sync attaches the buyer to sales whose line items were recorded
-    // before customer capture existed (one update per customer; idempotent).
+    // Backfill customer_id onto any already-ingested sale events for these orders.
     const orderIdsByCustomer = new Map<string, string[]>();
     for (const o of saleOrders) {
       const cid = o.customer ? customerIdByClover.get(o.customer.cloverId) : null;
@@ -101,23 +100,34 @@ export async function ingestCloverSales(
     }
   }
 
-  // clover item id → linked workspace inventory item id (null when unlinked)
-  const { data: links } = await db
-    .from("clover_item_links")
-    .select("clover_item_id, inventory_item_id");
+  // clover item id → linked workspace inventory item id — scoped to just the item
+  // ids in THIS set of orders (bounded read, so chunked calls stay cheap).
+  const pageCloverItemIds = [
+    ...new Set(
+      saleOrders.flatMap((o) =>
+        o.lineItems.map((li) => li.cloverItemId).filter((x): x is string => !!x),
+      ),
+    ),
+  ];
   const invByClover = new Map<string, string | null>();
-  for (const l of links ?? []) invByClover.set(l.clover_item_id, l.inventory_item_id ?? null);
+  for (let i = 0; i < pageCloverItemIds.length; i += 200) {
+    const chunk = pageCloverItemIds.slice(i, i + 200);
+    if (!chunk.length) continue;
+    const { data: links } = await db
+      .from("clover_item_links")
+      .select("clover_item_id, inventory_item_id")
+      .in("clover_item_id", chunk);
+    for (const l of links ?? []) invByClover.set(l.clover_item_id, l.inventory_item_id ?? null);
+  }
 
-  // Reef Club: load loyalty config once for the whole batch. When enabled, each
-  // linked member sale earns store credit via applyInventorySale (idempotent).
+  // Reef Club: load loyalty config once. When enabled, each linked member sale
+  // earns store credit via applyInventorySale (idempotent).
   const { loadLoyaltyConfig } = await import("@/lib/loyalty.server");
   const loyaltyCfg = await loadLoyaltyConfig(db);
   const loyalty = loyaltyCfg.enabled ? { earnPercent: loyaltyCfg.earnPercent } : null;
 
-  // Dedupe up front: which (order, line) pairs are already recorded? Keyed on the
-  // composite (clover_order_id, clover_line_item_id) to match the DB UNIQUE. Clover
-  // line-item ids are only unique WITHIN an order, so keying on the line id alone
-  // could mark a different order's line as a dup and silently drop a real sale.
+  // Dedupe up front: which (order, line) pairs are already recorded? Composite key
+  // to match the DB UNIQUE — Clover line ids are unique only WITHIN an order.
   const dedupeKey = (orderId: string, lineId: string) => `${orderId}::${lineId}`;
   const allLineIds = saleOrders.flatMap((o) => o.lineItems.map((li) => li.id));
   const seen = new Set<string>();
@@ -213,14 +223,7 @@ export async function ingestCloverSales(
     }
   }
 
-  const syncedThroughIso = new Date(runStart).toISOString();
-  await db
-    .from("clover_connection")
-    .update({ last_sale_synced_at: syncedThroughIso })
-    .eq("id", true);
-
   return {
-    ordersScanned: saleOrders.length,
     lineItemsSeen,
     applied,
     needsReview,
@@ -229,6 +232,79 @@ export async function ingestCloverSales(
     customersSeen,
     customersUpserted,
     errors,
-    syncedThroughIso,
   };
+}
+
+// Whole-window ingest in a single request. Used by the cron (tight overlap window,
+// so the order count is small). The wide MANUAL sync uses ingestCloverSalesPage so a
+// big catch-up can't exceed the Worker budget.
+export async function ingestCloverSales(
+  db: any,
+  opts: { sinceMs?: number; userId?: string } = {},
+): Promise<CloverIngestResult> {
+  const runStart = Date.now();
+
+  // Window start: explicit override → last successful sync (minus overlap) →
+  // first-run lookback.
+  let sinceMs = opts.sinceMs ?? null;
+  if (sinceMs == null) {
+    const { data: conn } = await db
+      .from("clover_connection")
+      .select("last_sale_synced_at")
+      .maybeSingle();
+    sinceMs = conn?.last_sale_synced_at
+      ? new Date(conn.last_sale_synced_at).getTime() - OVERLAP_MS
+      : runStart - DEFAULT_LOOKBACK_DAYS * 86_400_000;
+  }
+
+  const creds = await requireCloverCreds();
+  const orders = await cloverListRecentOrders(creds, sinceMs);
+  const saleOrders = orders.filter((o) => o.paid); // completed sales only
+  const counts = await processSaleOrders(db, saleOrders, {
+    userId: opts.userId,
+    runStartMs: runStart,
+  });
+
+  const syncedThroughIso = new Date(runStart).toISOString();
+  await db
+    .from("clover_connection")
+    .update({ last_sale_synced_at: syncedThroughIso })
+    .eq("id", true);
+
+  return { ordersScanned: saleOrders.length, ...counts, syncedThroughIso };
+}
+
+export type CloverIngestPageResult = Omit<CloverIngestResult, "syncedThroughIso"> & {
+  nextOffset: number;
+  done: boolean;
+  syncedThroughIso: string | null; // set only on the final page
+};
+
+// One page of the wide manual sync. The browser loops this, advancing `offset` and
+// passing a stable `runStartMs` (captured before the loop) so the watermark, written
+// only on the final page, reflects when the whole sync began.
+export async function ingestCloverSalesPage(
+  db: any,
+  opts: { sinceMs: number; offset: number; limit: number; userId?: string; runStartMs: number },
+): Promise<CloverIngestPageResult> {
+  const creds = await requireCloverCreds();
+  const orders = await cloverListRecentOrdersPage(creds, opts.sinceMs, opts.offset, opts.limit);
+  const saleOrders = orders.filter((o) => o.paid);
+  const counts = await processSaleOrders(db, saleOrders, {
+    userId: opts.userId,
+    runStartMs: opts.runStartMs,
+  });
+
+  const done = orders.length < opts.limit; // a short page is the last page
+  const nextOffset = opts.offset + orders.length;
+  let syncedThroughIso: string | null = null;
+  if (done) {
+    syncedThroughIso = new Date(opts.runStartMs).toISOString();
+    await db
+      .from("clover_connection")
+      .update({ last_sale_synced_at: syncedThroughIso })
+      .eq("id", true);
+  }
+
+  return { ordersScanned: saleOrders.length, ...counts, nextOffset, done, syncedThroughIso };
 }

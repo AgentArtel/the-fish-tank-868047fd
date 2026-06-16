@@ -14,7 +14,7 @@ import {
   testCloverConnection,
   importCloverCatalog,
   createWorkspaceItemsFromClover,
-  syncCloverSales,
+  syncCloverSalesChunk,
   getCloverSettings,
   saveCloverSettings,
 } from "@/lib/clover.functions";
@@ -50,13 +50,14 @@ function CloverSettings() {
   const testFn = useServerFn(testCloverConnection);
   const importFn = useServerFn(importCloverCatalog);
   const createItemsFn = useServerFn(createWorkspaceItemsFromClover);
-  const syncSalesFn = useServerFn(syncCloverSales);
+  const syncSalesChunkFn = useServerFn(syncCloverSalesChunk);
   const { data } = useQuery({ queryKey: ["clover-overview"], queryFn: () => overviewFn() });
 
   const [testing, setTesting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
 
   const test = async () => {
     setTesting(true);
@@ -85,16 +86,12 @@ function CloverSettings() {
       while (true) {
         const c = await createItemsFn({ data: { limit: 200 } });
         createdTotal += c.created + c.relinked;
-        setImportStatus(
-          `Creating workspace items… ${createdTotal} linked, ${c.remaining} to go`,
-        );
+        setImportStatus(`Creating workspace items… ${createdTotal} linked, ${c.remaining} to go`);
         qc.invalidateQueries({ queryKey: ["clover-overview"] });
         if (c.done || c.processed === 0) break;
         if (++guard > 100) break; // safety: never loop forever
       }
-      toast.success(
-        `Imported ${r.fetched} Clover items — ${createdTotal} created/linked this run`,
-      );
+      toast.success(`Imported ${r.fetched} Clover items — ${createdTotal} created/linked this run`);
       qc.invalidateQueries({ queryKey: ["clover-overview"] });
       qc.invalidateQueries({ queryKey: ["inventory"] });
     } catch (e: any) {
@@ -107,18 +104,44 @@ function CloverSettings() {
 
   const runSyncSales = async () => {
     setSyncing(true);
+    setSyncStatus("Syncing recent Clover sales…");
     try {
-      const r = await syncSalesFn({ data: { lookbackDays: 30 } });
+      // Chunked: the server processes a page of orders per call (Worker-safe); we
+      // loop until `done`, advancing the offset. runStartMs is fixed for the whole
+      // sync so the watermark (written on the final page) marks when it began.
+      const runStartMs = Date.now();
+      const sinceMs = runStartMs - 30 * 86_400_000; // 30-day window
+      let offset = 0;
+      let lineItemsSeen = 0;
+      let applied = 0;
+      let needsReview = 0;
+      let ordersScanned = 0;
+      let errorCount = 0;
+      let guard = 0;
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const r = await syncSalesChunkFn({ data: { sinceMs, runStartMs, offset, limit: 40 } });
+        ordersScanned += r.ordersScanned;
+        lineItemsSeen += r.lineItemsSeen;
+        applied += r.applied;
+        needsReview += r.needsReview;
+        errorCount += r.errors.length;
+        offset = r.nextOffset;
+        setSyncStatus(`Syncing sales… ${ordersScanned} orders, ${applied} applied to stock`);
+        qc.invalidateQueries({ queryKey: ["clover-overview"] });
+        if (r.done) break;
+        if (++guard > 2000) break; // safety: ≤ 80k orders/run
+      }
       toast.success(
-        `Synced ${r.lineItemsSeen} Clover line items — ${r.applied} applied to stock, ${r.needsReview} need review` +
-          (r.customersSeen ? ` · ${r.customersSeen} customers captured` : ""),
+        `Synced ${lineItemsSeen} Clover line items — ${applied} applied to stock, ${needsReview} need review`,
       );
-      if (r.errors.length) toast.warning(`${r.errors.length} line items errored — check logs`);
+      if (errorCount) toast.warning(`${errorCount} line items errored — check logs`);
       qc.invalidateQueries({ queryKey: ["clover-overview"] });
     } catch (e: any) {
       toast.error(e?.message ?? "Sale sync failed");
     } finally {
       setSyncing(false);
+      setSyncStatus(null);
     }
   };
 
@@ -138,7 +161,11 @@ function CloverSettings() {
           )}
           <div className="flex-1">
             <div className="font-medium text-sm">
-              {data?.connected ? "Connected" : data?.configured ? "Not yet connected" : "Not configured"}
+              {data?.connected
+                ? "Connected"
+                : data?.configured
+                  ? "Not yet connected"
+                  : "Not configured"}
             </div>
             <div className="text-xs text-muted-foreground">
               {data?.configured
@@ -148,8 +175,17 @@ function CloverSettings() {
                   : "An admin needs to enter Clover API credentials below."}
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={test} disabled={testing || !data?.configured}>
-            {testing ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Plug className="w-4 h-4 mr-1" />}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={test}
+            disabled={testing || !data?.configured}
+          >
+            {testing ? (
+              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+            ) : (
+              <Plug className="w-4 h-4 mr-1" />
+            )}
             Test connection
           </Button>
         </div>
@@ -163,7 +199,10 @@ function CloverSettings() {
             </Badge>
           )}
           {(data?.salesNeedingReview ?? 0) > 0 && (
-            <Badge variant="outline" className="border-amber-400 text-amber-700 dark:text-amber-300">
+            <Badge
+              variant="outline"
+              className="border-amber-400 text-amber-700 dark:text-amber-300"
+            >
               {data?.salesNeedingReview} sales need review
             </Badge>
           )}
@@ -178,16 +217,15 @@ function CloverSettings() {
             )}
             Import / re-sync Clover catalog
           </Button>
-          {importStatus && (
-            <p className="text-xs text-primary mt-2 font-medium">{importStatus}</p>
-          )}
+          {importStatus && <p className="text-xs text-primary mt-2 font-medium">{importStatus}</p>}
           <p className="text-xs text-muted-foreground mt-2">
-            Pulls every Clover item and <span className="font-medium">creates a linked workspace
-            item</span> for it (read-only against Clover). New items come in as drafts — quantity 0,
-            priced from Clover, <span className="font-medium">not for sale</span> until you add a
-            photo. Items are created in small batches with a live count above, so it's safe even for
-            large catalogs — keep this tab open until it finishes. Re-run anytime to pick up Clover
-            changes (already-linked items keep your workspace edits).
+            Pulls every Clover item and{" "}
+            <span className="font-medium">creates a linked workspace item</span> for it (read-only
+            against Clover). New items come in as drafts — quantity 0, priced from Clover,{" "}
+            <span className="font-medium">not for sale</span> until you add a photo. Items are
+            created in small batches with a live count above, so it's safe even for large catalogs —
+            keep this tab open until it finishes. Re-run anytime to pick up Clover changes
+            (already-linked items keep your workspace edits).
           </p>
         </div>
 
@@ -210,6 +248,7 @@ function CloverSettings() {
               Last sale sync {fmtRel(data?.lastSaleSyncedAt)}
             </span>
           </div>
+          {syncStatus && <p className="text-xs text-primary mt-2 font-medium">{syncStatus}</p>}
           <p className="text-xs text-muted-foreground mt-2">
             Pulls recent Clover orders and records each sale. Sales of{" "}
             <span className="font-medium">linked</span> items decrement workspace stock; refunds,
@@ -220,7 +259,11 @@ function CloverSettings() {
         </div>
       </div>
 
-      {isAdmin && <CloverApiSettingsCard onSaved={() => qc.invalidateQueries({ queryKey: ["clover-overview"] })} />}
+      {isAdmin && (
+        <CloverApiSettingsCard
+          onSaved={() => qc.invalidateQueries({ queryKey: ["clover-overview"] })}
+        />
+      )}
     </div>
   );
 }
@@ -315,7 +358,9 @@ function CloverApiSettingsCard({ onSaved }: { onSaved: () => void }) {
             type="password"
             value={apiToken}
             onChange={(e) => setApiToken(e.target.value)}
-            placeholder={settings?.hasToken ? "•••••••• (leave blank to keep current)" : "Paste API token"}
+            placeholder={
+              settings?.hasToken ? "•••••••• (leave blank to keep current)" : "Paste API token"
+            }
             autoComplete="new-password"
           />
           <p className="text-xs text-muted-foreground">
@@ -327,7 +372,11 @@ function CloverApiSettingsCard({ onSaved }: { onSaved: () => void }) {
 
       <div className="flex justify-end">
         <Button onClick={save} disabled={saving} size="sm">
-          {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+          {saving ? (
+            <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+          ) : (
+            <Save className="w-4 h-4 mr-1" />
+          )}
           Save credentials
         </Button>
       </div>

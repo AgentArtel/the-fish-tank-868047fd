@@ -129,22 +129,35 @@ export const saveCloverSettings = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// ---------- pull recent Clover sales → inventory_sale_events (admin) ----------
-// The manual button re-scans a wide window (default 30d) so it both catches any
-// missed sales and backfills customers onto already-ingested orders. Idempotent —
-// re-scanning never double-counts. (The cron uses the tight overlap window instead.)
-export const syncCloverSales = createServerFn({ method: "POST" })
-  .inputValidator((d: { lookbackDays?: number }) => ({
-    lookbackDays: Math.min(Math.max(Math.floor(d?.lookbackDays ?? 30), 1), 365),
-  }))
+// ---------- pull recent Clover sales → inventory_sale_events (admin, CHUNKED) ----------
+// One page of the wide manual sync, called repeatedly by the browser until `done`.
+// Chunking by order offset keeps each request inside the Cloudflare Worker budget so
+// a big catch-up (which used to run the whole window in one request) can't time out.
+// `runStartMs` is captured by the browser before the loop and passed through, so the
+// sync watermark — written only on the final page — reflects when the sync began.
+// Idempotent: re-scanning never double-counts (DB UNIQUE + dedupe). The cron uses the
+// single-shot ingest with its tight overlap window instead.
+export const syncCloverSalesChunk = createServerFn({ method: "POST" })
+  .inputValidator((d) =>
+    z
+      .object({
+        sinceMs: z.number().int().positive(),
+        runStartMs: z.number().int().positive(),
+        offset: z.number().int().min(0).max(1_000_000).optional(),
+        limit: z.number().int().min(1).max(100).optional(),
+      })
+      .parse(d),
+  )
   .middleware([requireSupabaseAuth])
   .handler(async ({ data, context }) => {
     await requireAdmin(context.supabase, context.userId);
-    const { ingestCloverSales } = await import("@/lib/clover.ingest.server");
-    const sinceMs = Date.now() - data.lookbackDays * 86_400_000;
-    return await ingestCloverSales(context.supabase as any, {
+    const { ingestCloverSalesPage } = await import("@/lib/clover.ingest.server");
+    return await ingestCloverSalesPage(context.supabase as any, {
+      sinceMs: data.sinceMs,
+      runStartMs: data.runStartMs,
+      offset: data.offset ?? 0,
+      limit: data.limit ?? 40,
       userId: context.userId,
-      sinceMs,
     });
   });
 
