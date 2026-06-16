@@ -20,7 +20,8 @@ function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) { toast.error(error.message); return; }
-    nav({ to: "/dashboard" });
+    // Hard reload — avoids a stale route-chunk import rejecting and leaving us on /login.
+    window.location.assign("/dashboard");
   };
 
   return (
