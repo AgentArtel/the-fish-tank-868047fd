@@ -1,0 +1,53 @@
+# feedback-autotriage.yml — OPTIONAL "Option A" auto-triage workflow.
+# Install path: .github/workflows/feedback-autotriage.yml
+#
+# This is the LATER, OPT-IN extension. The core feedback dock (Option B) works without it.
+# It triggers when a new issue is opened with the `bug` label (filed by the dock) and runs
+# Claude Code to triage → attempt a fix → open a PR. Review every PR before merging.
+#
+# REQUIRED SETUP before enabling:
+#  - Repo secret ANTHROPIC_API_KEY (or configure your provider/region per the action docs).
+#  - Workflow permissions: contents:write + pull-requests:write (set below) AND enable
+#    "Allow GitHub Actions to create and approve pull requests" in repo Settings → Actions.
+#  - The default GITHUB_TOKEN is used for issue/PR access; no extra PAT needed for same-repo.
+#  - Adjust the label filter (bug vs feedback) and the prompt to your codebase conventions.
+
+name: Feedback auto-triage
+
+on:
+  issues:
+    types: [opened, labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  triage:
+    # Only act on dock-filed bugs. Change to 'feedback' to cover all dock issues.
+    if: contains(github.event.issue.labels.*.name, 'bug')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Claude Code triage
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # The issue body uses the dock's fixed section headers (Description / Screenshot /
+          # Recent logs / metadata), so the model can parse it reliably.
+          prompt: |
+            A user filed this bug via the in-app feedback dock (issue #${{ github.event.issue.number }}):
+
+            Title: ${{ github.event.issue.title }}
+
+            ${{ github.event.issue.body }}
+
+            Triage it: reproduce from the Description + Recent logs + Page/Device context,
+            locate the cause in this repo, and if the fix is small and safe, implement it on a
+            new branch and open a pull request that references "Fixes #${{ github.event.issue.number }}".
+            If you cannot safely fix it, comment on the issue with your root-cause analysis and
+            a suggested fix instead. Never push directly to the default branch.

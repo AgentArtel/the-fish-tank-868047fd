@@ -1,0 +1,61 @@
+# Feedback auto-triage (Option A) — a new dock-filed `bug` issue spins up a Claude
+# Code run that triages → attempts a small, safe fix → opens a PR (never to main).
+#
+# ACTIVATION (this file must be on the DEFAULT branch `main` for `issues` events to fire):
+#   1. Add the repo secret `ANTHROPIC_API_KEY` (Settings → Secrets and variables → Actions).
+#   2. Settings → Actions → General → Workflow permissions:
+#        • "Read and write permissions"
+#        • enable "Allow GitHub Actions to create and approve pull requests".
+#   3. Merge this workflow to `main`.
+# The dock files issues with the `bug` label, which triggers this. Review every PR before merge.
+
+name: Feedback auto-triage
+
+on:
+  issues:
+    types: [opened, labeled]
+
+# One triage run per issue; if `opened` and `labeled` both fire, dedupe to a single run.
+concurrency:
+  group: feedback-triage-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  triage:
+    # Only dock-filed bugs. (Use 'feedback' to cover every dock report.)
+    if: contains(github.event.issue.labels.*.name, 'bug')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Claude Code triage
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            A user filed this bug from the in-app feedback dock (issue #${{ github.event.issue.number }})
+            in The Fish Tank — a TanStack Start + Supabase + shadcn/ui reef-store app.
+
+            Title: ${{ github.event.issue.title }}
+
+            ${{ github.event.issue.body }}
+
+            The body uses the dock's fixed sections (Description / Screenshot / Recent logs, plus
+            Page / Device / Viewport metadata) — use them to reproduce and locate the cause.
+
+            Then:
+            - If the fix is small and safe, implement it on a NEW branch and open a pull request whose
+              body references "Fixes #${{ github.event.issue.number }}". Never push to `main`.
+            - Keep it green: `npx tsc --noEmit`, `npx prettier --check` on touched files, and a build
+              if you changed server/route code. Match the surrounding code's conventions.
+            - Respect CLAUDE.md invariants (AI is draft-only; pricing approval + go-live are admin-only;
+              no item `available` without a photo; mutating server fns check is_active + role).
+            - If you cannot fix it safely (ambiguous, large refactor, or needs product input), instead
+              comment on the issue with a root-cause analysis and a concrete suggested fix.
