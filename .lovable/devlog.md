@@ -1456,3 +1456,15 @@ Per scope-app-lane-cleanups.md (both low-risk, TS-only, no DB).
   (explicit 13 cols before masking), getCloverOverview (3 status cols). Left the two internal/editor-gated
   ops reads as `*` (low payoff, long lists) per scope.
 Build ✅ · tsc clean · prettier clean. No behavior change (guards equivalent; projections narrowed).
+
+---
+## 2026-06-16 — Fix /inventory browser freeze (pagination) (Claude Code)
+
+QA found /inventory froze the browser. Cause: the page rendered ALL rows (catalog ~1000+) unvirtualized,
+and each row mounts 3 shadcn <Select> dropdowns → ~3000 heavy components at once. (The query was
+`.limit(2000)` capped, not unbounded — the killer was rendering, not the query.)
+- **Client-side pagination** (PAGE_SIZE 50) over the server-filtered result + a Prev/Next footer with
+  "showing X–Y of N"; resets to page 1 when filters/search/sort change. Cuts mounted rows from ~1000 to 50.
+- Narrowed the `select("*")` to the explicit columns the row uses (verified all exist) and dropped the
+  unused `store_locations` join — smaller payload, addresses the QA "SELECT *" note.
+Filters/search/sort are unchanged (still server-side). Build ✅ · tsc clean · prettier clean.

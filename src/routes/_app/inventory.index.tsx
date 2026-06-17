@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { OpsBadge, availabilityTone, liveSaleTone, pricingTone } from "@/components/ops-badge";
 import {
@@ -62,6 +62,11 @@ const SORT_LABELS: Record<string, string> = {
   qty: "Quantity (high→low)",
   price: "Price (high→low)",
 };
+
+// Render in pages — the catalog can be ~1000+ rows and each row mounts several
+// dropdowns, so rendering them all at once freezes the browser. Filters/search are
+// server-side; this paginates the rendered result.
+const PAGE_SIZE = 50;
 
 function InventoryPage() {
   const [q, setQ] = useState("");
@@ -118,7 +123,9 @@ function InventoryPage() {
       const s = SORTS[sort] ?? SORTS.updated;
       let query = supabase
         .from("inventory_items")
-        .select("*, store_locations(name,is_live_sale), vendors(name)")
+        .select(
+          "id, item_name, scientific_name, size, attrs, item_type, location_id, retail_price, pricing_status, availability_status, live_sale_status, quantity_available, quantity_received, quantity_on_hold, quantity_sold, quantity_lost, vendors(name)",
+        )
         .order(s.column, { ascending: s.ascending })
         .limit(2000);
       if (statusFilter === "needs_review")
@@ -131,6 +138,15 @@ function InventoryPage() {
     },
     enabled: locationId ? !!allLocations : true,
   });
+
+  // Paginate the rendered rows (filters run server-side; this just caps the DOM).
+  const [page, setPage] = useState(0);
+  const rows = data ?? [];
+  const pageRows = rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  useEffect(() => {
+    setPage(0);
+  }, [q, statusFilter, sort, type, locationId, descendants]);
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["inventory"] });
 
@@ -256,7 +272,7 @@ function InventoryPage() {
             </tr>
           </thead>
           <tbody>
-            {(data ?? []).map((i: any) => (
+            {pageRows.map((i: any) => (
               <InventoryRow
                 key={i.id}
                 item={i}
@@ -303,6 +319,35 @@ function InventoryPage() {
           </tbody>
         </table>
       </div>
+      {rows.length > PAGE_SIZE && (
+        <div className="flex items-center justify-between gap-2 mt-3 text-sm">
+          <span className="text-muted-foreground">
+            Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, rows.length)} of{" "}
+            {rows.length}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={page === 0}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+            >
+              Previous
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              Page {page + 1} / {pageCount}
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={page >= pageCount - 1}
+              onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
