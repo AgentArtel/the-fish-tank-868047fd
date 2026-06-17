@@ -17,10 +17,13 @@
 ---
 
 ## Tier 1 — Real correctness / data bugs (do first)
-1. **[App] Clover sales ingest hardcodes `qty: 1`** (`clover.ingest.server.ts:177,196`; `clover.api.ts` mapper fetches no quantity). Multi-unit Clover sales under-decrement stock AND under-count revenue. Fix: read the Clover line-item quantity through the API mapper and pass it to `applyInventorySale`.
+1. **[App] ✅ RESOLVED (no change) — Clover `qty:1` is correct.** Verified with Lovable against real
+   orders: classic Clover creates one `line_item` per unit (e.g. order KMQ3WMVN12H06 has the salt-water
+   item ~35× as separate lines), never an aggregated quantity. Future caveat: if a weight/measure item
+   (`unitQty`) is ever enabled, the mapper would need to read `unitQty` — none in the catalog today.
 2. **[App] `override_retail_price` dropped at conversion** (`ops.functions.ts:156`). Define D3 precedence and apply it in both `convertLineItemsToInventory` and the pricing-approval fns.
 3. **[App] reconcile↔convert UNIQUE clash on `source_vendor_line_item_id`** (`ops.functions.ts:1807` vs `:142`). A reconciled-then-converted line hard-errors or double-creates the same physical item. Fix: convert skips lines already linked via reconciliation; surface the conflict as a friendly message.
-4. **[DB+App] Sale decrement is not atomic** (`applyInventorySale` read-modify-write, no lock). Concurrent manual+Clover sale of one item can lost-update. Fix: a `SECURITY DEFINER` RPC with `FOR UPDATE` (or `SET col = col - x`), mirroring `loyalty_redeem`. Lovable writes the RPC; app calls it.
+4. **[DB+App] ✅ RESOLVED — Sale decrement now atomic.** Lovable shipped the `decrement_inventory_stock(_id, _qty)` `SECURITY DEFINER` RPC (single row-locked `UPDATE … SET col = col - LEAST(qty, available)`, clamps to available, bumps sold, flips `sold_out` at zero). `applyInventorySale` (non-colony branch) now calls the RPC instead of the read-modify-write. Lost-update window closed.
 5. **[App] `$0` counts as "approved"** — the 3 approval fns use `.nonnegative()`; the gate only checks `retail_price IS NULL`, so a $0 item can go live. Fix: `.positive()` on `reviewInventoryItem`, `approveInventoryPricing`, `approveLinePricing`.
 6. **[App] Quantity/status desync** — the bulk-import *merge* path (`ops.functions.ts:~2028`) and `adjustInventoryQuantities` bump `quantity_available` but never clear `sold_out`, so a restocked item stays invisible. Only sale/colony paths couple status↔qty. Fix: re-derive status at the 0/sold_out boundary in the qty mutators.
 
