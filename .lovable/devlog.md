@@ -1560,3 +1560,55 @@ From scope-inventory-cleanup.md (items 7–11). All App-lane, no DB dependency.
   `QuantitiesCard` re-seeds on `item.updated_at` so it doesn't show stale counts after a refetch.
 Build ✅ · tsc clean. (Skipped prettier on `inventory.$id.tsx` — the file predates the prettier config
 and a full reformat would bury the change; edits match the surrounding compact style.) **Tier 2 complete.**
+
+---
+## 2026-06-17 — Tier 2 item #12 closed: inventory direct-write RLS verified + hardened (Lovable + Claude)
+
+Lovable confirmed at the DB level that the direct browser `supabase` writes (location, notes,
+website_ready_later, needs_photo, inventory_media) are gated identically to a `requireEditor` server fn:
+only `can_edit_content` policies exist (admin-only DELETE), and the `inv_guard_gates` /
+`trg_inv_photo_required` / `inv_guard_pricing_approval` BEFORE triggers fire on client writes too.
+Hardened: migration `20260617155314` revokes stale table-level `ALL` grants from `anon` on
+`inventory_items` + `inventory_media` (defense-in-depth; anon was already RLS-blocked).
+Decision: keep these as RLS-enforced direct writes — no app refactor. **Tier 2 fully complete.**
+
+---
+## 2026-06-17 — Inventory cleanup Tier 3: consolidation + D2 rack field (Claude Code)
+
+From scope-inventory-cleanup.md (items 13, 14, decision D2). App-lane.
+- **`buildInventoryInsert()`** (`ops.functions.ts`): one typed builder (`TablesInsert<"inventory_items">`)
+  centralizes the full inventory-row insert shape + invariants (`live_sale_status: not_eligible`, `attrs`
+  never explicit-null, `quantity_lost` default 0). All four inserts — `quickAddInventoryItem`,
+  `bulkImportInventoryRows`, `convertLineItemsToInventory`, `catalogCoralItem` — route through it now,
+  passing only the genuinely-per-path fields (pricing_status, availability_status, needs_photo, provenance).
+  Kills the `needs_photo`/`pricing_status` drift that 3 of 4 agents flagged.
+- **`useGoLiveWithPhoto()` hook** (`photo-on-file-wizard.tsx`): `ensurePhoto(item, action, onCancel?)` + a
+  `photoGate` element encapsulate the "check photo → open wizard → run action on upload" dance. Refactored
+  the 3 status-flip surfaces (stock list, detail, Pricing Queue) onto it — each dropped its hand-rolled
+  wizardOpen/pendingAvail state. The Review Stock wizard keeps its bespoke flow (photo is the last of
+  several gates in a multi-field commit, not a one-shot flip).
+- **D2 rack field**: Quick Add now requires a "Rack / plug position" when item type is coral, uppercased
+  into `attrs.rack_position` — same plug-tag discipline as Coral Discovery.
+Build ✅ · tsc clean · prettier clean. **Tier 3.13/3.14 + D2 complete.** Remaining: Tier 3.15 (attrs→columns,
+DB-lane, largest) and Tier 4 cleanups.
+
+---
+## 2026-06-17 — Inventory cleanup Tier 4: low-risk cleanups + 3.15 handoff (Claude Code)
+
+App-lane cleanups from scope-inventory-cleanup.md (items 16–20):
+- **#16**: dropped `catalogCoralItem`'s manual `created` activity-log insert — a literal duplicate of the
+  `log_inventory_activity` trigger's `created` row (which carries `to_jsonb(NEW)`, the full row incl.
+  attrs). Kept `convertLineItemsToInventory`'s `converted_from_line` log: distinct action, not a duplicate
+  `created`, so the scope's premise didn't apply there.
+- **#17**: removed the always-empty `doaBlocked` field from `receiveBatchLines`' return (the real DOA block
+  throws pre-flight) + the dead `res.doaBlocked` toast branch in `batches.$id.tsx`.
+- **#18**: `cloverListItems` now skips Clover `hidden`/archived items so they don't become workspace drafts;
+  removed the vestigial `hidden` field from `CloverItem`.
+- **#20**: consolidated the duplicated inline `count` helper in `clover.functions.ts` onto the module-level
+  `countRows`. Deferred the cosmetic `Recon` `any[]` precision + unused-import sweep (low value / linter-risk).
+- **#15 (Tier 3.15)** handed to Lovable as a scope/decision proposal (`handoff-attrs-to-columns.md`):
+  promote `rack_position` to a column, leave `stock_mode` in attrs (per design-coral-stock-tracking.md),
+  `inventory_role` optional, backfill+cutover `clover_item_id`→`clover_item_links`.
+- **#19 correction**: flagged that `inventory_media.ocr_text`/`ocr_extracted_at` are NOT dead (read on the
+  detail page) — do not drop. Remaining #19 dead-schema candidates bundled into the same handoff.
+Build ✅ · tsc clean · prettier clean. **Tier 4 App-lane complete** (DB-lane #15/#19 with Lovable).

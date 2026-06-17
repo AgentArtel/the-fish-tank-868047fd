@@ -298,6 +298,7 @@ function ManualForm({
   const [notes, setNotes] = useState("");
   const [inventoryRole, setInventoryRole] = useState<string>("");
   const [coralType, setCoralType] = useState<string>("");
+  const [rackPosition, setRackPosition] = useState<string>("");
 
   const [primaryFile, setPrimaryFile] = useState<File | null>(null);
   const [primaryPreview, setPrimaryPreview] = useState<string>("");
@@ -362,6 +363,12 @@ function ManualForm({
       toast.error("Enter a valid retail price");
       return;
     }
+    // Plug-tag discipline: coral must carry a rack/plug position (matches Coral
+    // Discovery), so it's findable on the rack regardless of which door it came in.
+    if (itemType === "coral" && !rackPosition.trim()) {
+      toast.error("Rack / plug position is required for coral");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -375,6 +382,7 @@ function ManualForm({
       if (itemType === "coral") {
         if (inventoryRole) attrs.inventory_role = inventoryRole;
         if (coralType) attrs.coral_type = coralType;
+        attrs.rack_position = rackPosition.trim().toUpperCase();
       }
       const r = await quickAdd({
         data: {
@@ -560,6 +568,18 @@ function ManualForm({
         </div>
         {itemType === "coral" && (
           <>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Rack / plug position *</Label>
+              <Input
+                value={rackPosition}
+                onChange={(e) => setRackPosition(e.target.value)}
+                placeholder="B3 / X3 / H8"
+                className="uppercase"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Required for coral — the plug/rack tag so it&apos;s findable on the rack.
+              </p>
+            </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Inventory role</Label>
               <Select value={inventoryRole} onValueChange={setInventoryRole}>

@@ -25,17 +25,16 @@ export const getCloverOverview = createServerFn({ method: "GET" })
       .from("clover_connection")
       .select("connected, last_import_at, last_sale_synced_at")
       .maybeSingle();
-    const count = async (q: any) => (await q).count ?? 0;
-    const total = await count(
+    const total = await countRows(
       db.from("clover_item_links").select("id", { count: "exact", head: true }),
     );
-    const linked = await count(
+    const linked = await countRows(
       db
         .from("clover_item_links")
         .select("id", { count: "exact", head: true })
         .eq("link_status", "linked"),
     );
-    const salesNeedingReview = await count(
+    const salesNeedingReview = await countRows(
       db
         .from("inventory_sale_events")
         .select("id", { count: "exact", head: true })

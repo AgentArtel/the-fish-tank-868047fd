@@ -68,7 +68,6 @@ export type CloverItem = {
   name: string;
   priceCents: number | null;
   priceType: string | null;
-  hidden: boolean;
 };
 
 export async function cloverTestConnection(
@@ -98,12 +97,15 @@ export async function cloverListItems(creds: CloverCreds): Promise<CloverItem[]>
     });
     const els: any[] = j.elements ?? [];
     for (const e of els) {
+      // Skip items hidden/archived in Clover — they shouldn't become sellable
+      // workspace drafts. Pagination still walks the full set (break uses the
+      // raw page length below), so this only filters what we return.
+      if (e.hidden) continue;
       out.push({
         id: e.id,
         name: e.name ?? "(unnamed)",
         priceCents: typeof e.price === "number" ? e.price : null,
         priceType: e.priceType ?? null,
-        hidden: !!e.hidden,
       });
     }
     if (els.length < 100) break;

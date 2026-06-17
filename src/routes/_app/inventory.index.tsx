@@ -31,7 +31,7 @@ import {
   setInventoryLiveSale,
   markInventoryReviewed,
 } from "@/lib/ops.functions";
-import { PhotoOnFileWizard, inventoryHasPhoto } from "@/components/photo-on-file-wizard";
+import { useGoLiveWithPhoto } from "@/components/photo-on-file-wizard";
 import { invalidateInventoryViews } from "@/lib/inventory-cache";
 import { InventoryReviewWizard } from "@/components/inventory-review-wizard";
 import { QuickAddButton } from "@/components/quick-add-fab";
@@ -380,8 +380,7 @@ function InventoryRow({
   const setAvail = useServerFn(setInventoryAvailability);
   const setLive = useServerFn(setInventoryLiveSale);
   const markReviewedFn = useServerFn(markInventoryReviewed);
-  const [wizardOpen, setWizardOpen] = useState(false);
-  const [pendingAvail, setPendingAvail] = useState<string | null>(null);
+  const { ensurePhoto, photoGate } = useGoLiveWithPhoto();
 
   const markReviewed = async () => {
     try {
@@ -408,14 +407,10 @@ function InventoryRow({
       toast.error(e.message);
     }
   };
-  const changeAvail = async (s: string) => {
+  const changeAvail = (s: string) => {
     if (s === "available") {
-      const hasPhoto = await inventoryHasPhoto(item.id);
-      if (!hasPhoto) {
-        setPendingAvail(s);
-        setWizardOpen(true);
-        return;
-      }
+      ensurePhoto({ id: item.id, name: item.item_name }, () => applyAvail(s));
+      return;
     }
     applyAvail(s);
   };
@@ -524,18 +519,7 @@ function InventoryRow({
             tone={availabilityTone(item.availability_status)}
           />
         </div>
-        <PhotoOnFileWizard
-          open={wizardOpen}
-          onOpenChange={setWizardOpen}
-          inventoryItemId={item.id}
-          itemName={item.item_name}
-          onUploaded={async () => {
-            if (pendingAvail) {
-              await applyAvail(pendingAvail);
-              setPendingAvail(null);
-            }
-          }}
-        />
+        {photoGate}
       </td>
       <td className="p-3">
         <Select value={item.live_sale_status} onValueChange={changeLive}>

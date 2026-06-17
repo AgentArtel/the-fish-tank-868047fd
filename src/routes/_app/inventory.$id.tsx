@@ -27,7 +27,7 @@ import {
   parseTagPhoto, updateInventoryAttrs, updateInventoryItemType,
 } from "@/lib/ops.functions";
 import { Sparkles, Loader2 } from "lucide-react";
-import { PhotoOnFileWizard, inventoryHasPhoto } from "@/components/photo-on-file-wizard";
+import { useGoLiveWithPhoto } from "@/components/photo-on-file-wizard";
 import { AttrsEditor } from "@/components/attrs-editor";
 import { SalesCard } from "@/components/inventory-sales-card";
 import { ITEM_TYPE_LABELS, type ItemType } from "@/lib/item-type-attrs";
@@ -139,8 +139,7 @@ function DetailsCard({ item }: { item: any }) {
 function ControlsCard({ item, locations, onDone }: { item: any; locations: any[]; onDone: () => void }) {
   const setAvail = useServerFn(setInventoryAvailability);
   const setLive = useServerFn(setInventoryLiveSale);
-  const [wizardOpen, setWizardOpen] = useState(false);
-  const [pendingAvail, setPendingAvail] = useState<InventoryAvailability | null>(null);
+  const { ensurePhoto, photoGate } = useGoLiveWithPhoto();
 
   const applyAvail = async (s: InventoryAvailability) => {
     try { await setAvail({ data: { id: item.id, status: s } }); toast.success("Availability updated"); onDone(); }
@@ -152,11 +151,11 @@ function ControlsCard({ item, locations, onDone }: { item: any; locations: any[]
       .update({ location_id: locationId === "none" ? null : locationId }).eq("id", item.id);
     if (error) toast.error(error.message); else { toast.success("Location updated"); onDone(); }
   };
-  const changeAvail = async (s: string) => {
+  const changeAvail = (s: string) => {
     const next = s as InventoryAvailability;
     if (next === "available") {
-      const hasPhoto = await inventoryHasPhoto(item.id);
-      if (!hasPhoto) { setPendingAvail(next); setWizardOpen(true); return; }
+      ensurePhoto({ id: item.id, name: item.item_name }, () => applyAvail(next));
+      return;
     }
     applyAvail(next);
   };
@@ -218,13 +217,7 @@ function ControlsCard({ item, locations, onDone }: { item: any; locations: any[]
         </div>
         <div><OpsBadge label={INVENTORY_LIVE_SALE_LABELS[item.live_sale_status as keyof typeof INVENTORY_LIVE_SALE_LABELS]} tone={liveSaleTone(item.live_sale_status)} /></div>
       </div>
-      <PhotoOnFileWizard
-        open={wizardOpen}
-        onOpenChange={setWizardOpen}
-        inventoryItemId={item.id}
-        itemName={item.item_name}
-        onUploaded={async () => { if (pendingAvail) { await applyAvail(pendingAvail); setPendingAvail(null); } }}
-      />
+      {photoGate}
     </div>
   );
 }
