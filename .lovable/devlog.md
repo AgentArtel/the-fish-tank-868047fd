@@ -1494,3 +1494,17 @@ admin + floor-staff task, so non-admins create DRAFTS for admin approval.
   existing Inventory → "Needs review" + Review Stock wizard (and Pricing Queue for corals) — all admin-gated.
 - Defense-in-depth DB trigger (extend guard to BEFORE INSERT) handed to Lovable: handoff-pricing-insert-guard.md.
 Build ✅ · tsc clean · prettier clean.
+
+---
+## 2026-06-16 — REVISED pricing policy: non-admin adds go LIVE, flagged for review (Claude Code)
+
+Owner decision superseded the draft-pending-approval approach: don't block the floor. Non-admin Quick Add
+/ bulk import now goes **live** with the entered price locked in (`pricing_status:'approved'`, available)
+but carries an `attrs.price_review` flag so an admin can verify the price after the fact.
+- `quickAddInventoryItem` + `bulkImportInventoryRows`: revert to approved+live for everyone; non-admins get
+  the `price_review` flag. Return `flaggedForReview`. Quick Add toast: "live, flagged for admin review".
+- New **`markInventoryReviewed`** (admin) clears the flag. Inventory list: new **"Price review (staff-added)"**
+  filter; flagged rows show an amber badge + an admin "mark reviewed" action.
+- **Cancelled** the INSERT-guard DB handoff — we intentionally allow non-admin approved-price inserts now.
+  Updated policy: pricing approval is admin-only EXCEPT in-store Quick Add (live + flagged for review).
+Build ✅ · tsc clean · prettier clean.

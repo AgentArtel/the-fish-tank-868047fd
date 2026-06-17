@@ -392,8 +392,8 @@ function ManualForm({
       });
       (window as any).__quickAddTagPath = null;
       toast.success(
-        r.pendingApproval
-          ? `Added ${itemName} — pending admin pricing approval`
+        r.flaggedForReview
+          ? `Added ${itemName} — live, flagged for admin review`
           : `Added ${itemName}`,
       );
       onSaved();
@@ -887,7 +887,7 @@ function MarkdownBulk({
       const parts = [];
       if (result.created)
         parts.push(
-          `${result.created} created${result.pendingApproval ? " (pending approval)" : ""}`,
+          `${result.created} created${result.flaggedForReview ? " (flagged for review)" : ""}`,
         );
       if (result.merged) parts.push(`${result.merged} merged`);
       if (result.skipped) parts.push(`${result.skipped} skipped`);
