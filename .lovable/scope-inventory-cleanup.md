@@ -28,11 +28,11 @@
 6. **[App] Quantity/status desync** — the bulk-import *merge* path (`ops.functions.ts:~2028`) and `adjustInventoryQuantities` bump `quantity_available` but never clear `sold_out`, so a restocked item stays invisible. Only sale/colony paths couple status↔qty. Fix: re-derive status at the 0/sold_out boundary in the qty mutators.
 
 ## Tier 2 — High-traffic UX bugs
-7. **[App] Review Stock wizard** (`inventory-review-wizard.tsx`): keyboard `useEffect` has no deps (stale-closure double-fire window); deck only reloads on `[open]` so a re-click while open shows a stale deck. Fix: deps array + ref guard + a `sessionNonce` to force reload.
-8. **[App] `window.__quickAddTagPath` global** (`quick-add-fab.tsx`) → switching Livestock/Dry-Goods tab can attach the wrong tag photo. Fix: hold `tagPath` in component state.
-9. **[App] Stale nav badges** — the stock list `refresh()` and Quick Add invalidate `["inventory"]` but not `["workload"]` (and coral/missing-tags keys), so sidebar counts lag. `pricing-approval` already does it right — just match it.
-10. **[App] 2000-row cap** (`inventory.index.tsx`) silently truncates >2000 items and the "X items" count is wrong. Fix: server-side `.range()` pagination + a true count (or a "showing first N" notice).
-11. **[App] Detail page** (`inventory.$id.tsx`): a deleted/invalid id renders "Loading…" forever (no not-found state); `QuantitiesCard` doesn't re-seed after an external mutation. Fix: distinguish `isLoading` vs `null`; re-seed on `item.updated_at`.
+7. **[App] ✅ RESOLVED — Review Stock wizard** (`inventory-review-wizard.tsx`): keyboard `useEffect` now binds once per `[open]` and reads handlers through refs (no more re-subscribe-every-render double-fire window); the deck load uses a `loadSeq` ref guard so a quick close/reopen can't let a stale in-flight load clobber the fresh deck.
+8. **[App] ✅ RESOLVED — `window.__quickAddTagPath` global** (`quick-add-fab.tsx`) → now a per-form-instance `parsedTagPath` state, so switching the Livestock/Dry-Goods tab can't attach the wrong tag photo.
+9. **[App] ✅ RESOLVED — Stale nav badges** — new `invalidateInventoryViews(qc)` helper (`src/lib/inventory-cache.ts`) invalidates `["inventory"]` + `["workload"]` + `["coral-discovery-overview"]` + `["missing-tags"]` together; wired into the stock-list `refresh()`, the detail-page `refresh()`, and both Quick Add `onSaved` paths. Mirrors the `pricing-approval` canonical set.
+10. **[App] ✅ RESOLVED — 2000-row cap** (`inventory.index.tsx`): replaced the `.limit(2000)` + client slice with server-side `.range()` pagination (`page` in the query key, `keepPreviousData` for smooth paging) and an exact `{ count: "exact" }` total, so the "X items" count is accurate and nothing is silently truncated.
+11. **[App] ✅ RESOLVED — Detail page** (`inventory.$id.tsx`): distinguishes `isPending` (Loading…) from a `null` item (a real "Item not found" card with a back link); `QuantitiesCard` re-seeds its inputs on `item.updated_at` so it doesn't show stale counts after an external mutation.
 12. **[App/Decision] Direct `supabase.update()`** in the stock list/detail (location, notes, media) bypasses the server-fn `is_active`/role checks (relies on RLS only). Confirm RLS enforces it, or route through server fns.
 
 ## Tier 3 — Consolidation (the big maintainability win)

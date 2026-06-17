@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/page-header";
@@ -32,6 +32,7 @@ import {
   markInventoryReviewed,
 } from "@/lib/ops.functions";
 import { PhotoOnFileWizard, inventoryHasPhoto } from "@/components/photo-on-file-wizard";
+import { invalidateInventoryViews } from "@/lib/inventory-cache";
 import { InventoryReviewWizard } from "@/components/inventory-review-wizard";
 import { QuickAddButton } from "@/components/quick-add-fab";
 import { useMe } from "@/hooks/use-me";
@@ -67,15 +68,17 @@ const SORT_LABELS: Record<string, string> = {
   price: "Price (high→low)",
 };
 
-// Render in pages — the catalog can be ~1000+ rows and each row mounts several
-// dropdowns, so rendering them all at once freezes the browser. Filters/search are
-// server-side; this paginates the rendered result.
+// Page server-side — the catalog can be ~1000+ rows and each row mounts several
+// dropdowns, so rendering them all at once freezes the browser. Filters/search,
+// sort, the page slice, and the total count all run on the server (`.range()` +
+// an exact count), so we never pull (or silently truncate) the whole table.
 const PAGE_SIZE = 50;
 
 function InventoryPage() {
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sort, setSort] = useState<string>("updated");
+  const [page, setPage] = useState(0);
   const [reviewOpen, setReviewOpen] = useState(false);
   const { location: locationId, descendants, type } = Route.useSearch();
   const nav = useNavigate({ from: "/inventory" });
@@ -122,16 +125,17 @@ function InventoryPage() {
   }, [locationId, descendants, allLocations]);
 
   const { data } = useQuery({
-    queryKey: ["inventory", q, statusFilter, sort, locationIds, type],
+    queryKey: ["inventory", q, statusFilter, sort, locationIds, type, page],
     queryFn: async () => {
       const s = SORTS[sort] ?? SORTS.updated;
       let query = supabase
         .from("inventory_items")
         .select(
           "id, item_name, scientific_name, size, attrs, item_type, location_id, retail_price, pricing_status, availability_status, live_sale_status, quantity_available, quantity_received, quantity_on_hold, quantity_sold, quantity_lost, vendors(name)",
+          { count: "exact" },
         )
         .order(s.column, { ascending: s.ascending })
-        .limit(2000);
+        .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
       if (statusFilter === "needs_review")
         query = query.in("availability_status", INVENTORY_REVIEW_STATUSES);
       else if (statusFilter === "price_review")
@@ -140,21 +144,22 @@ function InventoryPage() {
       if (q) query = query.ilike("item_name", `%${q}%`);
       if (type) query = query.eq("item_type", type);
       if (locationIds) query = query.in("location_id", locationIds);
-      return (await query).data ?? [];
+      const { data, count } = await query;
+      return { rows: data ?? [], total: count ?? 0 };
     },
     enabled: locationId ? !!allLocations : true,
+    placeholderData: keepPreviousData, // keep the current page visible while the next loads
   });
 
-  // Paginate the rendered rows (filters run server-side; this just caps the DOM).
-  const [page, setPage] = useState(0);
-  const rows = data ?? [];
-  const pageRows = rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const rows = data?.rows ?? [];
+  const total = data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  // Filter/search/sort changes reset to the first page.
   useEffect(() => {
     setPage(0);
   }, [q, statusFilter, sort, type, locationId, descendants]);
 
-  const refresh = () => qc.invalidateQueries({ queryKey: ["inventory"] });
+  const refresh = () => invalidateInventoryViews(qc);
 
   const clearLocation = () =>
     nav({ search: (prev: any) => ({ ...prev, location: undefined, descendants: undefined }) });
@@ -205,7 +210,7 @@ function InventoryPage() {
             ))}
           </SelectContent>
         </Select>
-        <span className="text-xs text-muted-foreground">{data?.length ?? 0} items</span>
+        <span className="text-xs text-muted-foreground">{total} items</span>
         <div className="ml-auto flex gap-2">
           {isAdmin && (
             <Button size="sm" onClick={() => setReviewOpen(true)}>
@@ -279,7 +284,7 @@ function InventoryPage() {
             </tr>
           </thead>
           <tbody>
-            {pageRows.map((i: any) => (
+            {rows.map((i: any) => (
               <InventoryRow
                 key={i.id}
                 item={i}
@@ -289,7 +294,7 @@ function InventoryPage() {
                 onDone={refresh}
               />
             ))}
-            {data?.length === 0 && (
+            {total === 0 && (
               <tr>
                 <td colSpan={showPlug ? 9 : 8} className="p-10">
                   <div className="flex flex-col items-center text-center gap-3">
@@ -327,11 +332,10 @@ function InventoryPage() {
           </tbody>
         </table>
       </div>
-      {rows.length > PAGE_SIZE && (
+      {total > PAGE_SIZE && (
         <div className="flex items-center justify-between gap-2 mt-3 text-sm">
           <span className="text-muted-foreground">
-            Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, rows.length)} of{" "}
-            {rows.length}
+            Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
           </span>
           <div className="flex items-center gap-2">
             <Button

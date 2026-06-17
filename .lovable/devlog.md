@@ -1539,3 +1539,24 @@ single-`UPDATE` row-locked decrement (clamps to available, bumps sold, flips `so
 - scope-inventory-cleanup.md: Tier-1 items #1 (Clover qty:1 — verified, no change) and #4 (atomic
   decrement) marked ✅ RESOLVED. **Tier 1 complete.**
 Build ✅ · tsc clean · prettier clean. Tier 2 (UX bugs) gated on owner go-ahead.
+
+---
+## 2026-06-17 — Inventory cleanup Tier 2: high-traffic UX bugs (Claude Code)
+
+From scope-inventory-cleanup.md (items 7–11). All App-lane, no DB dependency.
+- **Review Stock wizard** (`inventory-review-wizard.tsx`): keyboard handler now binds once per `[open]`
+  and reads `doSaveLive`/`doSkip` through refs (the no-deps effect re-subscribed every render — a
+  double-fire window); deck load uses a `loadSeq` ref guard so a quick close/reopen can't let a stale
+  load clobber the fresh deck.
+- **Quick Add tag photo** (`quick-add-fab.tsx`): replaced the `window.__quickAddTagPath` global with a
+  per-form `parsedTagPath` state — switching Livestock/Dry-Goods can no longer attach the wrong tag photo.
+- **Stale nav badges**: new `invalidateInventoryViews(qc)` helper (`src/lib/inventory-cache.ts`)
+  invalidates `["inventory"]` + `["workload"]` + `["coral-discovery-overview"]` + `["missing-tags"]`
+  together; wired into the stock-list refresh, the detail-page refresh, and both Quick Add onSaved paths.
+- **2000-row cap** (`inventory.index.tsx`): swapped `.limit(2000)` + client slice for server-side
+  `.range()` pagination (`page` in the query key, `keepPreviousData` for smooth paging) + an exact
+  `count: "exact"` total — the "X items" count is now accurate and nothing is silently truncated.
+- **Detail page** (`inventory.$id.tsx`): `isPending` (Loading…) vs `null` ("Item not found" card);
+  `QuantitiesCard` re-seeds on `item.updated_at` so it doesn't show stale counts after a refetch.
+Build ✅ · tsc clean. (Skipped prettier on `inventory.$id.tsx` — the file predates the prettier config
+and a full reformat would bury the change; edits match the surrounding compact style.) **Tier 2 complete.**

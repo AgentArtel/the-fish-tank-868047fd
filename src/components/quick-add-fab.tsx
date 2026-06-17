@@ -60,6 +60,7 @@ import {
   bulkImportInventoryRows,
 } from "@/lib/ops.functions";
 import { Badge } from "@/components/ui/badge";
+import { invalidateInventoryViews } from "@/lib/inventory-cache";
 
 type Mode = "livestock" | "dry_good";
 
@@ -245,7 +246,7 @@ function QuickAddForm({ mode, onDone }: { mode: Mode; onDone: () => void }) {
           defaultType={defaultType}
           locations={locations ?? []}
           onSaved={() => {
-            qc.invalidateQueries({ queryKey: ["inventory"] });
+            invalidateInventoryViews(qc);
             onDone();
           }}
         />
@@ -255,7 +256,7 @@ function QuickAddForm({ mode, onDone }: { mode: Mode; onDone: () => void }) {
           defaultType={defaultType}
           locations={locations ?? []}
           onSaved={() => {
-            qc.invalidateQueries({ queryKey: ["inventory"] });
+            invalidateInventoryViews(qc);
             onDone();
           }}
         />
@@ -304,6 +305,10 @@ function ManualForm({
 
   const [tagFile, setTagFile] = useState<File | null>(null);
   const [tagPreview, setTagPreview] = useState<string>("");
+  // Path of the tag photo uploaded during AI parse, held per-form-instance so
+  // switching the Livestock/Dry-Goods tab can't attach the wrong tag photo
+  // (this used to be a window global shared across both forms).
+  const [parsedTagPath, setParsedTagPath] = useState<string | null>(null);
   const [parsing, setParsing] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -333,8 +338,8 @@ function ManualForm({
       if (parsed.scientific_name) setScientificName(parsed.scientific_name);
       if (parsed.item_type) setItemType(parsed.item_type as ItemType);
       if (typeof parsed.retail_price === "number") setRetailPrice(String(parsed.retail_price));
-      // store tag photo path for later attach
-      (window as any).__quickAddTagPath = path;
+      // store tag photo path for later attach (per-form instance)
+      setParsedTagPath(path);
       toast.success(`Parsed (${parsed.confidence ?? "ok"})`);
     } catch (e: any) {
       toast.error(e.message ?? "Parse failed");
@@ -361,7 +366,7 @@ function ManualForm({
     setSaving(true);
     try {
       const primary = await uploadToInventoryBucket(primaryFile);
-      let tagPath: string | null = (window as any).__quickAddTagPath ?? null;
+      let tagPath: string | null = parsedTagPath;
       if (tagFile && !tagPath) {
         const t = await uploadToInventoryBucket(tagFile);
         tagPath = t.path;
@@ -390,7 +395,7 @@ function ManualForm({
           attrs: Object.keys(attrs).length > 0 ? attrs : null,
         },
       });
-      (window as any).__quickAddTagPath = null;
+      setParsedTagPath(null);
       toast.success(
         r.flaggedForReview
           ? `Added ${itemName} — live, flagged for admin review`

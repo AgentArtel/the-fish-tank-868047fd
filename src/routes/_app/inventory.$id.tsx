@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Upload, Trash2, AlertTriangle } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { OpsBadge, availabilityTone, liveSaleTone, pricingTone } from "@/components/ops-badge";
 import {
@@ -31,6 +31,7 @@ import { PhotoOnFileWizard, inventoryHasPhoto } from "@/components/photo-on-file
 import { AttrsEditor } from "@/components/attrs-editor";
 import { SalesCard } from "@/components/inventory-sales-card";
 import { ITEM_TYPE_LABELS, type ItemType } from "@/lib/item-type-attrs";
+import { invalidateInventoryViews } from "@/lib/inventory-cache";
 
 export const Route = createFileRoute("/_app/inventory/$id")({ component: InventoryDetail });
 
@@ -39,11 +40,11 @@ function InventoryDetail() {
   const nav = useNavigate();
   const qc = useQueryClient();
 
-  const { data: item } = useQuery({
+  const { data: item, isPending } = useQuery({
     queryKey: ["inventory", id],
     queryFn: async () => (await supabase.from("inventory_items")
       .select("*, vendors(id,name), store_locations(id,name,is_live_sale), vendor_batches(id,invoice_number)")
-      .eq("id", id).maybeSingle()).data,
+      .eq("id", id).maybeSingle()).data ?? null,
   });
   const { data: locations } = useQuery({
     queryKey: ["all-locations"],
@@ -59,10 +60,22 @@ function InventoryDetail() {
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["inventory", id] });
     qc.invalidateQueries({ queryKey: ["inventory-logs", id] });
-    qc.invalidateQueries({ queryKey: ["inventory"] });
+    invalidateInventoryViews(qc);
   };
 
-  if (!item) return <div className="p-8 text-muted-foreground">Loading…</div>;
+  if (isPending) return <div className="p-8 text-muted-foreground">Loading…</div>;
+  if (!item) return (
+    <div className="p-8 space-y-4">
+      <button onClick={() => nav({ to: "/inventory" })} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
+        <ArrowLeft className="w-3 h-3" /> Back to inventory
+      </button>
+      <div className="rounded-lg border bg-card p-10 text-center space-y-2">
+        <AlertTriangle className="w-8 h-8 mx-auto text-muted-foreground" />
+        <div className="font-medium">Item not found</div>
+        <p className="text-sm text-muted-foreground">This inventory item doesn’t exist or was deleted.</p>
+      </div>
+    </div>
+  );
 
   return (
     <div className="p-8 space-y-6">
@@ -226,6 +239,17 @@ function QuantitiesCard({ item, onDone }: { item: any; onDone: () => void }) {
     quantity_sold: Number(item.quantity_sold ?? 0),
     quantity_lost: Number(item.quantity_lost ?? 0),
   });
+  // Re-seed when the row changes underneath us (e.g. a sale decrement or an
+  // adjustment elsewhere) so the inputs don't show stale counts after refetch.
+  useEffect(() => {
+    setF({
+      quantity_received: Number(item.quantity_received ?? 0),
+      quantity_available: Number(item.quantity_available ?? 0),
+      quantity_on_hold: Number(item.quantity_on_hold ?? 0),
+      quantity_sold: Number(item.quantity_sold ?? 0),
+      quantity_lost: Number(item.quantity_lost ?? 0),
+    });
+  }, [item.updated_at]);
   const [busy, setBusy] = useState(false);
   const save = async () => {
     setBusy(true);

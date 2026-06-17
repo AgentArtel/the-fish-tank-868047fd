@@ -67,10 +67,12 @@ export function InventoryReviewWizard({
   const current = queue[index] ?? null;
   const done = !loading && index >= queue.length;
 
-  // Load the deck when opened.
+  // Load (and reload) the deck each time the dialog opens. The seq guard means a
+  // quick close/reopen can't let a stale in-flight load clobber the fresh one.
+  const loadSeq = useRef(0);
   useEffect(() => {
     if (!open) return;
-    let cancelled = false;
+    const seq = ++loadSeq.current;
     (async () => {
       setLoading(true);
       setIndex(0);
@@ -84,14 +86,11 @@ export function InventoryReviewWizard({
         .order("updated_at", { ascending: false })
         .limit(100);
       const items = (data ?? []).filter((it: any) => !it.attrs?.review_flag);
-      if (!cancelled) {
+      if (seq === loadSeq.current) {
         setQueue(items);
         setLoading(false);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
   }, [open]);
 
   // Seed the form whenever the current card changes.
@@ -162,18 +161,25 @@ export function InventoryReviewWizard({
     }
   };
 
-  // Keyboard: → save & live, ← skip (ignored while typing in a field).
+  // Keyboard: → save & live, ← skip (ignored while typing in a field). Bind the
+  // listener once per open (not every render) and read the handlers through refs
+  // so the closure can't fire stale — the no-deps version re-subscribed on every
+  // render and risked a double-fire mid-state-update.
+  const doSaveLiveRef = useRef(doSaveLive);
+  const doSkipRef = useRef(doSkip);
+  doSaveLiveRef.current = doSaveLive;
+  doSkipRef.current = doSkip;
   useEffect(() => {
-    if (!open || !current) return;
+    if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       if (["INPUT", "TEXTAREA", "SELECT"].includes(t?.tagName)) return;
-      if (e.key === "ArrowRight") doSaveLive();
-      if (e.key === "ArrowLeft") doSkip();
+      if (e.key === "ArrowRight") doSaveLiveRef.current();
+      if (e.key === "ArrowLeft") doSkipRef.current();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  });
+  }, [open]);
 
   // Pointer drag on the card header (form inputs below stay interactive).
   const onPointerDown = (e: React.PointerEvent) => {
