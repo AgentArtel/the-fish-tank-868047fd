@@ -1560,3 +1560,14 @@ From scope-inventory-cleanup.md (items 7–11). All App-lane, no DB dependency.
   `QuantitiesCard` re-seeds on `item.updated_at` so it doesn't show stale counts after a refetch.
 Build ✅ · tsc clean. (Skipped prettier on `inventory.$id.tsx` — the file predates the prettier config
 and a full reformat would bury the change; edits match the surrounding compact style.) **Tier 2 complete.**
+
+---
+## 2026-06-17 — Tier 2 item #12 closed: inventory direct-write RLS verified + hardened (Lovable + Claude)
+
+Lovable confirmed at the DB level that the direct browser `supabase` writes (location, notes,
+website_ready_later, needs_photo, inventory_media) are gated identically to a `requireEditor` server fn:
+only `can_edit_content` policies exist (admin-only DELETE), and the `inv_guard_gates` /
+`trg_inv_photo_required` / `inv_guard_pricing_approval` BEFORE triggers fire on client writes too.
+Hardened: migration `20260617155314` revokes stale table-level `ALL` grants from `anon` on
+`inventory_items` + `inventory_media` (defense-in-depth; anon was already RLS-blocked).
+Decision: keep these as RLS-enforced direct writes — no app refactor. **Tier 2 fully complete.**
