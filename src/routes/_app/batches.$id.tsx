@@ -1318,13 +1318,9 @@ function ReceiveSection({
         };
       });
       const res = await receive({ data: { batchId, lines: payload } });
-      const blockedMsg = res.doaBlocked?.length
-        ? ` · ${res.doaBlocked.length} blocked (missing DOA photos)`
-        : "";
       toast.success(
         `Recorded ${res.updated} line(s)` +
-          (res.errors.length ? ` · ${res.errors.length} error(s)` : "") +
-          blockedMsg,
+          (res.errors.length ? ` · ${res.errors.length} error(s)` : ""),
       );
       setDrafts({});
       onDone();

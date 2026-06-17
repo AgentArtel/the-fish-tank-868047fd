@@ -381,7 +381,7 @@ export const receiveBatchLines = createServerFn({ method: "POST" })
       });
       updated++;
     }
-    return { updated, errors, doaBlocked: [] as { lineItemId: string; error: string }[] };
+    return { updated, errors };
   });
 
 export const uploadDoaPhoto = createServerFn({ method: "POST" })
@@ -2315,19 +2315,6 @@ export const catalogCoralItem = createServerFn({ method: "POST" })
       });
       if (mErr) throw new Error(`Photo: ${mErr.message}`);
     }
-
-    await supabase.from("inventory_activity_logs").insert({
-      inventory_item_id: inv.id,
-      actor_id: userId,
-      action: "created",
-      summary: `Coral discovery: "${data.item_name}" (${data.inventory_role})${rackPosition ? ` @ ${rackPosition}` : ""} in ${loc.name}`,
-      detail: {
-        source: "coral_discovery",
-        inventory_role: data.inventory_role,
-        rack_position: rackPosition,
-        location_id: data.location_id,
-      },
-    });
 
     return {
       inventoryItemId: inv.id,

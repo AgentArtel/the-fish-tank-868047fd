@@ -1591,3 +1591,24 @@ From scope-inventory-cleanup.md (items 13, 14, decision D2). App-lane.
   into `attrs.rack_position` — same plug-tag discipline as Coral Discovery.
 Build ✅ · tsc clean · prettier clean. **Tier 3.13/3.14 + D2 complete.** Remaining: Tier 3.15 (attrs→columns,
 DB-lane, largest) and Tier 4 cleanups.
+
+---
+## 2026-06-17 — Inventory cleanup Tier 4: low-risk cleanups + 3.15 handoff (Claude Code)
+
+App-lane cleanups from scope-inventory-cleanup.md (items 16–20):
+- **#16**: dropped `catalogCoralItem`'s manual `created` activity-log insert — a literal duplicate of the
+  `log_inventory_activity` trigger's `created` row (which carries `to_jsonb(NEW)`, the full row incl.
+  attrs). Kept `convertLineItemsToInventory`'s `converted_from_line` log: distinct action, not a duplicate
+  `created`, so the scope's premise didn't apply there.
+- **#17**: removed the always-empty `doaBlocked` field from `receiveBatchLines`' return (the real DOA block
+  throws pre-flight) + the dead `res.doaBlocked` toast branch in `batches.$id.tsx`.
+- **#18**: `cloverListItems` now skips Clover `hidden`/archived items so they don't become workspace drafts;
+  removed the vestigial `hidden` field from `CloverItem`.
+- **#20**: consolidated the duplicated inline `count` helper in `clover.functions.ts` onto the module-level
+  `countRows`. Deferred the cosmetic `Recon` `any[]` precision + unused-import sweep (low value / linter-risk).
+- **#15 (Tier 3.15)** handed to Lovable as a scope/decision proposal (`handoff-attrs-to-columns.md`):
+  promote `rack_position` to a column, leave `stock_mode` in attrs (per design-coral-stock-tracking.md),
+  `inventory_role` optional, backfill+cutover `clover_item_id`→`clover_item_links`.
+- **#19 correction**: flagged that `inventory_media.ocr_text`/`ocr_extracted_at` are NOT dead (read on the
+  detail page) — do not drop. Remaining #19 dead-schema candidates bundled into the same handoff.
+Build ✅ · tsc clean · prettier clean. **Tier 4 App-lane complete** (DB-lane #15/#19 with Lovable).
