@@ -131,7 +131,7 @@ function InventoryPage() {
       let query = supabase
         .from("inventory_items")
         .select(
-          "id, item_name, scientific_name, size, attrs, item_type, location_id, retail_price, pricing_status, availability_status, live_sale_status, quantity_available, quantity_received, quantity_on_hold, quantity_sold, quantity_lost, vendors(name)",
+          "id, item_name, scientific_name, size, attrs, rack_position, item_type, location_id, retail_price, pricing_status, availability_status, live_sale_status, quantity_available, quantity_received, quantity_on_hold, quantity_sold, quantity_lost, vendors(name)",
           { count: "exact" },
         )
         .order(s.column, { ascending: s.ascending })
@@ -454,8 +454,8 @@ function InventoryRow({
       </td>
       {showPlug && (
         <td className="p-3">
-          {item.attrs?.rack_position ? (
-            <Badge className="font-mono text-[10px]">{item.attrs.rack_position}</Badge>
+          {item.rack_position ? (
+            <Badge className="font-mono text-[10px]">{item.rack_position}</Badge>
           ) : (
             <span className="text-muted-foreground">—</span>
           )}

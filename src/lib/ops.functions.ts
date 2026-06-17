@@ -35,6 +35,7 @@ function buildInventoryInsert(input: {
   location_id?: string | null;
   notes?: string | null;
   attrs?: Record<string, any> | null;
+  rack_position?: string | null;
   vendor_id?: string | null;
   source_vendor_batch_id?: string | null;
   source_vendor_line_item_id?: string | null;
@@ -42,6 +43,10 @@ function buildInventoryInsert(input: {
   received_by?: string | null;
   created_by: string;
 }): InventoryItemInsert {
+  const attrs = (input.attrs && Object.keys(input.attrs).length > 0 ? input.attrs : {}) as Record<
+    string,
+    any
+  >;
   return {
     source_vendor_line_item_id: input.source_vendor_line_item_id ?? null,
     source_vendor_batch_id: input.source_vendor_batch_id ?? null,
@@ -64,9 +69,11 @@ function buildInventoryInsert(input: {
     live_sale_status: "not_eligible",
     needs_photo: input.needs_photo,
     notes: input.notes ?? null,
-    attrs: (input.attrs && Object.keys(input.attrs).length > 0
-      ? input.attrs
-      : {}) as InventoryItemInsert["attrs"],
+    attrs: attrs as InventoryItemInsert["attrs"],
+    // Dual-write rack_position to its real column (mirrors attrs during the
+    // attrs→column migration; reads use the column). Lovable drops the attrs
+    // key once the app reads the column exclusively.
+    rack_position: input.rack_position ?? attrs.rack_position ?? null,
     received_at: input.received_at ?? null,
     received_by: input.received_by ?? null,
     created_by: input.created_by,
@@ -525,9 +532,18 @@ export const updateInventoryAttrs = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await requireEditor(context.supabase, context.userId);
+    const patch: { attrs: Record<string, any>; rack_position?: string | null } = {
+      attrs: data.attrs,
+    };
+    // Keep the rack_position column in sync when it's edited via the attrs
+    // editor (dual-write during the attrs→column migration; uppercase to match
+    // the backfill + index).
+    if (typeof data.attrs.rack_position === "string") {
+      patch.rack_position = data.attrs.rack_position.trim().toUpperCase() || null;
+    }
     const { error } = await context.supabase
       .from("inventory_items")
-      .update({ attrs: data.attrs })
+      .update(patch)
       .eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -2341,7 +2357,7 @@ export const getCoralDiscoveryOverview = createServerFn({ method: "POST" })
     const { data: corals, error: cErr } = await supabase
       .from("inventory_items")
       .select(
-        "id,item_name,scientific_name,location_id,attrs,availability_status,retail_price,updated_at",
+        "id,item_name,scientific_name,location_id,attrs,rack_position,availability_status,retail_price,updated_at",
       )
       .eq("item_type", "coral")
       .order("updated_at", { ascending: false })
@@ -2358,7 +2374,7 @@ export const getCoralDiscoveryOverview = createServerFn({ method: "POST" })
       bucket.total += 1;
       const role = (c.attrs as any)?.inventory_role ?? "unspecified";
       bucket.roles[role] = (bucket.roles[role] ?? 0) + 1;
-      const pos = (c.attrs as any)?.rack_position;
+      const pos = c.rack_position;
       if (typeof pos === "string" && pos.trim()) {
         (positionsByLocation[c.location_id] ??= []).push(pos.trim().toUpperCase());
       }
