@@ -1238,6 +1238,10 @@ export const quickAddInventoryItem = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     await requireEditor(supabase, userId);
+    // Pricing approval is admin-only. A non-admin (floor staff) restock keeps the
+    // scanned price but lands as a DRAFT (not_priced, not live) for an admin to
+    // approve in the Pricing Queue / Review Stock wizard. Admins go live instantly.
+    const admin = await isAdmin(supabase, userId);
 
     // Get/create today's quick-add batch (shared helper)
     const { batchId, vendorId } = await resolveQuickAddBatch(supabase, userId);
@@ -1256,7 +1260,7 @@ export const quickAddInventoryItem = createServerFn({ method: "POST" })
         quantity_available: data.quantity,
         wholesale_cost: data.wholesale_cost ?? null,
         retail_price: data.retail_price,
-        pricing_status: "approved",
+        pricing_status: admin ? "approved" : "not_priced",
         location_id: data.location_id ?? null,
         availability_status: "incoming",
         live_sale_status: "not_eligible",
@@ -1300,15 +1304,16 @@ export const quickAddInventoryItem = createServerFn({ method: "POST" })
       });
     }
 
-    // Flip to available now that the photo is in place (gate satisfied)
-    if (data.set_available && data.location_id) {
+    // Flip to available now that the photo is in place (gate satisfied). Only for
+    // admins — a non-admin draft has not_priced pricing and must be approved first.
+    if (admin && data.set_available && data.location_id) {
       await supabase
         .from("inventory_items")
         .update({ availability_status: "available" })
         .eq("id", inv.id);
     }
 
-    return { inventoryItemId: inv.id, batchId };
+    return { inventoryItemId: inv.id, batchId, pendingApproval: !admin };
   });
 
 // AI: parse a livestock/dry-good price tag photo → { name, scientific_name?, price?, type? }
@@ -1962,6 +1967,9 @@ export const bulkImportInventoryRows = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     await requireEditor(supabase, userId);
+    // Pricing approval is admin-only — non-admin bulk imports land as drafts (see
+    // quickAddInventoryItem). Admins' rows go live; editors' rows await approval.
+    const admin = await isAdmin(supabase, userId);
 
     // Resolve / create today's quick-add batch (shared helper).
     const { batchId, vendorId } = await resolveQuickAddBatch(
@@ -2019,7 +2027,7 @@ export const bulkImportInventoryRows = createServerFn({ method: "POST" })
             quantity_available: r.quantity,
             wholesale_cost: r.wholesale_cost ?? null,
             retail_price: r.retail_price,
-            pricing_status: "approved",
+            pricing_status: admin ? "approved" : "not_priced",
             location_id: data.location_id ?? null,
             availability_status: "incoming",
             live_sale_status: "not_eligible",
@@ -2054,7 +2062,7 @@ export const bulkImportInventoryRows = createServerFn({ method: "POST" })
         });
         if (mErr) throw new Error(`Photo: ${mErr.message}`);
 
-        if (data.set_available && data.location_id) {
+        if (admin && data.set_available && data.location_id) {
           await supabase
             .from("inventory_items")
             .update({ availability_status: "available" })
@@ -2067,7 +2075,7 @@ export const bulkImportInventoryRows = createServerFn({ method: "POST" })
       }
     }
 
-    return { created, merged, skipped, errors, batchId, createdIds };
+    return { created, merged, skipped, errors, batchId, createdIds, pendingApproval: !admin };
   });
 
 // ── Coral Inventory Discovery ────────────────────────────────────────────────
