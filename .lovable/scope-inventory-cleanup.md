@@ -5,17 +5,14 @@
 > Lanes: **[App]** = Claude (TS) · **[DB]** = Lovable (migration/RPC) · **[Decision]** = needs owner sign-off.
 
 ## Decisions needed first (they gate some fixes)
-- **D1 — Editor go-live via the availability dropdown.** `setInventoryAvailability`/`setInventoryLiveSale`
-  are editor-gated, so a non-admin can flip an *existing* priced+photographed item to `available` (or stage
-  it live) without admin sign-off. We just decided Quick Add staff-adds go live (+flagged); should the
-  generic per-row "set Available / set Live" dropdowns also be editor-allowed, or admin-only? (Recommend:
-  set-Available editor-OK to match Quick Add; **live-sale staging admin-only**.)
-- **D2 — Coral's front door.** Coral can be created 3 ways with different rules: Coral Discovery (requires
-  plug/rack tag, draft), Quick Add (no rack field, goes live), paste-list. A Quick-Add coral bypasses the
-  rack-tag discipline the Pricing Queue + Discovery assume. Hide `coral` from Quick Add (route to Discovery),
-  or add a rack-position field to Quick Add?
-- **D3 — Price precedence.** Receivers enter `override_retail_price`; the **tag CSV uses it**, but conversion
-  ignores it (uses `approved_retail_price`) → tags and live price can disagree. Which wins?
+- **D1 — Editor go-live via the availability dropdown. → DECIDED: Available = editor-OK; Live-sale staging
+  = admin-only.** Gate `setInventoryLiveSale` (into staged/live) behind admin; leave `setInventoryAvailability`
+  editor-allowed (matches the Quick Add staff-add policy).
+- **D2 — Coral's front door. → DECIDED: keep coral in Quick Add but ADD a required rack-position field** so the
+  plug-tag discipline holds in both Quick Add and Coral Discovery.
+- **D3 — Price precedence. → DECIDED: admin-approved price wins.** The override is a suggestion; the live
+  price and the printed tag both come from the approved/retail price. Fix the tag CSV to use the approved
+  price (not the override) for consistency.
 
 ---
 

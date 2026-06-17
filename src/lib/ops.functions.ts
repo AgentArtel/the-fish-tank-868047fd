@@ -36,7 +36,7 @@ export const approveLinePricing = createServerFn({ method: "POST" })
     z
       .object({
         lineItemId: z.string().uuid(),
-        approvedRetailPrice: z.number().nonnegative(),
+        approvedRetailPrice: z.number().positive(),
       })
       .parse(d),
   )
@@ -63,7 +63,7 @@ export const approveInventoryPricing = createServerFn({ method: "POST" })
     z
       .object({
         inventoryItemId: z.string().uuid(),
-        approvedRetailPrice: z.number().nonnegative().max(1000000),
+        approvedRetailPrice: z.number().positive().max(1000000),
       })
       .parse(d),
   )
@@ -115,6 +115,13 @@ export const convertLineItemsToInventory = createServerFn({ method: "POST" })
     for (const line of lines ?? []) {
       if (line.converted_inventory_item_id) {
         skipped.push({ id: line.id, reason: "already converted" });
+        continue;
+      }
+      // Reconciliation already linked this line to an existing inventory row (and
+      // stamped source_vendor_line_item_id on it, which is UNIQUE) — converting would
+      // duplicate the physical item / hit the unique constraint.
+      if (line.reconciled_inventory_item_id) {
+        skipped.push({ id: line.id, reason: "already linked via reconciliation" });
         continue;
       }
       if (line.kind !== "sellable") {
@@ -378,7 +385,14 @@ export const setInventoryLiveSale = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    await requireEditor(context.supabase, context.userId);
+    // Staging / starting a live sale is admin-only; lower transitions are editor-OK.
+    if (data.status === "staged" || data.status === "live") {
+      if (!(await isAdmin(context.supabase, context.userId)))
+        throw new Error("Only admins can stage or start a live sale");
+      await requireActive(context.supabase, context.userId);
+    } else {
+      await requireEditor(context.supabase, context.userId);
+    }
     const { error } = await context.supabase
       .from("inventory_items")
       .update({ live_sale_status: data.status })
@@ -386,6 +400,26 @@ export const setInventoryLiveSale = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+// Keep availability in sync with stock at the 0 ⇄ sold_out boundary (the qty
+// mutators don't otherwise touch status, unlike applyInventorySale). Restock of a
+// sold_out item attempts to bring it back available; if it no longer meets the gate
+// (photo/price/location), the DB trigger rejects and we leave it sold_out.
+async function syncAvailabilityToStock(db: any, id: string) {
+  const { data: row } = await db
+    .from("inventory_items")
+    .select("quantity_available, availability_status")
+    .eq("id", id)
+    .maybeSingle();
+  if (!row) return;
+  const qa = Number(row.quantity_available ?? 0);
+  if (qa <= 0 && row.availability_status === "available") {
+    await db.from("inventory_items").update({ availability_status: "sold_out" }).eq("id", id);
+  } else if (qa > 0 && row.availability_status === "sold_out") {
+    await db.from("inventory_items").update({ availability_status: "available" }).eq("id", id);
+    // gate-trigger rejection (item no longer eligible) is fine — stays sold_out.
+  }
+}
 
 export const adjustInventoryQuantities = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -404,8 +438,10 @@ export const adjustInventoryQuantities = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await requireEditor(context.supabase, context.userId);
     const { id, ...patch } = data;
-    const { error } = await context.supabase.from("inventory_items").update(patch).eq("id", id);
+    const db = context.supabase as any;
+    const { error } = await db.from("inventory_items").update(patch).eq("id", id);
     if (error) throw new Error(error.message);
+    if (patch.quantity_available !== undefined) await syncAvailabilityToStock(db, id);
     return { ok: true };
   });
 
@@ -464,7 +500,7 @@ export const reviewInventoryItem = createServerFn({ method: "POST" })
         id: z.string().uuid(),
         locationId: z.string().uuid().nullable().optional(),
         quantityAvailable: z.number().int().nonnegative().max(1_000_000).optional(),
-        retailPrice: z.number().nonnegative().max(1_000_000).optional(),
+        retailPrice: z.number().positive().max(1_000_000).optional(),
         takeLive: z.boolean().optional(),
       })
       .parse(d),
@@ -2034,6 +2070,8 @@ export const bulkImportInventoryRows = createServerFn({ method: "POST" })
             })
             .eq("id", r.merge_target_id);
           if (uErr) throw new Error(uErr.message);
+          // A merge can restock a sold_out item — bring it back available if eligible.
+          await syncAvailabilityToStock(supabase, r.merge_target_id);
           merged++;
           continue;
         }
