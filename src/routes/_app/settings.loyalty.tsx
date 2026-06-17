@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useMe } from "@/hooks/use-me";
 import { getLoyaltyConfig, saveLoyaltyConfig } from "@/lib/loyalty.functions";
+import { DEFAULT_TIERS } from "@/lib/loyalty";
 import { Loader2, Save, Waves } from "lucide-react";
 
 export const Route = createFileRoute("/_app/settings/loyalty")({ component: LoyaltySettings });
@@ -26,14 +27,15 @@ function LoyaltySettings() {
 
   const [enabled, setEnabled] = useState(false);
   const [earnPercent, setEarnPercent] = useState("5");
-  const [tiersText, setTiersText] = useState("");
+  // Seed with the documented defaults so the field is never blank (even pre-fetch).
+  const [tiersText, setTiersText] = useState(() => JSON.stringify(DEFAULT_TIERS, null, 2));
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (data) {
       setEnabled(data.enabled);
       setEarnPercent(String(data.earnPercent));
-      setTiersText(JSON.stringify(data.tiers, null, 2));
+      setTiersText(JSON.stringify(data.tiers?.length ? data.tiers : DEFAULT_TIERS, null, 2));
     }
   }, [data]);
 

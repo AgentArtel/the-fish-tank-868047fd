@@ -51,7 +51,10 @@ function CloverSettings() {
   const importFn = useServerFn(importCloverCatalog);
   const createItemsFn = useServerFn(createWorkspaceItemsFromClover);
   const syncSalesChunkFn = useServerFn(syncCloverSalesChunk);
-  const { data } = useQuery({ queryKey: ["clover-overview"], queryFn: () => overviewFn() });
+  const { data, isLoading } = useQuery({
+    queryKey: ["clover-overview"],
+    queryFn: () => overviewFn(),
+  });
 
   const [testing, setTesting] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -154,25 +157,31 @@ function CloverSettings() {
 
       <div className="rounded-lg border bg-card p-4 space-y-4">
         <div className="flex items-center gap-2">
-          {data?.connected ? (
+          {isLoading ? (
+            <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
+          ) : data?.connected ? (
             <CheckCircle2 className="w-5 h-5 text-emerald-600" />
           ) : (
             <AlertTriangle className="w-5 h-5 text-amber-500" />
           )}
           <div className="flex-1">
             <div className="font-medium text-sm">
-              {data?.connected
-                ? "Connected"
-                : data?.configured
-                  ? "Not yet connected"
-                  : "Not configured"}
+              {isLoading
+                ? "Checking connection…"
+                : data?.connected
+                  ? "Connected"
+                  : data?.configured
+                    ? "Not yet connected"
+                    : "Not configured"}
             </div>
             <div className="text-xs text-muted-foreground">
-              {data?.configured
-                ? `Last import ${fmtRel(data?.lastImportAt)}`
-                : isAdmin
-                  ? "Enter your Clover API token and merchant ID below to enable."
-                  : "An admin needs to enter Clover API credentials below."}
+              {isLoading
+                ? "Loading Clover status…"
+                : data?.configured
+                  ? `Last import ${fmtRel(data?.lastImportAt)}`
+                  : isAdmin
+                    ? "Enter your Clover API token and merchant ID below to enable."
+                    : "An admin needs to enter Clover API credentials below."}
             </div>
           </div>
           <Button

@@ -1468,3 +1468,15 @@ and each row mounts 3 shadcn <Select> dropdowns → ~3000 heavy components at on
 - Narrowed the `select("*")` to the explicit columns the row uses (verified all exist) and dropped the
   unused `store_locations` join — smaller payload, addresses the QA "SELECT *" note.
 Filters/search/sort are unchanged (still server-side). Build ✅ · tsc clean · prettier clean.
+
+---
+## 2026-06-16 — QA follow-ups: Reef Club tiers prefill + Clover status flash (Claude Code)
+
+Two minor UX nits from Lovable's QA pass (both app-lane).
+- **Reef Club tiers field** seeds with the 3 documented DEFAULT_TIERS so it's never blank (even pre-fetch),
+  and falls back to defaults if the loaded config has empty tiers.
+- **Clover settings** gates the connection banner behind the query's loading state — shows
+  "Checking connection…" with a spinner until `getCloverOverview` resolves, instead of flashing
+  "Not configured" on every visit.
+"Unnamed" customers is data, not a bug — those Clover customers were captured without name/email/phone
+(token likely lacks customer-PII read scope, or they're anonymous walk-ins). Build ✅ · tsc clean · prettier clean.
