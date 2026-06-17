@@ -8,8 +8,9 @@
 - **D1 — Editor go-live via the availability dropdown. → DECIDED: Available = editor-OK; Live-sale staging
   = admin-only.** Gate `setInventoryLiveSale` (into staged/live) behind admin; leave `setInventoryAvailability`
   editor-allowed (matches the Quick Add staff-add policy).
-- **D2 — Coral's front door. → DECIDED: keep coral in Quick Add but ADD a required rack-position field** so the
-  plug-tag discipline holds in both Quick Add and Coral Discovery.
+- **D2 — Coral's front door. → DECIDED + ✅ DONE: keep coral in Quick Add but ADD a required rack-position field** so the
+  plug-tag discipline holds in both Quick Add and Coral Discovery. Quick Add now shows a required "Rack / plug
+  position" input when `item_type === "coral"`, uppercased into `attrs.rack_position` (matches `catalogCoralItem`).
 - **D3 — Price precedence. → DECIDED: admin-approved price wins.** The override is a suggestion; the live
   price and the printed tag both come from the approved/retail price. Fix the tag CSV to use the approved
   price (not the override) for consistency.
@@ -36,8 +37,8 @@
 12. **[DB] ✅ RESOLVED — Direct `supabase.update()` writes are RLS-safe, kept as-is.** Lovable verified at the DB level: `inventory_items`/`inventory_media` have only the four `can_edit_content`-gated policies (admin-only DELETE), so inactive/non-editor users can't write; the `inv_guard_gates` / `trg_inv_photo_required` / `inv_guard_pricing_approval` BEFORE triggers fire on client writes identically to server fns. Hardened: anon had stale table-level grants (functionally blocked by RLS, but) — migration `20260617155314` revokes `ALL` from anon on both tables. Decision: keep these as RLS-enforced direct writes, no app refactor.
 
 ## Tier 3 — Consolidation (the big maintainability win)
-13. **[App] `buildInventoryInsert()` helper** — the inventory-row insert shape is duplicated **4×** (`quickAddInventoryItem`, `bulkImportInventoryRows`, `convertLineItemsToInventory`, `catalogCoralItem`) and has *already drifted* on `needs_photo` (false/true/`!photo`) and `pricing_status` (approved/not_priced). One builder with explicit per-path overrides. **Independently flagged by 3 of 4 agents.**
-14. **[App] `goLiveAfterPhoto()` helper + `useGoLiveWithPhoto()` hook** — the "check photo → open PhotoOnFileWizard → apply available" block is copy-pasted across the stock list, detail, Pricing Queue, and review wizard.
+13. **[App] ✅ RESOLVED — `buildInventoryInsert()` helper** (`ops.functions.ts`). One typed builder (`TablesInsert<"inventory_items">`) centralizes the full column list + invariants (`live_sale_status: not_eligible`, `attrs` never explicit-null, `quantity_lost` default 0); all 4 sites (`quickAddInventoryItem`, `bulkImportInventoryRows`, `convertLineItemsToInventory`, `catalogCoralItem`) now route through it with the genuinely-per-path fields (`pricing_status`, `availability_status`, `needs_photo`, provenance) passed explicitly. No more silent drift.
+14. **[App] ✅ RESOLVED — `useGoLiveWithPhoto()` hook** (`photo-on-file-wizard.tsx`). `ensurePhoto(item, action, onCancel?)` + a `photoGate` element encapsulate "check photo → open PhotoOnFileWizard → run action once uploaded". The 3 status-flip surfaces (stock list, detail, Pricing Queue) now use it. The Review Stock wizard keeps its bespoke flow on purpose — there the photo is the *last* of several gates in a multi-field commit (location/qty/price), not a one-shot status flip, and it preloads photo state per card.
 15. **[DB+App] Promote load-bearing `attrs` keys to real columns**: `rack_position`, `stock_mode`, `inventory_role` (they're queried/sorted and drive sale-decrement logic — shouldn't be untyped jsonb). Drop duplicate `attrs.clover_item_id` in favor of the `clover_item_links` table (single source of provenance). Bigger effort (migration + app refactor).
 
 ## Tier 4 — Cleanups (quick, low-risk)

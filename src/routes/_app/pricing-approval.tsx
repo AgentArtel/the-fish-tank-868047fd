@@ -16,7 +16,7 @@ import {
   approveInventoryPricing,
   setInventoryAvailability,
 } from "@/lib/ops.functions";
-import { PhotoOnFileWizard, inventoryHasPhoto } from "@/components/photo-on-file-wizard";
+import { useGoLiveWithPhoto } from "@/components/photo-on-file-wizard";
 
 export const Route = createFileRoute("/_app/pricing-approval")({ component: PricingApprovalPage });
 
@@ -171,7 +171,7 @@ function CoralDraftRow({
     item.retail_price != null ? String(item.retail_price) : "",
   );
   const [busy, setBusy] = useState(false);
-  const [wizardOpen, setWizardOpen] = useState(false);
+  const { ensurePhoto, photoGate } = useGoLiveWithPhoto();
   const approve = useServerFn(approveInventoryPricing);
   const setAvail = useServerFn(setInventoryAvailability);
   const approved = item.pricing_status === "approved";
@@ -197,40 +197,24 @@ function CoralDraftRow({
   const goLive = async () => {
     if (busy) return;
     setBusy(true);
-    try {
-      const hasPhoto = await inventoryHasPhoto(item.id);
-      if (!hasPhoto) {
-        // Hand off to the photo wizard; STAY busy so "Take live" can't fire again
-        // while it's open. Cleared by afterPhoto (success) or the wizard close.
-        setWizardOpen(true);
-        return;
-      }
-      await setAvail({ data: { id: item.id, status: "available" } });
-      toast.success(`${item.item_name} is live`);
-      onDone();
-      setBusy(false);
-    } catch (e: any) {
-      toast.error(e.message);
-      setBusy(false);
-    }
-  };
-
-  const afterPhoto = async () => {
-    try {
-      await setAvail({ data: { id: item.id, status: "available" } });
-      toast.success(`${item.item_name} is live`);
-      onDone();
-    } catch (e: any) {
-      toast.error(e.message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // Wizard dismissed without completing → re-enable the button.
-  const handleWizardOpenChange = (open: boolean) => {
-    setWizardOpen(open);
-    if (!open) setBusy(false);
+    // ensurePhoto runs the flip now if a photo exists, else opens the wizard
+    // (staying busy so "Take live" can't re-fire) and flips once uploaded. The
+    // onCancel re-enables the button if the wizard is dismissed without a photo.
+    await ensurePhoto(
+      { id: item.id, name: item.item_name },
+      async () => {
+        try {
+          await setAvail({ data: { id: item.id, status: "available" } });
+          toast.success(`${item.item_name} is live`);
+          onDone();
+        } catch (e: any) {
+          toast.error(e.message);
+        } finally {
+          setBusy(false);
+        }
+      },
+      () => setBusy(false),
+    );
   };
 
   return (
@@ -290,13 +274,7 @@ function CoralDraftRow({
         {!isAdmin && !approved && (
           <div className="text-[11px] text-muted-foreground mt-1">Admin approval required</div>
         )}
-        <PhotoOnFileWizard
-          open={wizardOpen}
-          onOpenChange={handleWizardOpenChange}
-          inventoryItemId={item.id}
-          itemName={item.item_name}
-          onUploaded={afterPhoto}
-        />
+        {photoGate}
       </td>
     </tr>
   );

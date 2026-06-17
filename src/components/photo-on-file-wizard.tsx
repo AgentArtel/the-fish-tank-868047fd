@@ -1,6 +1,13 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -37,7 +44,11 @@ export function PhotoOnFileWizard({
   const [busy, setBusy] = useState(false);
   const runOcr = useServerFn(parseTagPhoto);
 
-  const reset = () => { setFile(null); setPreview(null); setHasPriceTag(false); };
+  const reset = () => {
+    setFile(null);
+    setPreview(null);
+    setHasPriceTag(false);
+  };
 
   const pick = (f: File | undefined | null) => {
     if (!f) return;
@@ -46,7 +57,10 @@ export function PhotoOnFileWizard({
   };
 
   const submit = async () => {
-    if (!file) { toast.error("Pick or capture a photo first"); return; }
+    if (!file) {
+      toast.error("Pick or capture a photo first");
+      return;
+    }
     setBusy(true);
     try {
       const { data: userRes } = await supabase.auth.getUser();
@@ -67,7 +81,10 @@ export function PhotoOnFileWizard({
         has_price_tag: hasPriceTag,
       });
       if (insErr) throw insErr;
-      await supabase.from("inventory_items").update({ needs_photo: false }).eq("id", inventoryItemId);
+      await supabase
+        .from("inventory_items")
+        .update({ needs_photo: false })
+        .eq("id", inventoryItemId);
 
       // Best-effort OCR; don't block the wizard.
       runOcr({ data: { storage_path: path } }).catch(() => {});
@@ -84,25 +101,44 @@ export function PhotoOnFileWizard({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!busy) { onOpenChange(o); if (!o) reset(); } }}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!busy) {
+          onOpenChange(o);
+          if (!o) reset();
+        }
+      }}
+    >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Snap a photo on file</DialogTitle>
           <DialogDescription>
-            {itemName ? <><span className="font-medium">{itemName}</span> — </> : null}{reason}
+            {itemName ? (
+              <>
+                <span className="font-medium">{itemName}</span> —{" "}
+              </>
+            ) : null}
+            {reason}
           </DialogDescription>
         </DialogHeader>
 
         <div className="rounded-md border border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200 p-3 flex items-start gap-2 text-xs">
           <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-          <span>One photo is enough. You can add more (or replace this) later on the item page.</span>
+          <span>
+            One photo is enough. You can add more (or replace this) later on the item page.
+          </span>
         </div>
 
         <div className="space-y-3">
           {preview ? (
             <div className="rounded-md border overflow-hidden">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={preview} alt="Preview" className="w-full max-h-72 object-contain bg-muted" />
+              <img
+                src={preview}
+                alt="Preview"
+                className="w-full max-h-72 object-contain bg-muted"
+              />
             </div>
           ) : (
             <label className="block rounded-md border-2 border-dashed border-muted-foreground/30 p-6 text-center cursor-pointer hover:bg-muted/30">
@@ -125,20 +161,98 @@ export function PhotoOnFileWizard({
                 <Checkbox checked={hasPriceTag} onCheckedChange={(v) => setHasPriceTag(!!v)} />
                 Includes price tag
               </label>
-              <Button type="button" variant="ghost" size="sm" onClick={reset}>Retake</Button>
+              <Button type="button" variant="ghost" size="sm" onClick={reset}>
+                Retake
+              </Button>
             </div>
           )}
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
+            Cancel
+          </Button>
           <Button onClick={submit} disabled={!file || busy}>
-            {busy ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Saving…</> : "Save photo"}
+            {busy ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-1 animate-spin" /> Saving…
+              </>
+            ) : (
+              "Save photo"
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
+}
+
+/**
+ * Hook: run an action behind the "photo on file" gate.
+ *
+ * Every "mark available / take live" surface needs the same dance — check
+ * whether the item has a photo, and if not, pop the PhotoOnFileWizard and only
+ * run the action once a photo is uploaded. This centralizes that so the stock
+ * list, detail page, and Pricing Queue don't each hand-roll the wizard state.
+ *
+ * Usage:
+ *   const { ensurePhoto, photoGate } = useGoLiveWithPhoto();
+ *   // ...
+ *   onClick={() => ensurePhoto({ id, name }, () => applyAvailable())}
+ *   // render {photoGate} once in the component.
+ */
+export function useGoLiveWithPhoto() {
+  const [open, setOpen] = useState(false);
+  const [target, setTarget] = useState<{ id: string; name?: string } | null>(null);
+  const actionRef = useRef<(() => void | Promise<void>) | null>(null);
+  const cancelRef = useRef<(() => void) | null>(null);
+
+  // Run `action` now if the item already has a photo; otherwise open the wizard
+  // and run it once a photo is uploaded. `onCancel` fires if the wizard is
+  // dismissed without uploading (e.g. to reset a caller's busy flag).
+  const ensurePhoto = async (
+    item: { id: string; name?: string },
+    action: () => void | Promise<void>,
+    onCancel?: () => void,
+  ) => {
+    if (await inventoryHasPhoto(item.id)) {
+      await action();
+      return;
+    }
+    actionRef.current = action;
+    cancelRef.current = onCancel ?? null;
+    setTarget(item);
+    setOpen(true);
+  };
+
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    // Closed without a successful upload (onUploaded clears actionRef first).
+    if (!next) {
+      cancelRef.current?.();
+      cancelRef.current = null;
+      actionRef.current = null;
+    }
+  };
+
+  const onUploaded = async () => {
+    const action = actionRef.current;
+    actionRef.current = null;
+    cancelRef.current = null;
+    await action?.();
+  };
+
+  const photoGate = target ? (
+    <PhotoOnFileWizard
+      open={open}
+      onOpenChange={handleOpenChange}
+      inventoryItemId={target.id}
+      itemName={target.name}
+      onUploaded={onUploaded}
+    />
+  ) : null;
+
+  return { ensurePhoto, photoGate };
 }
 
 /**

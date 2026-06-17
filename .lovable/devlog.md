@@ -1571,3 +1571,23 @@ only `can_edit_content` policies exist (admin-only DELETE), and the `inv_guard_g
 Hardened: migration `20260617155314` revokes stale table-level `ALL` grants from `anon` on
 `inventory_items` + `inventory_media` (defense-in-depth; anon was already RLS-blocked).
 Decision: keep these as RLS-enforced direct writes — no app refactor. **Tier 2 fully complete.**
+
+---
+## 2026-06-17 — Inventory cleanup Tier 3: consolidation + D2 rack field (Claude Code)
+
+From scope-inventory-cleanup.md (items 13, 14, decision D2). App-lane.
+- **`buildInventoryInsert()`** (`ops.functions.ts`): one typed builder (`TablesInsert<"inventory_items">`)
+  centralizes the full inventory-row insert shape + invariants (`live_sale_status: not_eligible`, `attrs`
+  never explicit-null, `quantity_lost` default 0). All four inserts — `quickAddInventoryItem`,
+  `bulkImportInventoryRows`, `convertLineItemsToInventory`, `catalogCoralItem` — route through it now,
+  passing only the genuinely-per-path fields (pricing_status, availability_status, needs_photo, provenance).
+  Kills the `needs_photo`/`pricing_status` drift that 3 of 4 agents flagged.
+- **`useGoLiveWithPhoto()` hook** (`photo-on-file-wizard.tsx`): `ensurePhoto(item, action, onCancel?)` + a
+  `photoGate` element encapsulate the "check photo → open wizard → run action on upload" dance. Refactored
+  the 3 status-flip surfaces (stock list, detail, Pricing Queue) onto it — each dropped its hand-rolled
+  wizardOpen/pendingAvail state. The Review Stock wizard keeps its bespoke flow (photo is the last of
+  several gates in a multi-field commit, not a one-shot flip).
+- **D2 rack field**: Quick Add now requires a "Rack / plug position" when item type is coral, uppercased
+  into `attrs.rack_position` — same plug-tag discipline as Coral Discovery.
+Build ✅ · tsc clean · prettier clean. **Tier 3.13/3.14 + D2 complete.** Remaining: Tier 3.15 (attrs→columns,
+DB-lane, largest) and Tier 4 cleanups.

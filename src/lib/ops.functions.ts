@@ -5,6 +5,73 @@ import { classifyCoralType, coralTypeLabel } from "@/lib/coral-type";
 import { callAIChat } from "@/lib/ai-call.server";
 import { suggestRetail } from "@/lib/ops";
 import { isAdmin, requireActive, requireEditor } from "@/lib/auth-guards";
+import type { TablesInsert } from "@/integrations/supabase/types";
+
+type InventoryItemInsert = TablesInsert<"inventory_items">;
+
+// Shared shape for every inventory_items insert (Quick Add, bulk import, vendor
+// conversion, coral discovery). Centralizes the full column list + the invariants
+// — `live_sale_status` starts `not_eligible`, `attrs` is never an explicit null
+// (the column is NOT NULL DEFAULT '{}'), `quantity_lost` defaults to 0 — so the
+// four call sites can't drift on them. The per-path semantics that genuinely
+// differ (`pricing_status`, `availability_status`, `needs_photo`, provenance) are
+// passed in explicitly.
+function buildInventoryInsert(input: {
+  item_name: string;
+  scientific_name?: string | null;
+  item_type: InventoryItemInsert["item_type"];
+  category?: string | null;
+  subcategory?: string | null;
+  origin_region?: string | null;
+  size?: string | null;
+  quantity_received: number;
+  quantity_available: number;
+  quantity_lost?: number;
+  wholesale_cost?: number | null;
+  retail_price?: number | null;
+  pricing_status: InventoryItemInsert["pricing_status"];
+  availability_status: InventoryItemInsert["availability_status"];
+  needs_photo: boolean;
+  location_id?: string | null;
+  notes?: string | null;
+  attrs?: Record<string, any> | null;
+  vendor_id?: string | null;
+  source_vendor_batch_id?: string | null;
+  source_vendor_line_item_id?: string | null;
+  received_at?: string | null;
+  received_by?: string | null;
+  created_by: string;
+}): InventoryItemInsert {
+  return {
+    source_vendor_line_item_id: input.source_vendor_line_item_id ?? null,
+    source_vendor_batch_id: input.source_vendor_batch_id ?? null,
+    vendor_id: input.vendor_id ?? null,
+    item_name: input.item_name,
+    scientific_name: input.scientific_name ?? null,
+    item_type: input.item_type,
+    category: input.category ?? null,
+    subcategory: input.subcategory ?? null,
+    origin_region: input.origin_region ?? null,
+    size: input.size ?? null,
+    quantity_received: input.quantity_received,
+    quantity_available: input.quantity_available,
+    quantity_lost: input.quantity_lost ?? 0,
+    wholesale_cost: input.wholesale_cost ?? null,
+    retail_price: input.retail_price ?? null,
+    pricing_status: input.pricing_status,
+    location_id: input.location_id ?? null,
+    availability_status: input.availability_status,
+    live_sale_status: "not_eligible",
+    needs_photo: input.needs_photo,
+    notes: input.notes ?? null,
+    attrs: (input.attrs && Object.keys(input.attrs).length > 0
+      ? input.attrs
+      : {}) as InventoryItemInsert["attrs"],
+    received_at: input.received_at ?? null,
+    received_by: input.received_by ?? null,
+    created_by: input.created_by,
+  };
+}
 
 export const getSignedVendorInvoiceUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -145,31 +212,32 @@ export const convertLineItemsToInventory = createServerFn({ method: "POST" })
       const availableQty = Math.max(0, receivedQty - lostQty);
       const { data: inv, error: insErr } = await supabase
         .from("inventory_items")
-        .insert({
-          source_vendor_line_item_id: line.id,
-          source_vendor_batch_id: line.vendor_batch_id,
-          vendor_id: line.vendor_id,
-          item_name: line.clean_item_name || line.raw_description || "Untitled item",
-          scientific_name: line.scientific_name,
-          item_type: line.item_type,
-          category: line.category,
-          subcategory: line.subcategory,
-          origin_region: line.origin_region,
-          size: line.size,
-          quantity_received: receivedQty,
-          quantity_available: availableQty,
-          quantity_lost: lostQty,
-          wholesale_cost: line.wholesale_cost,
-          retail_price: line.approved_retail_price,
-          pricing_status: "approved",
-          location_id: line.assigned_location_id,
-          availability_status: "incoming",
-          live_sale_status: "not_eligible",
-          needs_photo: true,
-          received_at: line.received_at,
-          received_by: line.received_by,
-          created_by: userId,
-        })
+        .insert(
+          buildInventoryInsert({
+            source_vendor_line_item_id: line.id,
+            source_vendor_batch_id: line.vendor_batch_id,
+            vendor_id: line.vendor_id,
+            item_name: line.clean_item_name || line.raw_description || "Untitled item",
+            scientific_name: line.scientific_name,
+            item_type: line.item_type,
+            category: line.category,
+            subcategory: line.subcategory,
+            origin_region: line.origin_region,
+            size: line.size,
+            quantity_received: receivedQty,
+            quantity_available: availableQty,
+            quantity_lost: lostQty,
+            wholesale_cost: line.wholesale_cost,
+            retail_price: line.approved_retail_price,
+            pricing_status: "approved",
+            location_id: line.assigned_location_id,
+            availability_status: "incoming",
+            needs_photo: true,
+            received_at: line.received_at,
+            received_by: line.received_by,
+            created_by: userId,
+          }),
+        )
         .select("id")
         .single();
       if (insErr) {
@@ -1308,33 +1376,32 @@ export const quickAddInventoryItem = createServerFn({ method: "POST" })
     const nowIso = new Date().toISOString();
     const { data: inv, error: insErr } = await supabase
       .from("inventory_items")
-      .insert({
-        source_vendor_batch_id: batchId,
-        vendor_id: data.source_vendor_id ?? vendorId,
-        item_name: data.item_name,
-        scientific_name: data.scientific_name ?? null,
-        item_type: data.item_type,
-        quantity_received: data.quantity,
-        quantity_available: data.quantity,
-        wholesale_cost: data.wholesale_cost ?? null,
-        retail_price: data.retail_price,
-        pricing_status: "approved",
-        location_id: data.location_id ?? null,
-        availability_status: "incoming",
-        live_sale_status: "not_eligible",
-        needs_photo: false,
-        notes: data.notes ?? null,
-        // attrs is NOT NULL DEFAULT '{}' — send an empty object, never explicit
-        // null (an explicit null violates the not-null constraint even though the
-        // column has a default). Non-admin adds carry a price_review flag.
-        attrs: {
-          ...(data.attrs && Object.keys(data.attrs).length > 0 ? data.attrs : {}),
-          ...(admin ? {} : { price_review: { at: nowIso, by: userId } }),
-        },
-        received_at: nowIso,
-        received_by: userId,
-        created_by: userId,
-      })
+      .insert(
+        buildInventoryInsert({
+          source_vendor_batch_id: batchId,
+          vendor_id: data.source_vendor_id ?? vendorId,
+          item_name: data.item_name,
+          scientific_name: data.scientific_name ?? null,
+          item_type: data.item_type,
+          quantity_received: data.quantity,
+          quantity_available: data.quantity,
+          wholesale_cost: data.wholesale_cost ?? null,
+          retail_price: data.retail_price,
+          pricing_status: "approved",
+          location_id: data.location_id ?? null,
+          availability_status: "incoming",
+          needs_photo: false,
+          notes: data.notes ?? null,
+          // Non-admin adds carry a price_review flag for an admin to double-check.
+          attrs: {
+            ...(data.attrs && Object.keys(data.attrs).length > 0 ? data.attrs : {}),
+            ...(admin ? {} : { price_review: { at: nowIso, by: userId } }),
+          },
+          received_at: nowIso,
+          received_by: userId,
+          created_by: userId,
+        }),
+      )
       .select("id")
       .single();
     if (insErr) throw new Error(insErr.message);
@@ -2078,27 +2145,28 @@ export const bulkImportInventoryRows = createServerFn({ method: "POST" })
         // decision === "create"
         const { data: inv, error: insErr } = await supabase
           .from("inventory_items")
-          .insert({
-            source_vendor_batch_id: batchId,
-            vendor_id: data.source_vendor_id ?? vendorId,
-            item_name: r.item_name,
-            scientific_name: r.scientific_name ?? null,
-            item_type: r.item_type,
-            quantity_received: r.quantity,
-            quantity_available: r.quantity,
-            wholesale_cost: r.wholesale_cost ?? null,
-            retail_price: r.retail_price,
-            pricing_status: "approved",
-            location_id: data.location_id ?? null,
-            availability_status: "incoming",
-            live_sale_status: "not_eligible",
-            needs_photo: false,
-            notes: r.notes ?? null,
-            attrs: admin ? {} : { price_review: { at: nowIso, by: userId } },
-            received_at: nowIso,
-            received_by: userId,
-            created_by: userId,
-          })
+          .insert(
+            buildInventoryInsert({
+              source_vendor_batch_id: batchId,
+              vendor_id: data.source_vendor_id ?? vendorId,
+              item_name: r.item_name,
+              scientific_name: r.scientific_name ?? null,
+              item_type: r.item_type,
+              quantity_received: r.quantity,
+              quantity_available: r.quantity,
+              wholesale_cost: r.wholesale_cost ?? null,
+              retail_price: r.retail_price,
+              pricing_status: "approved",
+              location_id: data.location_id ?? null,
+              availability_status: "incoming",
+              needs_photo: false,
+              notes: r.notes ?? null,
+              attrs: admin ? {} : { price_review: { at: nowIso, by: userId } },
+              received_at: nowIso,
+              received_by: userId,
+              created_by: userId,
+            }),
+          )
           .select("id")
           .single();
         if (insErr) throw new Error(insErr.message);
@@ -2211,24 +2279,25 @@ export const catalogCoralItem = createServerFn({ method: "POST" })
 
     const { data: inv, error: insErr } = await supabase
       .from("inventory_items")
-      .insert({
-        item_name: data.item_name,
-        scientific_name: data.scientific_name ?? null,
-        item_type: "coral",
-        quantity_received: data.quantity,
-        quantity_available: data.quantity,
-        retail_price: data.retail_price ?? null,
-        pricing_status: "not_priced", // discovery never approves pricing
-        location_id: data.location_id,
-        availability_status: availability,
-        live_sale_status: "not_eligible",
-        needs_photo: !data.photo_path,
-        notes: data.notes ?? null,
-        attrs,
-        received_at: nowIso,
-        received_by: userId,
-        created_by: userId,
-      })
+      .insert(
+        buildInventoryInsert({
+          item_name: data.item_name,
+          scientific_name: data.scientific_name ?? null,
+          item_type: "coral",
+          quantity_received: data.quantity,
+          quantity_available: data.quantity,
+          retail_price: data.retail_price ?? null,
+          pricing_status: "not_priced", // discovery never approves pricing
+          location_id: data.location_id,
+          availability_status: availability,
+          needs_photo: !data.photo_path,
+          notes: data.notes ?? null,
+          attrs,
+          received_at: nowIso,
+          received_by: userId,
+          created_by: userId,
+        }),
+      )
       .select("id")
       .single();
     if (insErr) throw new Error(insErr.message);
