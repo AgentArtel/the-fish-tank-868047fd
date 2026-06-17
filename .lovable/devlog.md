@@ -1480,3 +1480,31 @@ Two minor UX nits from Lovable's QA pass (both app-lane).
   "Not configured" on every visit.
 "Unnamed" customers is data, not a bug — those Clover customers were captured without name/email/phone
 (token likely lacks customer-PII read scope, or they're anonymous walk-ins). Build ✅ · tsc clean · prettier clean.
+
+---
+## 2026-06-16 — Pricing approval admin-only at INSERT (Option B) (Claude Code)
+
+Closed the domain-invariant gap where a non-admin editor could create a live, approved-priced item via
+Quick Add / bulk import (the DB pricing-approval trigger only guarded UPDATE). Decision: restocks are an
+admin + floor-staff task, so non-admins create DRAFTS for admin approval.
+- `quickAddInventoryItem` + `bulkImportInventoryRows`: compute `isAdmin`; admins insert `pricing_status:
+  'approved'` and go live (unchanged); non-admins insert `'not_priced'` and stay `incoming` (a draft),
+  keeping their scanned price as a pending suggestion. Both return `pendingApproval`.
+- Quick Add UI toasts now say "pending admin pricing approval" for non-admin adds. Drafts surface in the
+  existing Inventory → "Needs review" + Review Stock wizard (and Pricing Queue for corals) — all admin-gated.
+- Defense-in-depth DB trigger (extend guard to BEFORE INSERT) handed to Lovable: handoff-pricing-insert-guard.md.
+Build ✅ · tsc clean · prettier clean.
+
+---
+## 2026-06-16 — REVISED pricing policy: non-admin adds go LIVE, flagged for review (Claude Code)
+
+Owner decision superseded the draft-pending-approval approach: don't block the floor. Non-admin Quick Add
+/ bulk import now goes **live** with the entered price locked in (`pricing_status:'approved'`, available)
+but carries an `attrs.price_review` flag so an admin can verify the price after the fact.
+- `quickAddInventoryItem` + `bulkImportInventoryRows`: revert to approved+live for everyone; non-admins get
+  the `price_review` flag. Return `flaggedForReview`. Quick Add toast: "live, flagged for admin review".
+- New **`markInventoryReviewed`** (admin) clears the flag. Inventory list: new **"Price review (staff-added)"**
+  filter; flagged rows show an amber badge + an admin "mark reviewed" action.
+- **Cancelled** the INSERT-guard DB handoff — we intentionally allow non-admin approved-price inserts now.
+  Updated policy: pricing approval is admin-only EXCEPT in-store Quick Add (live + flagged for review).
+Build ✅ · tsc clean · prettier clean.

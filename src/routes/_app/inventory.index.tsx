@@ -26,7 +26,11 @@ import {
   type ItemType,
   fmtMoney,
 } from "@/lib/ops";
-import { setInventoryAvailability, setInventoryLiveSale } from "@/lib/ops.functions";
+import {
+  setInventoryAvailability,
+  setInventoryLiveSale,
+  markInventoryReviewed,
+} from "@/lib/ops.functions";
 import { PhotoOnFileWizard, inventoryHasPhoto } from "@/components/photo-on-file-wizard";
 import { InventoryReviewWizard } from "@/components/inventory-review-wizard";
 import { QuickAddButton } from "@/components/quick-add-fab";
@@ -130,6 +134,8 @@ function InventoryPage() {
         .limit(2000);
       if (statusFilter === "needs_review")
         query = query.in("availability_status", INVENTORY_REVIEW_STATUSES);
+      else if (statusFilter === "price_review")
+        query = query.not("attrs->price_review", "is", null); // staff-added, awaiting price check
       else if (statusFilter !== "all") query = query.eq("availability_status", statusFilter as any);
       if (q) query = query.ilike("item_name", `%${q}%`);
       if (type) query = query.eq("item_type", type);
@@ -179,6 +185,7 @@ function InventoryPage() {
           <SelectContent>
             <SelectItem value="all">All availability</SelectItem>
             <SelectItem value="needs_review">Needs review</SelectItem>
+            <SelectItem value="price_review">Price review (staff-added)</SelectItem>
             {INVENTORY_AVAILABILITY.map((s) => (
               <SelectItem key={s} value={s}>
                 {INVENTORY_AVAILABILITY_LABELS[s]}
@@ -278,6 +285,7 @@ function InventoryPage() {
                 item={i}
                 locations={allLocations ?? []}
                 showPlug={showPlug}
+                isAdmin={isAdmin}
                 onDone={refresh}
               />
             ))}
@@ -356,17 +364,29 @@ function InventoryRow({
   item,
   locations,
   showPlug,
+  isAdmin,
   onDone,
 }: {
   item: any;
   locations: any[];
   showPlug?: boolean;
+  isAdmin?: boolean;
   onDone: () => void;
 }) {
   const setAvail = useServerFn(setInventoryAvailability);
   const setLive = useServerFn(setInventoryLiveSale);
+  const markReviewedFn = useServerFn(markInventoryReviewed);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [pendingAvail, setPendingAvail] = useState<string | null>(null);
+
+  const markReviewed = async () => {
+    try {
+      await markReviewedFn({ data: { id: item.id } });
+      onDone();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
 
   const setLocation = async (locationId: string) => {
     const { error } = await supabase
@@ -414,6 +434,24 @@ function InventoryRow({
           <div className="text-xs italic text-muted-foreground">{item.scientific_name}</div>
         )}
         {item.size && <div className="text-xs text-muted-foreground">{item.size}</div>}
+        {item.attrs?.price_review && (
+          <div className="mt-1 flex items-center gap-1.5">
+            <Badge
+              variant="outline"
+              className="text-[10px] border-amber-400 text-amber-700 dark:text-amber-300"
+            >
+              price review
+            </Badge>
+            {isAdmin && (
+              <button
+                onClick={markReviewed}
+                className="text-[10px] text-muted-foreground underline hover:text-foreground"
+              >
+                mark reviewed
+              </button>
+            )}
+          </div>
+        )}
       </td>
       {showPlug && (
         <td className="p-3">
