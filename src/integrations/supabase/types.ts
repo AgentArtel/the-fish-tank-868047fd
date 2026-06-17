@@ -439,6 +439,7 @@ export type Database = {
           quantity_on_hold: number
           quantity_received: number
           quantity_sold: number
+          rack_position: string | null
           received_at: string | null
           received_by: string | null
           retail_price: number | null
@@ -475,6 +476,7 @@ export type Database = {
           quantity_on_hold?: number
           quantity_received?: number
           quantity_sold?: number
+          rack_position?: string | null
           received_at?: string | null
           received_by?: string | null
           retail_price?: number | null
@@ -511,6 +513,7 @@ export type Database = {
           quantity_on_hold?: number
           quantity_received?: number
           quantity_sold?: number
+          rack_position?: string | null
           received_at?: string | null
           received_by?: string | null
           retail_price?: number | null
