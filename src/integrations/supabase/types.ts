@@ -2030,6 +2030,14 @@ export type Database = {
           spend_cents: number
         }[]
       }
+      decrement_inventory_stock: {
+        Args: { _id: string; _qty: number }
+        Returns: {
+          availability_status: string
+          quantity_available: number
+          quantity_sold: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
