@@ -1526,3 +1526,16 @@ rack field to Quick Add (pending) · D3 admin-approved price wins.
   printed tags match the live price.
 Deferred: atomic stock-decrement RPC → Lovable (handoff-atomic-stock-decrement.md); Clover qty:1 → verify
 first (same handoff). Build ✅ · tsc clean · prettier clean.
+
+---
+## 2026-06-17 — Wire atomic stock-decrement RPC (Tier 1 close-out) (Claude Code)
+
+Lovable shipped `decrement_inventory_stock(_id, _qty)` (migration 20260617152801) — a `SECURITY DEFINER`
+single-`UPDATE` row-locked decrement (clamps to available, bumps sold, flips `sold_out` at zero).
+- `applyInventorySale` (non-colony sale branch): replaced the read-modify-write decrement with
+  `supabase.rpc("decrement_inventory_stock", { _id, _qty })`; trimmed the item SELECT to
+  `id, item_type, attrs` (no longer reads quantity_available/sold). Closes the lost-update race between a
+  manual log and the Clover cron firing on the same item.
+- scope-inventory-cleanup.md: Tier-1 items #1 (Clover qty:1 — verified, no change) and #4 (atomic
+  decrement) marked ✅ RESOLVED. **Tier 1 complete.**
+Build ✅ · tsc clean · prettier clean. Tier 2 (UX bugs) gated on owner go-ahead.

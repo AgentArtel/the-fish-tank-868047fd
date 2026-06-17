@@ -2345,7 +2345,7 @@ export async function applyInventorySale(
 ) {
   const { data: item, error } = await supabase
     .from("inventory_items")
-    .select("id, item_type, attrs, quantity_available, quantity_sold")
+    .select("id, item_type, attrs")
     .eq("id", opts.inventoryItemId)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -2402,19 +2402,13 @@ export async function applyInventorySale(
   }
 
   if (kind === "sale" && !isColony) {
-    const avail = Number(item.quantity_available ?? 0);
-    const sold = Number(item.quantity_sold ?? 0);
-    const dec = Math.min(opts.qty, avail); // clamp so received >= avail+sold stays valid
-    const newAvail = avail - dec;
-    const patch: Record<string, any> = {
-      quantity_available: newAvail,
-      quantity_sold: sold + dec,
-    };
-    if (newAvail === 0) patch.availability_status = "sold_out";
-    const { error: ue } = await supabase
-      .from("inventory_items")
-      .update(patch)
-      .eq("id", opts.inventoryItemId);
+    // Atomic, row-locked decrement (clamps to available, bumps sold, flips to
+    // sold_out at zero) — closes the read-modify-write lost-update race between
+    // concurrent manual + Clover sales of the same item.
+    const { error: ue } = await supabase.rpc("decrement_inventory_stock", {
+      _id: opts.inventoryItemId,
+      _qty: opts.qty,
+    });
     if (ue) throw new Error(ue.message);
   }
   return { ok: true, saleEventId: saleRow.id as string };
