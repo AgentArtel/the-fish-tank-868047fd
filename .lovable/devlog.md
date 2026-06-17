@@ -1508,3 +1508,21 @@ but carries an `attrs.price_review` flag so an admin can verify the price after 
 - **Cancelled** the INSERT-guard DB handoff — we intentionally allow non-admin approved-price inserts now.
   Updated policy: pricing approval is admin-only EXCEPT in-store Quick Add (live + flagged for review).
 Build ✅ · tsc clean · prettier clean.
+
+---
+## 2026-06-16 — Inventory cleanup Tier 1: correctness fixes (Claude Code)
+
+From scope-inventory-cleanup.md (4-agent review). Decisions: D1 Available=editor/Live-sale=admin · D2 add
+rack field to Quick Add (pending) · D3 admin-approved price wins.
+- **$0 "approved" guard**: `approveLinePricing`/`approveInventoryPricing`/`reviewInventoryItem` price fields
+  `.nonnegative()` → `.positive()` (a $0 slipped the gate's NULL-only check).
+- **D1**: `setInventoryLiveSale` now requires admin for `staged`/`live`; lower transitions stay editor.
+- **Qty/status desync**: new `syncAvailabilityToStock` helper re-derives the sold_out⇄available boundary;
+  called from `adjustInventoryQuantities` and the bulk-import merge path (a restocked item no longer stays
+  invisible as sold_out).
+- **Reconcile↔convert collision**: `convertLineItemsToInventory` now skips lines already linked via
+  reconciliation (`reconciled_inventory_item_id`) — prevents the UNIQUE clash / double-create.
+- **D3 tag price**: the batch tag CSV now uses the admin-approved price first (override is a fallback) so
+  printed tags match the live price.
+Deferred: atomic stock-decrement RPC → Lovable (handoff-atomic-stock-decrement.md); Clover qty:1 → verify
+first (same handoff). Build ✅ · tsc clean · prettier clean.
