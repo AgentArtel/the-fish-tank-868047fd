@@ -19,13 +19,13 @@
 
 - **PO → line items → CMS draft: ~90% reuse.** The vendor batch → `vendor_line_items` pipeline,
   the AI invoice parser, the content/media model, and the existing media library all exist and fit.
-- **The image crawler is the net-new core — and the honest finding is that the existing scraper does
-  NOT solve it.** `vendor-watch` scrapes **Shopify product JSON from a fixed vendor catalog**
-  (`scrape.functions.ts:314` hard-rejects anything but `kind="shopify_public"`). It is *not* a
-  general web/image search and is *not* a royalty-free image source. What IS directly reusable is
-  the **mechanism**: `downloadImage()` (`scrape.functions.ts:250`) materializes a remote image into
-  the `inventory-media` bucket, and the **"image-borrow matcher + confirm UI"** pattern is already
-  designed in `.lovable/design-coral-stock-tracking.md` §C — that confirm-before-use flow is the
+- **The image crawler reuses Lovable's existing Firecrawl integration (owner-directed) — not a new
+  scraper.** Firecrawl is the fetch/search engine for image sourcing; this instruction ships with the
+  Phase-2 migrations. (Note: `vendor-watch`'s scraper is unrelated — it only reads Shopify product JSON
+  from a fixed catalog, `scrape.functions.ts:314`.) What's *also* directly reusable is the **mechanism**:
+  `downloadImage()` (`scrape.functions.ts:250`) materializes a remote image into the `inventory-media`
+  bucket, and the **"image-borrow matcher + confirm UI"** pattern is already designed in
+  `.lovable/design-coral-stock-tracking.md` §C — that confirm-before-use flow is the
   template for this feature's human-approval step.
 - **"Royalty-free" via scraping Google/the open web is NOT royalty-free** and is a real legal/brand
   risk. Use **licensed image APIs + CC sources keyed on scientific name**, store license+source+
@@ -82,7 +82,7 @@ integration as the two owner decisions that gate everything net-new.
 | Content/post model + draft→publish state machine | ✅ Reuse | `content_items` (status: idea→…→approved→scheduled→posted), `workflow.ts`, `content.$id.tsx`, `cms.functions.ts:updateContentStatus` | A "new arrivals" post = a `content_items` row (`content_type='carousel'/'announcement'`). |
 | Media library + content↔media linking | ✅ Reuse | `media_assets`, `content_media` junction, `media.tsx`, `media` bucket; signed URLs via `getSignedUrl` | Approved species images land here with `source_type`, `usage_rights` already modeled. |
 | Per-platform targeting + manual publish | ✅ Reuse | `content_platforms` (platform enum incl. `facebook`, `post_url`), `publishing.tsx` checklist | Phase A "export caption + save the live URL" is *already the existing manual flow*. |
-| **General web / royalty-free image crawler** | ❌ Net-new | — | vendor-watch is Shopify-catalog-only (`scrape.functions.ts:314`). Needs new image-source connectors. |
+| **Image crawler / fetch engine** | ✅ Reuse | **Existing Firecrawl integration** — `fetchViaFirecrawl()` `scrape.functions.ts:186` (`FIRECRAWL_API_KEY` already configured; `prefer_firecrawl` setting exists) | Owner-directed: reuse Firecrawl as the fetch/search layer — do NOT build a new scraper. The transport + secret are already in the app; Phase 2 adds an image-oriented call path on top. |
 | **Image candidate + license/attribution model** | ❌ Net-new (DB) | — | New table(s) — see Data model. |
 | **"New-arrivals post draft" linking batch→lines→images** | ❌ Net-new (DB) | — | New table — see Data model. |
 | **Facebook Graph API publish** | ❌ Net-new | `settings.meta.tsx`, `meta_publish_ready` are placeholders only | Page token + App Review + multi-photo upload. Phase B. |
@@ -123,6 +123,17 @@ candidate/license model are the real new build; FB publish is a separate integra
 (Unsplash/Pexels and a per-vendor rights enum were considered and **dropped for simplicity** — not needed
 for "good consistent images.") Always: **`scientific_name` is the primary match key**, AI vision verifies
 the candidate actually depicts the species, and a human confirms before it's used.
+
+**Crawler engine — REUSE the existing Firecrawl integration (owner-directed, 2026-06-18).** The
+fetch/crawl/search layer is NOT net-new and is already in the app: `fetchViaFirecrawl()`
+(`scrape.functions.ts:186`) calls `https://api.firecrawl.dev/v2/scrape` with `FIRECRAWL_API_KEY` (already
+configured), and a `prefer_firecrawl` setting already exists. That is the crawler we reuse for image
+sourcing — do **not** build a new scraper. Firecrawl does the searching/scraping of the sources above
+(vendor product pages, and Wikimedia/iNaturalist where their direct APIs aren't simpler); the app then runs
+AI-vision verification + human confirm on what Firecrawl returns. Phase 2 just adds an image-oriented call
+path on top of the existing transport. **This instruction travels with the new tables/migrations** (see
+Data model). *Net effect: the earlier "(C) needs external network/secrets" blocker is largely resolved —
+the egress + key already exist.*
 
 **Per-image metadata (store on every candidate, for the record — not a workflow):** `source`
 (`vendor:<name>` / `wikimedia` / `inaturalist`), `source_url`, `attribution` (author/credit string),
@@ -189,6 +200,13 @@ Proposal — to be drafted as a versioned migration by Lovable if the owner gree
   `usage_rights` set from the candidate's license) linked to the post via `content_media`. The post
   itself is a `content_items` row — no parallel post table.
 
+> **Crawler instruction for Lovable (ships with these migrations):** populate `species_image_candidates`
+> via the **existing Firecrawl integration** (already set up on Lovable's side) — reuse it as the
+> image-search/scrape engine; do **not** build a new scraper. Each candidate stores the Firecrawl
+> `source_url` + `image_url`; the app side handles AI-vision match scoring and the human approve gate.
+> A `content_items ↔ vendor_batches` FK (Phase 1A currently records this link in `content_items.notes`)
+> and a workspace-level "vendor photos OK" attestation setting belong with this same migration.
+
 > All RLS/GRANTs follow existing patterns; mutating server fns must check `is_active` + role
 > (`requireEditor`/admin) per CLAUDE.md invariants.
 
@@ -208,14 +226,15 @@ settled, no build starts.
 - **[DB]** `arrival_post_drafts` + `arrival_post_lines` tables (Lovable).
 - **[Decision]** Confirm caption auto-draft vs. blank (Decision #3).
 
-### Phase 2 — Image sourcing (vendor-first → Wikimedia fallback) + verify + confirm — net-new core
+### Phase 2 — Image sourcing (vendor-first → Wikimedia fallback) via Firecrawl + verify + confirm
 - **[Decision]** Owner attests vendors permit reseller use of their photos (Decision #1).
-- **[DB]** `species_image_candidates` table + any `media_assets` field additions (Lovable). One
-  workspace-level "vendor photos OK" setting (no per-vendor column). Any new API-key secrets (Lovable lane).
-- **[App] 2a — Vendor imagery first.** Match each PO line → an existing vendor/scraped catalog image by
-  `scientific_name`/`clean_item_name`; surface as the first candidates. Covers what it can before any
-  external call. (Broadening vendor-image capture beyond the current Shopify monitor is the larger
-  sub-effort here, but 2b covers the gap.)
+- **[DB]** `species_image_candidates` table + `content_items↔vendor_batches` FK + any `media_assets` field
+  additions + a workspace "vendor photos OK" setting (Lovable). **Wire candidate-gathering to the existing
+  Firecrawl integration — reuse it, don't build a new scraper** (this instruction ships with the migrations).
+- **[App] 2a — Vendor imagery first.** Use Firecrawl to fetch/search vendor product pages, match each PO
+  line by `scientific_name`/`clean_item_name`; surface as the first candidates.
+- **[App] 2b — Wikimedia/iNaturalist fallback (via Firecrawl or their direct APIs).** For species with no
+  vendor image, search Wikimedia Commons + iNaturalist (commercial-OK CC), keyed on `scientific_name`.
 - **[App] 2b — Wikimedia/iNaturalist fallback.** For species with no vendor image, look up Wikimedia
   Commons + iNaturalist (commercial-OK CC), keyed on `scientific_name`.
 - **[App] verify + confirm.** `callAIChat` vision verification per candidate, then a **confirm UI** (top-N,
