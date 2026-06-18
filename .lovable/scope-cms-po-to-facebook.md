@@ -43,12 +43,15 @@ integration as the two owner decisions that gate everything net-new.
 
 ## Decisions needed first (owner — 4 of them)
 
-1. **Image-source strategy & licensing posture (BLOCKING).** Scraping arbitrary web/Google images
-   is not royalty-free. Pick the compliant default (recommendation below): **licensed API
-   (Unsplash/Pexels) + CC sources (Wikimedia Commons, iNaturalist) keyed on scientific name**, with
-   license/source/attribution stored per image. Decide whether vendor-supplied product photos (some
-   wholesalers license these; some are already captured by vendor-watch) are allowed and under what
-   terms. *Without this decision the crawler should not be built.*
+1. **Image-source strategy & licensing posture (BLOCKING).** Recommended **tiered priority
+   (owner-directed): (1) vendor imagery first** — most relevant (the actual species/specimen), gated on a
+   tracked per-vendor `image_usage_rights` flag — **then (2) CC sources (Wikimedia Commons, iNaturalist,
+   commercial-OK only) keyed on scientific name** for the remainder, **then (3) Unsplash/Pexels** as generic
+   fallback. Store license/source/attribution per image. **Sub-decision:** confirm the per-vendor
+   usage-rights model (which vendors permit reseller/marketing use of their photos) — vendor photos are the
+   vendor's copyright used under permission, *not* "royalty-free," so they can't be auto-used until a
+   vendor is marked allowed. Note: scraping arbitrary web/Google images is never royalty-free and is
+   excluded. *Without this decision the crawler should not be built.*
 2. **Facebook integration depth.** Phase A only (generate a draft caption + a downloadable
    collage/image set, owner posts manually) vs. committing to Phase B (Meta App Review +
    `pages_manage_posts` + Page token + direct multi-photo publish). Phase B is real integration work
@@ -106,16 +109,37 @@ candidate/license model are the real new build; FB publish is a separate integra
 | **FishBase / reef species DBs** | varies, often restrictive | scientific name | Authoritative IDs | Licensing often *not* open commercial — treat as ID reference, not image source |
 | **Vendor-supplied product photos** | per vendor agreement | vendor SKU / catalog | Already the actual animal; some captured by vendor-watch | License must be confirmed per vendor; not "royalty-free", it's "vendor-licensed" |
 
-**Recommended default:** **scientific-name-keyed lookup against Wikimedia Commons + iNaturalist
-(commercial-OK CC licenses only), with Unsplash/Pexels as a generic-fallback**, and **vendor photos
-as an opt-in source if the owner confirms the vendor license**. Always: **scientific name is the
-primary key** (it's binomial and unambiguous; `vendor_line_items.scientific_name`), AI vision
-verifies the candidate actually depicts the species, and a human confirms before it's used.
+**Recommended default — tiered source priority (owner-directed, 2026-06-18): vendor imagery first,
+then CC sources for the remainder.**
+1. **Vendor imagery (PRIORITY).** It's the most *relevant* source — the actual species (often the actual
+   specimen) the store bought — and the least crawler-dependent. Match the PO line →
+   vendor catalog image by `scientific_name` / `clean_item_name`. **Gated on a per-vendor
+   `image_usage_rights` flag** (see below): only auto-use photos from vendors who permit reseller/marketing
+   use. *Coverage caveat:* vendor-watch today scrapes one Shopify catalog as a price monitor
+   (`scrape.functions.ts:314`), which is not necessarily the PO's actual supplier — so early coverage is
+   partial, and broadening vendor-image capture (per-supplier connectors / vendor-supplied photo intake) is
+   itself part of the build.
+2. **Wikimedia Commons + iNaturalist (commercial-OK CC only)** — keyed on `scientific_name` — for every
+   species with no permitted vendor image. Exclude NonCommercial licenses.
+3. **Unsplash / Pexels** — generic aesthetic fallback / filler only (high "wrong species" risk; never the
+   primary identity shot).
 
-**Mandatory per-image metadata (store on every candidate):** `source` (api/site), `source_url`,
-`license` (e.g. CC-BY-4.0, Unsplash, vendor), `attribution` (author/credit string),
+Always: **`scientific_name` is the primary match key**, AI vision verifies the candidate actually depicts
+the species, and a human confirms before it's used.
+
+> **Licensing reality check:** vendor photos are **not** "royalty-free" — they're the vendor's copyright,
+> used under the vendor's reseller/marketing permission. That's why tier 1 is gated on a tracked per-vendor
+> right, not assumed. Tiers 2–3 are the genuinely license-clean "royalty-free" sources.
+
+**Per-image metadata (store on every candidate):** `source` (vendor/api/site), `source_url`,
+`license` (e.g. CC-BY-4.0, Unsplash, `vendor:<name>`), `attribution` (author/credit string),
 `commercial_ok` (bool), `ai_match_confidence`, `approved` (human gate). The existing `media_assets`
 table already has `source_type` and `usage_rights` enums — extend, don't reinvent.
+
+**New (DB-lane): per-vendor `image_usage_rights`.** Add to `vendors` (e.g. enum
+`unknown | not_allowed | resale_marketing_ok`, default `unknown`). Tier-1 vendor imagery is only
+auto-eligible when a vendor is `resale_marketing_ok`; otherwise its photos are proposed but flagged
+"confirm rights" before use. Lovable's lane.
 
 ### 2. Species identification & matching
 
@@ -195,14 +219,20 @@ settled, no build starts.
 - **[DB]** `arrival_post_drafts` + `arrival_post_lines` tables (Lovable).
 - **[Decision]** Confirm caption auto-draft vs. blank (Decision #3).
 
-### Phase 2 — Royalty-free image crawler + verify + confirm — net-new core
-- **[Decision]** Image source set + licensing posture locked (Decision #1).
-- **[DB]** `species_image_candidates` table + any `media_assets` license-field additions (Lovable);
-  any new API-key secrets (Lovable's lane).
-- **[App]** Per-species lookup against the chosen compliant sources (keyed on `scientific_name`),
-  `callAIChat` vision verification, and a **confirm UI** (top-N candidates, approve/reject) modeled on
-  design-coral-stock-tracking §C. On approve: `downloadImage`-style materialize → `media_assets` +
-  `content_media`, carrying license/attribution.
+### Phase 2 — Image sourcing (vendor-first) + verify + confirm — net-new core
+- **[Decision]** Tiered source priority + licensing posture locked (Decision #1), incl. per-vendor rights.
+- **[DB]** `species_image_candidates` table + `vendors.image_usage_rights` flag + any `media_assets`
+  license-field additions (Lovable); any new API-key secrets (Lovable's lane).
+- **[App] 2a — Vendor imagery first.** Match each PO line → an existing vendor/scraped catalog image by
+  `scientific_name`/`clean_item_name`; surface as tier-1 candidates, flagged by the vendor's
+  `image_usage_rights` (auto-eligible only when `resale_marketing_ok`). This covers the species we can
+  before any external API call. (Broadening vendor-image capture beyond the current Shopify monitor is the
+  larger sub-effort here.)
+- **[App] 2b — CC fallback for the remainder.** For species with no permitted vendor image, look up the
+  chosen compliant sources (Wikimedia/iNaturalist, keyed on `scientific_name`; Unsplash/Pexels as filler).
+- **[App] verify + confirm.** `callAIChat` vision verification per candidate, then a **confirm UI** (top-N,
+  approve/reject) modeled on design-coral-stock-tracking §C. On approve: `downloadImage`-style materialize →
+  `media_assets` + `content_media`, carrying source/license/attribution.
 
 ### Phase 3A — Manual FB publish (no app review) — reuse existing publishing
 - **[App]** "Export post" = approved caption + downloadable image set/collage; owner posts manually,
