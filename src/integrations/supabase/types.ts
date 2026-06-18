@@ -170,6 +170,7 @@ export type Database = {
           reviewer: string | null
           scheduled_date: string | null
           short_caption: string | null
+          source_vendor_batch_id: string | null
           status: Database["public"]["Enums"]["content_status"]
           title: string
           updated_at: string
@@ -192,6 +193,7 @@ export type Database = {
           reviewer?: string | null
           scheduled_date?: string | null
           short_caption?: string | null
+          source_vendor_batch_id?: string | null
           status?: Database["public"]["Enums"]["content_status"]
           title: string
           updated_at?: string
@@ -214,6 +216,7 @@ export type Database = {
           reviewer?: string | null
           scheduled_date?: string | null
           short_caption?: string | null
+          source_vendor_batch_id?: string | null
           status?: Database["public"]["Enums"]["content_status"]
           title?: string
           updated_at?: string
@@ -231,6 +234,13 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_items_source_vendor_batch_id_fkey"
+            columns: ["source_vendor_batch_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_batches"
             referencedColumns: ["id"]
           },
         ]
@@ -1016,6 +1026,74 @@ export type Database = {
             columns: ["content_item_id"]
             isOneToOne: false
             referencedRelation: "content_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      species_image_candidates: {
+        Row: {
+          ai_match_confidence: number | null
+          approved: boolean
+          approved_at: string | null
+          approved_by: string | null
+          attribution: string | null
+          commercial_ok: boolean | null
+          created_at: string
+          created_by: string | null
+          id: string
+          image_url: string
+          license: string | null
+          source: string
+          source_url: string
+          species_key: string | null
+          storage_path: string | null
+          updated_at: string
+          vendor_line_item_id: string | null
+        }
+        Insert: {
+          ai_match_confidence?: number | null
+          approved?: boolean
+          approved_at?: string | null
+          approved_by?: string | null
+          attribution?: string | null
+          commercial_ok?: boolean | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          image_url: string
+          license?: string | null
+          source: string
+          source_url: string
+          species_key?: string | null
+          storage_path?: string | null
+          updated_at?: string
+          vendor_line_item_id?: string | null
+        }
+        Update: {
+          ai_match_confidence?: number | null
+          approved?: boolean
+          approved_at?: string | null
+          approved_by?: string | null
+          attribution?: string | null
+          commercial_ok?: boolean | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          image_url?: string
+          license?: string | null
+          source?: string
+          source_url?: string
+          species_key?: string | null
+          storage_path?: string | null
+          updated_at?: string
+          vendor_line_item_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "species_image_candidates_vendor_line_item_id_fkey"
+            columns: ["vendor_line_item_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_line_items"
             referencedColumns: ["id"]
           },
         ]
@@ -2002,6 +2080,33 @@ export type Database = {
           provider?: string
           updated_at?: string
           updated_by?: string | null
+        }
+        Relationships: []
+      }
+      workspace_content_settings: {
+        Row: {
+          id: string
+          updated_at: string
+          updated_by: string | null
+          vendor_photos_ok: boolean
+          vendor_photos_ok_attested_at: string | null
+          vendor_photos_ok_attested_by: string | null
+        }
+        Insert: {
+          id?: string
+          updated_at?: string
+          updated_by?: string | null
+          vendor_photos_ok?: boolean
+          vendor_photos_ok_attested_at?: string | null
+          vendor_photos_ok_attested_by?: string | null
+        }
+        Update: {
+          id?: string
+          updated_at?: string
+          updated_by?: string | null
+          vendor_photos_ok?: boolean
+          vendor_photos_ok_attested_at?: string | null
+          vendor_photos_ok_attested_by?: string | null
         }
         Relationships: []
       }
