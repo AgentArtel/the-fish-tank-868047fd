@@ -1655,3 +1655,29 @@ Final app-side cutover so nothing reads or writes attrs.rack_position (Lovable c
   fallback. Reads were already on the column (#59).
 - Verified: no `attrs.rack_position =` writers remain; reads all use the column. tsc clean, build green.
 Next: ping Lovable → they ship the `attrs.rack_position` key-drop migration.
+
+---
+## 2026-06-18 — rack_position attrs→column migration COMPLETE (Lovable + Claude)
+
+Lovable dropped the `attrs.rack_position` key from existing rows (migration 20260618184654), the final
+step after the app cut over to column-only reads/writes (#59 + #60). End-to-end done: column + index +
+backfill (Lovable) → app reads/writes the column exclusively (Claude) → attrs key dropped (Lovable).
+No app path touches `attrs.rack_position`. Tidied one now-stale comment in `flagInventoryForReview`
+(rack_position is no longer an attrs example). Tier 3.15 `rack_position` fully resolved; remaining
+attrs keys settled by design (`stock_mode`/`inventory_role` stay; `clover_item_id` kept for orphan-recovery).
+
+---
+## 2026-06-18 — CMS Phase 1A: new-arrivals draft post from a vendor batch (Claude Code)
+
+First shippable slice of the PO→CMS→Facebook feature (scope-cms-po-to-facebook.md), app-lane only — zero
+schema, zero network, draft-only.
+- New server fn `buildArrivalPostFromBatch` (`cms.functions.ts`): reads the batch's livestock
+  `vendor_line_items` (kind=sellable, item_type ∈ fish/coral/invert/live_rock), auto-generates an editable
+  species-list caption, and inserts a draft `content_items` row (status `idea`, content_type `announcement`).
+  Batch→post link recorded in `content_items.notes` (no FK column yet). Auth matches the CMS module's
+  inline `is_active` pattern. Draft only — nothing auto-publishes.
+- `batches.$id.tsx`: additive "Build new-arrivals post" button + confirm dialog → opens the new draft at
+  `/content/$id`. No existing receive/convert/pricing logic touched.
+Image sourcing (Phase 2) reuses the existing Firecrawl integration (`fetchViaFirecrawl`,
+scrape.functions.ts:186) per owner direction, and is gated on Lovable's DB tables — see the scope doc's
+data-model section. Build ✅ · tsc clean.

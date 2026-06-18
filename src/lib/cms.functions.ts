@@ -77,6 +77,90 @@ export const updateContentStatus = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// Phase 1A: build a draft "new arrivals" CMS post from a vendor batch.
+// App-lane only — no schema, no external network, no auto-publish. Draft only.
+// The batch→post link is recorded in content_items.notes (no FK column exists).
+const ARRIVAL_LIVESTOCK_TYPES = ["fish", "coral", "invert", "live_rock"] as const;
+
+export const buildArrivalPostFromBatch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ batchId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: prof } = await supabase
+      .from("profiles")
+      .select("is_active")
+      .eq("id", userId)
+      .maybeSingle();
+    if (!prof?.is_active) throw new Error("Forbidden: account pending approval");
+
+    const { data: batch, error: batchErr } = await supabase
+      .from("vendor_batches")
+      .select("id, invoice_number, arrival_date, invoice_date, vendors(name)")
+      .eq("id", data.batchId)
+      .maybeSingle();
+    if (batchErr) throw new Error(batchErr.message);
+    if (!batch) throw new Error("Batch not found");
+
+    const { data: lines, error: linesErr } = await supabase
+      .from("vendor_line_items")
+      .select("clean_item_name, raw_description, scientific_name, item_type, quantity, kind")
+      .eq("vendor_batch_id", data.batchId)
+      .eq("kind", "sellable")
+      .in("item_type", [...ARRIVAL_LIVESTOCK_TYPES])
+      .order("line_number", { nullsFirst: false });
+    if (linesErr) throw new Error(linesErr.message);
+
+    const livestock = lines ?? [];
+    if (livestock.length === 0) {
+      throw new Error("No livestock lines (fish/coral/invert/live rock) on this batch yet.");
+    }
+
+    const invoiceLabel =
+      batch.invoice_number ||
+      batch.arrival_date ||
+      batch.invoice_date ||
+      new Date().toISOString().slice(0, 10);
+    const vendorName = (batch.vendors as any)?.name ?? "our supplier";
+
+    // Build a simple, editable plain-text/markdown caption: intro + one line per species.
+    const speciesLines = livestock.map((l) => {
+      const name = (l.clean_item_name || l.raw_description || "New arrival").toString().trim();
+      const sci = l.scientific_name?.toString().trim();
+      const qty = l.quantity != null ? Math.round(Number(l.quantity)) : null;
+      let line = `- ${name}`;
+      if (sci) line += ` (*${sci}*)`;
+      if (qty != null && qty > 0) line += ` — ${qty} available`;
+      return line;
+    });
+    const caption = [
+      `Fresh arrivals just landed from ${vendorName}! Here's what's new this week:`,
+      "",
+      ...speciesLines,
+      "",
+      "Come by the shop or message us to reserve yours.",
+    ].join("\n");
+
+    const title = `New arrivals — ${invoiceLabel}`;
+    const notes = `Source vendor batch: ${batch.invoice_number || data.batchId}`;
+
+    const { data: inserted, error: insErr } = await supabase
+      .from("content_items")
+      .insert({
+        title,
+        content_type: "announcement",
+        status: "idea",
+        caption,
+        notes,
+        created_by: userId,
+      })
+      .select("id")
+      .single();
+    if (insErr) throw new Error(insErr.message);
+
+    return { contentItemId: inserted.id };
+  });
+
 export const getSignedUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ path: z.string().min(1) }).parse(d))

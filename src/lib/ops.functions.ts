@@ -624,7 +624,7 @@ export const reviewInventoryItem = createServerFn({ method: "POST" })
   });
 
 // Skip-and-flag an item for later admin review. Merges a `review_flag` marker into
-// attrs (read-merge-write so existing attrs like rack_position/source are kept).
+// attrs (read-merge-write so existing attrs like source/price_review are kept).
 export const flagInventoryForReview = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
