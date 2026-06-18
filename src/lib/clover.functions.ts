@@ -261,6 +261,13 @@ export const createWorkspaceItemsFromClover = createServerFn({ method: "POST" })
 
     // Orphan-safety: some of these Clover items may already have an inventory item
     // from an earlier interrupted run — re-link those instead of duplicating.
+    //
+    // `attrs.clover_item_id` is KEPT IN ATTRS BY DESIGN (not duplicate provenance):
+    // it's the recovery marker for this cold path. We insert the item and write its
+    // `clover_item_links` row in separate steps, so a worker timeout between them can
+    // leave an orphan (item created, link missing). `clover_item_links` can't recover
+    // that — the missing link IS the gap — so the next run finds the orphan by this
+    // attrs key and re-links it. (clover_item_links stays the canonical link table.)
     const cloverIds = batch.map((b: any) => b.clover_item_id);
     const { data: orphans } = await db
       .from("inventory_items")
@@ -289,6 +296,7 @@ export const createWorkspaceItemsFromClover = createServerFn({ method: "POST" })
           live_sale_status: "not_eligible",
           needs_photo: true,
           notes: "Imported from Clover POS",
+          // clover_item_id kept in attrs by design — orphan-recovery marker, see above.
           attrs: { source: "clover", clover_item_id: b.clover_item_id },
           created_by: context.userId,
         };

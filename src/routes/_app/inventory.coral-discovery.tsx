@@ -251,10 +251,8 @@ function CoralDiscoveryPage() {
                     key={c.id}
                     className="flex items-center gap-2 text-sm border-b last:border-0 pb-2 last:pb-0"
                   >
-                    {c.attrs?.rack_position && (
-                      <Badge className="font-mono text-[10px] shrink-0">
-                        {c.attrs.rack_position}
-                      </Badge>
+                    {c.rack_position && (
+                      <Badge className="font-mono text-[10px] shrink-0">{c.rack_position}</Badge>
                     )}
                     <Link
                       to="/inventory/$id"

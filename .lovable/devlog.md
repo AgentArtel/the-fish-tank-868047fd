@@ -1612,3 +1612,32 @@ App-lane cleanups from scope-inventory-cleanup.md (items 16–20):
 - **#19 correction**: flagged that `inventory_media.ocr_text`/`ocr_extracted_at` are NOT dead (read on the
   detail page) — do not drop. Remaining #19 dead-schema candidates bundled into the same handoff.
 Build ✅ · tsc clean · prettier clean. **Tier 4 App-lane complete** (DB-lane #15/#19 with Lovable).
+
+---
+## 2026-06-17 — Tier 3.15: rack_position attrs→column cutover (app side) (Claude Code)
+
+Lovable shipped `rack_position text` + a `(location_id, rack_position)` index and backfilled it, opening a
+dual-write window. App cutover:
+- **Reads → column**: inventory list, Pricing Queue coral row, and the Coral Discovery overview now read
+  `rack_position` (column added to each SELECT) instead of `attrs.rack_position`.
+- **Dual-write the column**: `buildInventoryInsert` mirrors `attrs.rack_position`→`rack_position` on every
+  insert path; `updateInventoryAttrs` mirrors it (uppercased) when edited via the attrs editor — so the
+  column never goes stale while we keep writing attrs during the window.
+- Next: ping Lovable that list/query reads are on the column; a follow-up will move the detail attrs-editor
+  field onto the column and stop dual-writing, after which Lovable drops the attrs key.
+- **clover_item_id deferred (with pushback)**: `attrs.clover_item_id` is the orphan-recovery key for
+  crash-resumed chunked imports (`createWorkspaceItemsFromClover` inserts items then links separately; a
+  worker-timeout between leaves an orphan that's recovered via the attrs key — `clover_item_links` can't,
+  since the missing link is the gap). Removing it risks duplicate inventory. Asked Lovable to either keep it
+  or promote it to a real `inventory_items.clover_item_id` column. `stock_mode`/`inventory_role` stay in
+  attrs; `ocr_text`/`ocr_extracted_at` not dropped (both confirmed by Lovable).
+Build ✅ · tsc clean · prettier clean.
+
+---
+## 2026-06-17 — Document attrs.clover_item_id as deliberate (recovery marker) (Claude Code)
+
+Lovable agreed it's not duplicate provenance and chose to keep it in attrs (a UNIQUE column would turn a
+recoverable orphan-dup into a hard mid-chunk insert failure; no hot query benefits). Documented per their
+ask: expanded the orphan-recovery comment in `clover.functions.ts` (`createWorkspaceItemsFromClover`) + a
+note at the attrs write, and added a "Kept in attrs, by design" section to `handoff-attrs-to-columns.md`
+(alongside `stock_mode`) so the next audit doesn't re-flag it.

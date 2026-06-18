@@ -48,6 +48,30 @@ No app changes until we agree — this one's big enough to be worth a quick alig
 
 ---
 
+## Kept in attrs, by design (do not re-flag as "duplicate provenance")
+The following `attrs` keys are deliberately staying in jsonb. A future audit should **not** re-flag them.
+
+- **`stock_mode` / `price_mode`** (coral) — chosen in `design-coral-stock-tracking.md`; coral is the only
+  consumer, no trigger/RLS needs them, and the sale path reads them fine. Promoting buys nothing.
+- **`attrs.clover_item_id`** — **NOT duplicate provenance; it's the orphan-recovery marker** for resumed
+  chunked Clover imports. `createWorkspaceItemsFromClover` inserts the inventory item and writes its
+  `clover_item_links` row in *separate* steps, so a worker timeout between them can leave an orphan (item
+  created, link missing). `clover_item_links` can't recover that (the missing link is the gap), so the next
+  run finds the orphan by `attrs.clover_item_id` and re-links instead of duplicating. Lovable's call
+  (2026-06-17): keep it in attrs — a `UNIQUE` column would turn a recoverable dupe into a hard mid-chunk
+  insert failure, and there's no hot query that benefits. `clover_item_links` remains the canonical link
+  table. Documented in `clover.functions.ts` (`createWorkspaceItemsFromClover`).
+
+## Status (2026-06-17)
+- `rack_position` → column shipped + backfilled (Lovable). App reads cut to the column; inserts/edits
+  dual-write the column (PR #59). **Pending:** detail-page attrs-editor field → column + stop dual-writing,
+  then Lovable drops the `attrs.rack_position` key.
+- `stock_mode` / `inventory_role` → staying in attrs.
+- `ocr_text` / `ocr_extracted_at` → NOT dropped (still read on the detail page).
+- `attrs.clover_item_id` → kept in attrs by design (above), documented.
+
+---
+
 ### Aside — correction to audit item #19 (dead schema)
 While auditing I found the scope's claim that `inventory_media.ocr_text` / `ocr_extracted_at` have "no
 reader" is **wrong** — they're written by `parseTagPhoto`/OCR (`ops.functions.ts`) and **read+displayed**

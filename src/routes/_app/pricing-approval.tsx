@@ -101,7 +101,7 @@ function CoralDraftsSection({ isAdmin }: { isAdmin: boolean }) {
         await supabase
           .from("inventory_items")
           .select(
-            "id,item_name,scientific_name,attrs,retail_price,quantity_available,availability_status,pricing_status,location_id,store_locations(name)",
+            "id,item_name,scientific_name,attrs,rack_position,retail_price,quantity_available,availability_status,pricing_status,location_id,store_locations(name)",
           )
           .eq("item_type", "coral")
           .in("availability_status", ["incoming", "needs_id"])
@@ -226,8 +226,8 @@ function CoralDraftRow({
         )}
       </td>
       <td className="p-3">
-        {item.attrs?.rack_position ? (
-          <Badge className="font-mono text-[10px]">{item.attrs.rack_position}</Badge>
+        {item.rack_position ? (
+          <Badge className="font-mono text-[10px]">{item.rack_position}</Badge>
         ) : (
           <span className="text-muted-foreground">—</span>
         )}
