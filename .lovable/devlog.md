@@ -1655,3 +1655,13 @@ Final app-side cutover so nothing reads or writes attrs.rack_position (Lovable c
   fallback. Reads were already on the column (#59).
 - Verified: no `attrs.rack_position =` writers remain; reads all use the column. tsc clean, build green.
 Next: ping Lovable → they ship the `attrs.rack_position` key-drop migration.
+
+---
+## 2026-06-18 — rack_position attrs→column migration COMPLETE (Lovable + Claude)
+
+Lovable dropped the `attrs.rack_position` key from existing rows (migration 20260618184654), the final
+step after the app cut over to column-only reads/writes (#59 + #60). End-to-end done: column + index +
+backfill (Lovable) → app reads/writes the column exclusively (Claude) → attrs key dropped (Lovable).
+No app path touches `attrs.rack_position`. Tidied one now-stale comment in `flagInventoryForReview`
+(rack_position is no longer an attrs example). Tier 3.15 `rack_position` fully resolved; remaining
+attrs keys settled by design (`stock_mode`/`inventory_role` stay; `clover_item_id` kept for orphan-recovery).
