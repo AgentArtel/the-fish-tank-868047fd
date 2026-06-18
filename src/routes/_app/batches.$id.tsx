@@ -41,6 +41,7 @@ import {
   AlertTriangle,
   ScanBarcode,
   Tags,
+  Megaphone,
 } from "lucide-react";
 import { BarcodeScanDialog } from "@/components/barcode-scan-dialog";
 import { PhotoReceiveDialog } from "@/components/photo-receive-dialog";
@@ -80,6 +81,7 @@ import {
   confirmReconciliation,
 } from "@/lib/ops.functions";
 import { ReconcileSection } from "@/components/reconcile-section";
+import { buildArrivalPostFromBatch } from "@/lib/cms.functions";
 
 export const Route = createFileRoute("/_app/batches/$id")({ component: BatchDetail });
 
@@ -149,6 +151,7 @@ function BatchDetail() {
               extractionStatus={batch.extraction_status}
               onDone={refreshAll}
             />
+            <BuildArrivalPostButton batchId={id} lines={lines ?? []} />
             <ConvertButton batchId={id} lines={lines ?? []} onDone={refreshAll} />
           </div>
         }
@@ -1006,6 +1009,62 @@ function ChargesSection({
         </tbody>
       </table>
     </div>
+  );
+}
+
+function BuildArrivalPostButton({ batchId, lines }: { batchId: string; lines: any[] }) {
+  const nav = useNavigate();
+  const build = useServerFn(buildArrivalPostFromBatch);
+  const [busy, setBusy] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const LIVESTOCK = ["fish", "coral", "invert", "live_rock"];
+  const livestockCount = lines.filter(
+    (l) => l.kind === "sellable" && LIVESTOCK.includes(l.item_type),
+  ).length;
+
+  const run = async () => {
+    setBusy(true);
+    try {
+      const res = await build({ data: { batchId } });
+      toast.success("New-arrivals draft created");
+      nav({ to: "/content/$id", params: { id: res.contentItemId } });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not build post");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <Button variant="outline" disabled={busy} onClick={() => setConfirmOpen(true)}>
+        <Megaphone className="w-4 h-4 mr-1" /> {busy ? "Building…" : "Build new-arrivals post"}
+      </Button>
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Build a new-arrivals post?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This creates a draft content item listing the {livestockCount} livestock line
+              {livestockCount === 1 ? "" : "s"} (fish, coral, invert, live rock) on this batch, with
+              a pre-filled caption you can edit. It is a draft only — nothing is published and no
+              prices are set.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmOpen(false);
+                run();
+              }}
+            >
+              Build draft post
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
