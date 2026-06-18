@@ -1641,3 +1641,17 @@ recoverable orphan-dup into a hard mid-chunk insert failure; no hot query benefi
 ask: expanded the orphan-recovery comment in `clover.functions.ts` (`createWorkspaceItemsFromClover`) + a
 note at the attrs write, and added a "Kept in attrs, by design" section to `handoff-attrs-to-columns.md`
 (alongside `stock_mode`) so the next audit doesn't re-flag it.
+
+---
+## 2026-06-17 — Tier 3.15 PR #60: rack_position column-exclusive (app side) (Claude Code)
+
+Final app-side cutover so nothing reads or writes attrs.rack_position (Lovable can now drop the key):
+- **Detail edit → column**: removed rack_position from the coral attrs schema (`item-type-attrs.ts`); added
+  a dedicated coral-only "Rack position" editor on the detail page backed by a new `setInventoryRackPosition`
+  server fn (requireEditor, trim+uppercase, updates the column).
+- **Intake writes → column**: `catalogCoralItem` and `quickAddInventoryItem` (+ Quick Add client) now set the
+  `rack_position` column directly (top-level field → builder), not `attrs.rack_position`.
+- **Stopped dual-writing**: dropped the `updateInventoryAttrs` mirror and the builder's `?? attrs.rack_position`
+  fallback. Reads were already on the column (#59).
+- Verified: no `attrs.rack_position =` writers remain; reads all use the column. tsc clean, build green.
+Next: ping Lovable → they ship the `attrs.rack_position` key-drop migration.

@@ -73,7 +73,9 @@ function buildInventoryInsert(input: {
     // Dual-write rack_position to its real column (mirrors attrs during the
     // attrs→column migration; reads use the column). Lovable drops the attrs
     // key once the app reads the column exclusively.
-    rack_position: input.rack_position ?? attrs.rack_position ?? null,
+    // rack_position lives in its own column (the attrs key is retired). Callers
+    // pass it explicitly; coral intake always does.
+    rack_position: input.rack_position ?? null,
     received_at: input.received_at ?? null,
     received_by: input.received_by ?? null,
     created_by: input.created_by,
@@ -532,21 +534,30 @@ export const updateInventoryAttrs = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await requireEditor(context.supabase, context.userId);
-    const patch: { attrs: Record<string, any>; rack_position?: string | null } = {
-      attrs: data.attrs,
-    };
-    // Keep the rack_position column in sync when it's edited via the attrs
-    // editor (dual-write during the attrs→column migration; uppercase to match
-    // the backfill + index).
-    if (typeof data.attrs.rack_position === "string") {
-      patch.rack_position = data.attrs.rack_position.trim().toUpperCase() || null;
-    }
     const { error } = await context.supabase
       .from("inventory_items")
-      .update(patch)
+      .update({ attrs: data.attrs })
       .eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
+  });
+
+// Update the rack_position column (coral plug/frag tag). Its own server fn — and
+// its own column — now that rack_position is column-backed (off attrs). Editor-only.
+export const setInventoryRackPosition = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({ id: z.string().uuid(), rack_position: z.string().trim().max(40) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await requireEditor(context.supabase, context.userId);
+    const value = data.rack_position.trim().toUpperCase() || null;
+    const { error } = await context.supabase
+      .from("inventory_items")
+      .update({ rack_position: value })
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true, rack_position: value };
   });
 
 export const updateInventoryItemType = createServerFn({ method: "POST" })
@@ -1374,6 +1385,7 @@ export const quickAddInventoryItem = createServerFn({ method: "POST" })
         tag_photo_path: z.string().max(500).nullable().optional(),
         set_available: z.boolean().default(true),
         attrs: z.record(z.string(), z.any()).nullable().optional(),
+        rack_position: z.string().trim().max(40).nullable().optional(),
       })
       .parse(d),
   )
@@ -1413,6 +1425,7 @@ export const quickAddInventoryItem = createServerFn({ method: "POST" })
             ...(data.attrs && Object.keys(data.attrs).length > 0 ? data.attrs : {}),
             ...(admin ? {} : { price_review: { at: nowIso, by: userId } }),
           },
+          rack_position: data.rack_position ?? null,
           received_at: nowIso,
           received_by: userId,
           created_by: userId,
@@ -2286,9 +2299,9 @@ export const catalogCoralItem = createServerFn({ method: "POST" })
     };
     if (data.coral_type) attrs.coral_type = data.coral_type;
     // Rack position (plug tag, e.g. B3 / X3 / H8) — required; normalize to
-    // uppercase so it stays consistent across cataloguers.
+    // uppercase so it stays consistent across cataloguers. Stored in its own
+    // column (passed to the builder below), not attrs.
     const rackPosition = data.rack_position.toUpperCase();
-    attrs.rack_position = rackPosition;
 
     const availability = coralRoleToAvailability(data.inventory_role);
     const nowIso = new Date().toISOString();
@@ -2309,6 +2322,7 @@ export const catalogCoralItem = createServerFn({ method: "POST" })
           needs_photo: !data.photo_path,
           notes: data.notes ?? null,
           attrs,
+          rack_position: rackPosition,
           received_at: nowIso,
           received_by: userId,
           created_by: userId,

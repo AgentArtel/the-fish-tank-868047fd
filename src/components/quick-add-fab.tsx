@@ -382,7 +382,6 @@ function ManualForm({
       if (itemType === "coral") {
         if (inventoryRole) attrs.inventory_role = inventoryRole;
         if (coralType) attrs.coral_type = coralType;
-        attrs.rack_position = rackPosition.trim().toUpperCase();
       }
       const r = await quickAdd({
         data: {
@@ -401,6 +400,8 @@ function ManualForm({
           tag_photo_path: tagPath,
           set_available: true,
           attrs: Object.keys(attrs).length > 0 ? attrs : null,
+          // rack_position is column-backed (off attrs) — send it top-level.
+          rack_position: itemType === "coral" ? rackPosition.trim().toUpperCase() : null,
         },
       });
       setParsedTagPath(null);
