@@ -1,13 +1,17 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { STATUS_LABELS, type ContentStatus } from "@/lib/workflow";
+import { getMe, getContentSettings, setVendorPhotosOk } from "@/lib/cms.functions";
 import { Plus } from "lucide-react";
+import { toast } from "sonner";
 import { z } from "zod";
 
 const search = z.object({
@@ -41,6 +45,7 @@ function ContentList() {
     <div className="p-8">
       <PageHeader title="Content Items" description="All planned, drafted, and posted items in the Content module."
         action={<Button asChild><Link to="/content/new"><Plus className="w-4 h-4 mr-1" /> New</Link></Button>} />
+      <VendorPhotosSetting />
       <div className="flex gap-2 mb-4">
         <Input placeholder="Search title…" value={q ?? ""} className="max-w-xs"
           onChange={e => nav({ search: (s: any) => ({ ...s, q: e.target.value || undefined }) })} />
@@ -70,6 +75,47 @@ function ContentList() {
             {data?.length === 0 && <tr><td colSpan={4} className="p-6 text-center text-muted-foreground">No items.</td></tr>}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+// Admin-only attestation toggle: do our wholesalers permit reseller use of
+// their product photos? Gates the vendor-Firecrawl image tier. Default false.
+function VendorPhotosSetting() {
+  const meFn = useServerFn(getMe);
+  const getSettingsFn = useServerFn(getContentSettings);
+  const setFn = useServerFn(setVendorPhotosOk);
+
+  const { data: me } = useQuery({ queryKey: ["me"], queryFn: () => meFn() });
+  const isAdmin = (me?.roles ?? []).includes("admin");
+
+  const { data: settings, refetch } = useQuery({
+    queryKey: ["content-settings"],
+    queryFn: () => getSettingsFn(),
+    enabled: isAdmin,
+  });
+
+  const toggle = useMutation({
+    mutationFn: (ok: boolean) => setFn({ data: { ok } }),
+    onSuccess: () => { toast.success("Setting saved"); refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  if (!isAdmin) return null;
+  return (
+    <div className="rounded-lg border bg-card p-3 mb-4 flex items-start gap-3">
+      <Checkbox
+        checked={!!settings?.vendorPhotosOk}
+        disabled={toggle.isPending}
+        onCheckedChange={(c) => toggle.mutate(!!c)}
+      />
+      <div className="text-xs">
+        <div className="font-medium">Vendor photos OK (attestation)</div>
+        <div className="text-muted-foreground">
+          Our wholesalers permit reseller use of their product photos. Enables vendor-page image
+          sourcing for new-arrivals posts.{settings?.attestedAt ? ` Attested ${new Date(settings.attestedAt).toLocaleDateString()}.` : ""}
+        </div>
       </div>
     </div>
   );
