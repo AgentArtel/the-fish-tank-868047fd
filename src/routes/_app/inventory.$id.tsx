@@ -25,6 +25,7 @@ import {
   setInventoryAvailability, setInventoryLiveSale,
   adjustInventoryQuantities, getSignedInventoryMediaUrl,
   parseTagPhoto, updateInventoryAttrs, updateInventoryItemType,
+  setInventoryRackPosition,
 } from "@/lib/ops.functions";
 import { Sparkles, Loader2 } from "lucide-react";
 import { useGoLiveWithPhoto } from "@/components/photo-on-file-wizard";
@@ -491,6 +492,39 @@ function ActivityLog({ logs }: { logs: any[] }) {
   );
 }
 
+// Rack position is column-backed (off attrs) — edit it directly on the column.
+function RackPositionCard({ item, onDone }: { item: any; onDone: () => void }) {
+  const setRack = useServerFn(setInventoryRackPosition);
+  const [val, setVal] = useState<string>(item.rack_position ?? "");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { setVal(item.rack_position ?? ""); }, [item.rack_position]);
+  const unchanged = val.trim().toUpperCase() === (item.rack_position ?? "");
+  const save = async () => {
+    setBusy(true);
+    try {
+      await setRack({ data: { id: item.id, rack_position: val } });
+      toast.success("Rack position saved");
+      onDone();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className="rounded-lg border bg-card p-5 space-y-2">
+      <Label className="text-sm">Rack position (plug)</Label>
+      <div className="flex items-center gap-2">
+        <Input className="h-9 w-40 font-mono uppercase" value={val}
+          onChange={(e) => setVal(e.target.value)} placeholder="e.g. B3, X3, H8" />
+        <Button size="sm" onClick={save} disabled={busy || unchanged}>
+          {busy ? "Saving…" : "Save"}
+        </Button>
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        Plug / frag-tag code marking exactly where this coral sits on the rack.
+      </p>
+    </div>
+  );
+}
+
 function PerTypeCard({ item, onDone }: { item: any; onDone: () => void }) {
   const updateAttrs = useServerFn(updateInventoryAttrs);
   const updateType = useServerFn(updateInventoryItemType);
@@ -531,6 +565,7 @@ function PerTypeCard({ item, onDone }: { item: any; onDone: () => void }) {
         </Select>
         <span className="text-xs text-muted-foreground">Drives which fields appear below.</span>
       </div>
+      {item.item_type === "coral" && <RackPositionCard item={item} onDone={onDone} />}
       <AttrsEditor itemType={item.item_type} value={item.attrs ?? {}} onSave={save} saving={saving} />
     </div>
   );

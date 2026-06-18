@@ -75,13 +75,6 @@ export const ITEM_TYPE_SCHEMA: Record<ItemType, AttrGroup[]> = {
       label: "Coral details",
       fields: [
         {
-          key: "rack_position",
-          label: "Rack position (plug)",
-          type: "text",
-          placeholder: "e.g. B3, X3, H8",
-          help: "Plug / frag-tag code marking exactly where this coral sits on the rack.",
-        },
-        {
           key: "inventory_role",
           label: "Inventory role",
           type: "select",
