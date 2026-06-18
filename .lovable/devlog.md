@@ -1632,3 +1632,12 @@ dual-write window. App cutover:
   or promote it to a real `inventory_items.clover_item_id` column. `stock_mode`/`inventory_role` stay in
   attrs; `ocr_text`/`ocr_extracted_at` not dropped (both confirmed by Lovable).
 Build ✅ · tsc clean · prettier clean.
+
+---
+## 2026-06-17 — Document attrs.clover_item_id as deliberate (recovery marker) (Claude Code)
+
+Lovable agreed it's not duplicate provenance and chose to keep it in attrs (a UNIQUE column would turn a
+recoverable orphan-dup into a hard mid-chunk insert failure; no hot query benefits). Documented per their
+ask: expanded the orphan-recovery comment in `clover.functions.ts` (`createWorkspaceItemsFromClover`) + a
+note at the attrs write, and added a "Kept in attrs, by design" section to `handoff-attrs-to-columns.md`
+(alongside `stock_mode`) so the next audit doesn't re-flag it.
