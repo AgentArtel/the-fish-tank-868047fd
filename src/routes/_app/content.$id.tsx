@@ -17,8 +17,12 @@ import {
   CONTENT_TYPES, PLATFORMS, PLATFORM_LABELS, STATUS_LABELS,
   allowedNext, type ContentStatus, type Platform,
 } from "@/lib/workflow";
-import { updateContentStatus, getSignedUrl } from "@/lib/cms.functions";
-import { Copy, Trash2, ArrowLeft } from "lucide-react";
+import {
+  updateContentStatus, getSignedUrl,
+  gatherSpeciesImages, listSpeciesImageCandidates,
+  approveSpeciesImage, rejectSpeciesImage,
+} from "@/lib/cms.functions";
+import { Copy, Trash2, ArrowLeft, ImageDown, Check, X } from "lucide-react";
 
 export const Route = createFileRoute("/_app/content/$id")({ component: ContentDetail });
 
@@ -192,6 +196,10 @@ function ContentDetail() {
             </details>
           </Section>
 
+          {item.source_vendor_batch_id && (
+            <SpeciesImagesSection contentItemId={id} onApproved={refetchMedia} />
+          )}
+
           <Button onClick={save}>Save changes</Button>
         </div>
 
@@ -259,6 +267,134 @@ function MediaTile({ asset, onRemove }: { asset: any; onRemove: () => void }) {
         className="absolute top-1 right-1 p-1 bg-destructive text-destructive-foreground rounded opacity-0 group-hover:opacity-100">
         <Trash2 className="w-3 h-3" />
       </button>
+    </div>
+  );
+}
+
+// --- Phase 2: per-species image candidates (find → AI-verify → human approve) ---
+function SpeciesImagesSection({ contentItemId, onApproved }: { contentItemId: string; onApproved: () => void }) {
+  const qc = useQueryClient();
+  const gatherFn = useServerFn(gatherSpeciesImages);
+  const listFn = useServerFn(listSpeciesImageCandidates);
+  const approveFn = useServerFn(approveSpeciesImage);
+  const rejectFn = useServerFn(rejectSpeciesImage);
+
+  const { data, refetch, isFetching } = useQuery({
+    queryKey: ["species-candidates", contentItemId],
+    queryFn: () => listFn({ data: { contentItemId } }),
+  });
+
+  const gather = useMutation({
+    mutationFn: () => gatherFn({ data: { contentItemId } }),
+    onSuccess: (r: any) => {
+      toast.success(`Found ${r.created} candidate image(s)`);
+      refetch();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const approve = useMutation({
+    mutationFn: (candidateId: string) => approveFn({ data: { candidateId, contentItemId } }),
+    onSuccess: () => {
+      toast.success("Image approved & added to the post");
+      refetch();
+      onApproved();
+      qc.invalidateQueries({ queryKey: ["content-media", contentItemId] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const reject = useMutation({
+    mutationFn: (candidateId: string) => rejectFn({ data: { candidateId } }),
+    onSuccess: () => { toast.success("Candidate removed"); refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const lines: any[] = data?.lines ?? [];
+  const candidates: any[] = data?.candidates ?? [];
+  const byLine = new Map<string, any[]>();
+  for (const c of candidates) {
+    const arr = byLine.get(c.vendor_line_item_id) ?? [];
+    arr.push(c);
+    byLine.set(c.vendor_line_item_id, arr);
+  }
+
+  return (
+    <Section title="Species images">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs text-muted-foreground">
+          Find royalty-free / vendor images per species, AI-verified, then approve each one. Draft only — nothing publishes.
+        </p>
+        <Button size="sm" variant="secondary" disabled={gather.isPending}
+          onClick={() => gather.mutate()}>
+          <ImageDown className="w-3 h-3 mr-1" /> {gather.isPending ? "Finding…" : "Find images"}
+        </Button>
+      </div>
+      {isFetching && lines.length === 0 && <p className="text-xs text-muted-foreground">Loading…</p>}
+      {lines.length === 0 && !isFetching && (
+        <p className="text-xs text-muted-foreground">No livestock lines on the linked batch.</p>
+      )}
+      <div className="space-y-4">
+        {lines.map((l) => {
+          const cands = byLine.get(l.id) ?? [];
+          const name = l.clean_item_name || l.raw_description || "Unnamed";
+          return (
+            <div key={l.id} className="border rounded-md p-3">
+              <div className="text-sm font-medium">
+                {name}
+                {l.scientific_name && <span className="italic text-muted-foreground"> ({l.scientific_name})</span>}
+              </div>
+              {cands.length === 0 ? (
+                <p className="text-xs text-muted-foreground mt-1">No candidates yet — use “Find images”.</p>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-2">
+                  {cands.map((c) => (
+                    <CandidateTile key={c.id} cand={c}
+                      onApprove={() => approve.mutate(c.id)}
+                      onReject={() => reject.mutate(c.id)}
+                      busy={approve.isPending || reject.isPending} />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Section>
+  );
+}
+
+function CandidateTile({ cand, onApprove, onReject, busy }: { cand: any; onApprove: () => void; onReject: () => void; busy: boolean }) {
+  const conf = cand.ai_match_confidence;
+  return (
+    <div className="border rounded overflow-hidden text-xs">
+      <div className="aspect-square bg-muted">
+        <img src={cand.image_url} alt={cand.species_key ?? ""} className="w-full h-full object-cover" loading="lazy" />
+      </div>
+      <div className="p-2 space-y-1">
+        <div className="flex flex-wrap gap-1">
+          <Badge variant="outline" className="text-[10px]">{cand.source}</Badge>
+          {conf != null && (
+            <Badge variant="outline" className="text-[10px]">AI {Math.round(Number(conf) * 100)}%</Badge>
+          )}
+          {cand.commercial_ok === false && (
+            <Badge variant="destructive" className="text-[10px]">non-commercial</Badge>
+          )}
+        </div>
+        {cand.attribution && <div className="text-[10px] text-muted-foreground truncate" title={cand.attribution}>{cand.attribution}</div>}
+        {cand.approved ? (
+          <Badge className="text-[10px]">Approved</Badge>
+        ) : (
+          <div className="flex gap-1">
+            <Button size="sm" variant="default" className="h-7 flex-1" disabled={busy} onClick={onApprove}>
+              <Check className="w-3 h-3" />
+            </Button>
+            <Button size="sm" variant="outline" className="h-7 flex-1" disabled={busy} onClick={onReject}>
+              <X className="w-3 h-3" />
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

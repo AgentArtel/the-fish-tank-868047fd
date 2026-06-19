@@ -183,7 +183,7 @@ async function fetchWithRetry(url: string, attempts = 3): Promise<Response> {
 const FIRECRAWL_ENDPOINT = "https://api.firecrawl.dev/v2/scrape";
 
 // Fetch a URL's raw body via Firecrawl. Throws if not configured or on error.
-async function fetchViaFirecrawl(url: string): Promise<string> {
+export async function fetchViaFirecrawl(url: string): Promise<string> {
   const key = process.env.FIRECRAWL_API_KEY;
   if (!key) throw new Error("Firecrawl not configured (FIRECRAWL_API_KEY missing)");
   const res = await fetch(FIRECRAWL_ENDPOINT, {
@@ -247,7 +247,7 @@ function imageBucketPath(vendorSlug: string, externalId: string, imgUrl: string)
   return `scraped/${vendorSlug}/${safeId}.${ext}`;
 }
 
-async function downloadImage(supabaseAdmin: any, opts: { url: string; bucketPath: string }) {
+export async function downloadImage(supabaseAdmin: any, opts: { url: string; bucketPath: string }) {
   const res = await fetch(opts.url, {
     headers: { "User-Agent": SCRAPE_UA, Accept: "image/*,*/*" },
   });
