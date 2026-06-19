@@ -1018,8 +1018,9 @@ function BuildArrivalPostButton({ batchId, lines }: { batchId: string; lines: an
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const LIVESTOCK = ["fish", "coral", "invert", "live_rock"];
+  // Match the server: livestock OR not-yet-classified (item_type NULL after extraction).
   const livestockCount = lines.filter(
-    (l) => l.kind === "sellable" && LIVESTOCK.includes(l.item_type),
+    (l) => l.kind === "sellable" && (l.item_type == null || LIVESTOCK.includes(l.item_type)),
   ).length;
 
   const run = async () => {

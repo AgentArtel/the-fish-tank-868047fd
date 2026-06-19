@@ -110,7 +110,11 @@ export const buildArrivalPostFromBatch = createServerFn({ method: "POST" })
       .select("clean_item_name, raw_description, scientific_name, item_type, quantity, kind")
       .eq("vendor_batch_id", data.batchId)
       .eq("kind", "sellable")
-      .in("item_type", [...ARRIVAL_LIVESTOCK_TYPES])
+      // Livestock OR not-yet-classified: AI extraction sets kind='sellable' but
+      // leaves item_type NULL until lines are classified, so an unclassified
+      // (freshly-extracted) batch must still count. Once classified, dry goods
+      // /equipment drop out.
+      .or(`item_type.is.null,item_type.in.(${ARRIVAL_LIVESTOCK_TYPES.join(",")})`)
       .order("line_number", { nullsFirst: false });
     if (linesErr) throw new Error(linesErr.message);
 
@@ -488,7 +492,8 @@ export const gatherSpeciesImages = createServerFn({ method: "POST" })
       .select("id, clean_item_name, raw_description, scientific_name, item_type")
       .eq("vendor_batch_id", batchId)
       .eq("kind", "sellable")
-      .in("item_type", [...ARRIVAL_IMG_TYPES])
+      // Livestock OR not-yet-classified (item_type NULL after AI extraction).
+      .or(`item_type.is.null,item_type.in.(${ARRIVAL_IMG_TYPES.join(",")})`)
       .order("line_number", { nullsFirst: false });
     if (linesErr) throw new Error(linesErr.message);
 
@@ -616,7 +621,8 @@ export const listSpeciesImageCandidates = createServerFn({ method: "POST" })
       .select("id, clean_item_name, raw_description, scientific_name, item_type")
       .eq("vendor_batch_id", item.source_vendor_batch_id)
       .eq("kind", "sellable")
-      .in("item_type", [...ARRIVAL_IMG_TYPES])
+      // Livestock OR not-yet-classified (item_type NULL after AI extraction).
+      .or(`item_type.is.null,item_type.in.(${ARRIVAL_IMG_TYPES.join(",")})`)
       .order("line_number", { nullsFirst: false });
 
     const lineIds = (lines ?? []).map((l: any) => l.id);
