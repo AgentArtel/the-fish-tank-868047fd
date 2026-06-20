@@ -4,6 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { isTransitionAllowed, type ContentStatus } from "./workflow";
 import { requireAdmin, requireEditor } from "@/lib/auth-guards";
 import { callAIChat } from "@/lib/ai-call.server";
+import { fetchViaFirecrawl } from "@/lib/scrape.functions";
 
 export const getMe = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -386,12 +387,13 @@ async function fromINaturalist(scientificName: string): Promise<GatheredCandidat
   return out.filter((c) => c.commercial_ok);
 }
 
-// --- AI: resolve a messy livestock line name → a single scientific binomial ---
-// Livestock invoice lines are often common names, multi-species "packs", or have
-// the binomial buried in free text — so the scientific-name-keyed image APIs find
-// nothing. Ask the AI to extract/resolve one clean "Genus species". Best-effort:
-// returns null if it can't determine one.
-async function resolveScientificName(rawName: string): Promise<string | null> {
+// --- AI: resolve a messy livestock line name → a clean common + scientific name ---
+// Invoice lines are often common names, multi-species "packs", or have the
+// binomial buried in free text. We need a clean COMMON name (for retailer search)
+// and a SCIENTIFIC binomial (for the license-clean APIs). Best-effort; nulls if unsure.
+async function resolveSpecies(
+  rawName: string,
+): Promise<{ common: string | null; scientific: string | null }> {
   try {
     const { json } = await callAIChat({
       tier: "flash",
@@ -402,19 +404,68 @@ async function resolveScientificName(rawName: string): Promise<string | null> {
           content: [
             {
               type: "text",
-              text: `You are a marine-aquarium taxonomy expert. Given this livestock line-item name, reply with ONLY the single most likely species' scientific name as a binomial "Genus species" (for a multi-species pack, the primary/first species). If you cannot determine one, reply NONE. Name: "${rawName}"`,
+              text: `You are a marine-aquarium expert. For this livestock line item (which may be a common name, a multi-species "pack", or messy text), identify the PRIMARY species and reply EXACTLY two lines:
+COMMON: <clean common name, e.g. Royal Gramma>
+SCIENTIFIC: <Genus species, or NONE>
+Line: "${rawName}"`,
             },
           ],
         },
       ],
     });
-    const txt: string = (json?.choices?.[0]?.message?.content ?? "").trim();
-    if (!txt || /^none/i.test(txt)) return null;
-    const m = txt.match(/[A-Z][a-z]+ [a-z]+/);
-    return m?.[0] ?? null;
+    const txt: string = json?.choices?.[0]?.message?.content ?? "";
+    let common = txt.match(/COMMON:\s*(.+)/i)?.[1]?.trim() || null;
+    if (common && /^none/i.test(common)) common = null;
+    let scientific = txt.match(/SCIENTIFIC:\s*(.+)/i)?.[1]?.trim() || null;
+    if (scientific && /^none/i.test(scientific)) scientific = null;
+    if (scientific) scientific = scientific.match(/[A-Z][a-z]+ [a-z]+/)?.[0] ?? null;
+    return { common, scientific };
   } catch {
-    return null;
+    return { common: null, scientific: null };
   }
+}
+
+// --- Source: Top Shelf Aquatics (Shopify retailer) via Firecrawl ---
+// Owner-directed: scrape a real aquarium retailer (which has per-species product
+// photos) keyed on the common name, using the proven Firecrawl egress. NOTE: these
+// are the retailer's product photos — their copyright, NOT royalty-free —
+// commercial_ok=false flags that for the human-approve step.
+async function fromTopShelf(query: string): Promise<GatheredCandidate[]> {
+  const q = query.replace(/[;,].*$/, "").trim() || query;
+  const url = `https://topshelfaquatics.com/search/suggest.json?q=${encodeURIComponent(q)}&resources[type]=product&resources[limit]=5`;
+  const body = await fetchViaFirecrawl(url);
+  // Firecrawl may wrap the JSON in HTML — recover the object.
+  let j: any;
+  try {
+    j = JSON.parse(body);
+  } catch {
+    const s = body.indexOf("{");
+    const e = body.lastIndexOf("}");
+    if (s < 0 || e <= s) return [];
+    try {
+      j = JSON.parse(body.slice(s, e + 1));
+    } catch {
+      return [];
+    }
+  }
+  const products: any[] = j?.resources?.results?.products ?? [];
+  const out: GatheredCandidate[] = [];
+  for (const p of products) {
+    let img: any = p?.image || p?.featured_image || (Array.isArray(p?.images) ? p.images[0] : null);
+    if (img && typeof img === "object") img = img.src || img.url || null;
+    if (!img || typeof img !== "string") continue;
+    if (img.startsWith("//")) img = `https:${img}`;
+    out.push({
+      source: "topshelf",
+      source_url: p?.url ? `https://topshelfaquatics.com${p.url}` : url,
+      image_url: img,
+      license: "Top Shelf Aquatics product photo",
+      attribution: `Top Shelf Aquatics — ${p?.title ?? q}`,
+      commercial_ok: false,
+    });
+    if (out.length >= 3) break;
+  }
+  return out;
 }
 
 // --- AI vision verify (best-effort): score "does this depict <species>?" ---
@@ -477,14 +528,24 @@ export const gatherSpeciesImages = createServerFn({ method: "POST" })
       .order("line_number", { nullsFirst: false });
     if (linesErr) throw new Error(linesErr.message);
 
-    // Existing candidates for idempotency (vendor_line_item_id, image_url) dedupe.
     const lineIds = (lines ?? []).map((l: any) => l.id);
+    // Refresh: drop stale UNAPPROVED candidates for these lines so a re-run
+    // replaces them (e.g. old logos from a prior source). Approved ones stay.
+    if (lineIds.length) {
+      await supabase
+        .from("species_image_candidates")
+        .delete()
+        .in("vendor_line_item_id", lineIds)
+        .eq("approved", false);
+    }
+    // Dedupe against already-APPROVED images (don't re-propose one already picked).
     const existingKeys = new Set<string>();
     if (lineIds.length) {
       const { data: existing } = await supabase
         .from("species_image_candidates")
         .select("vendor_line_item_id, image_url")
-        .in("vendor_line_item_id", lineIds);
+        .in("vendor_line_item_id", lineIds)
+        .eq("approved", true);
       for (const e of existing ?? []) {
         existingKeys.add(`${e.vendor_line_item_id}::${e.image_url}`);
       }
@@ -504,32 +565,45 @@ export const gatherSpeciesImages = createServerFn({ method: "POST" })
       // The free image APIs key on a scientific binomial. Use the line's
       // scientific_name if present; otherwise AI-resolve the messy line name
       // (common names / packs / embedded binomials) to one.
-      let sciName = line.scientific_name?.toString().trim() || null;
-      if (!sciName && rawName) sciName = await resolveScientificName(rawName);
-      const speciesKey = sciName || rawName;
-      // No resolvable species name → nothing to look up; record and move on.
-      if (!sciName) {
-        perSpecies.push({
-          lineId: line.id,
-          speciesKey,
-          added: 0,
-          note: "no scientific name (couldn't resolve)",
-        });
+      let scientific = line.scientific_name?.toString().trim() || null;
+      let common: string | null = null;
+      // Resolve a clean common + scientific name from the messy line name.
+      if (rawName) {
+        const r = await resolveSpecies(rawName);
+        common = r.common;
+        if (!scientific) scientific = r.scientific;
+      }
+      const searchCommon = common || rawName;
+      const speciesKey = scientific || common || rawName;
+      // Nothing to search on at all → record and move on.
+      if (!searchCommon && !scientific) {
+        perSpecies.push({ lineId: line.id, speciesKey, added: 0, note: "no usable name" });
         continue;
       }
+      const verifyName = scientific || common || rawName || "";
 
       const gathered: GatheredCandidate[] = [];
 
-      // Reliable workhorses (scientific-name keyed, license-clean).
-      try {
-        gathered.push(...(await fromWikipedia(sciName)));
-      } catch {
-        /* skip */
+      // Top Shelf retailer (real per-species fish photos via Firecrawl), keyed on common name.
+      if (searchCommon) {
+        try {
+          gathered.push(...(await fromTopShelf(searchCommon)));
+        } catch {
+          /* skip — graceful degrade */
+        }
       }
-      try {
-        gathered.push(...(await fromINaturalist(sciName)));
-      } catch {
-        /* skip */
+      // License-clean fallbacks (scientific-name keyed).
+      if (scientific) {
+        try {
+          gathered.push(...(await fromWikipedia(scientific)));
+        } catch {
+          /* skip */
+        }
+        try {
+          gathered.push(...(await fromINaturalist(scientific)));
+        } catch {
+          /* skip */
+        }
       }
 
       // Dedupe within this run + cap.
@@ -546,7 +620,7 @@ export const gatherSpeciesImages = createServerFn({ method: "POST" })
         const dedupeKey = `${line.id}::${cand.image_url}`;
         if (existingKeys.has(dedupeKey)) continue; // idempotent re-run
 
-        const confidence = await aiMatchConfidence(cand.image_url, sciName);
+        const confidence = await aiMatchConfidence(cand.image_url, verifyName);
 
         const { error: insErr } = await supabase.from("species_image_candidates").insert({
           vendor_line_item_id: line.id,
