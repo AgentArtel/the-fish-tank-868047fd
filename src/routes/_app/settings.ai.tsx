@@ -12,6 +12,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { getAISettings, updateAISettings, testAISettings } from "@/lib/ai-settings.functions";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_app/settings/ai")({ component: AISettingsPage });
 
