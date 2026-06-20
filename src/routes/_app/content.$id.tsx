@@ -126,10 +126,11 @@ function ContentDetail() {
       <PageHeader title={form.title || "Untitled"} description={`Last updated ${new Date(item.updated_at).toLocaleString()}`}
         action={<div className="flex items-center gap-2"><StatusBadge status={item.status} />{isAdmin && (
           <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" disabled={remove.isPending}
-            onClick={() => { if (confirm(`Delete "${form.title || "Untitled"}"? This can't be undone.`)) remove.mutate(); }}>
+            onClick={() => setConfirmDel(true)}>
             <Trash2 className="w-4 h-4 mr-1" /> Delete
           </Button>
         )}</div>} />
+
 
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
