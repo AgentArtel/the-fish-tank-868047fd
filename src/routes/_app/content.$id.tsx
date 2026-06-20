@@ -19,7 +19,7 @@ import {
 } from "@/lib/workflow";
 import {
   updateContentStatus, getSignedUrl, getMe, deleteContentItem,
-  gatherSpeciesImages, listSpeciesImageCandidates,
+  listSpeciesImageCandidates,
   approveSpeciesImage, rejectSpeciesImage,
 } from "@/lib/cms.functions";
 import { Copy, Trash2, ArrowLeft, ImageDown, Check, X } from "lucide-react";
@@ -293,7 +293,6 @@ function MediaTile({ asset, onRemove }: { asset: any; onRemove: () => void }) {
 // --- Phase 2: per-species image candidates (find → AI-verify → human approve) ---
 function SpeciesImagesSection({ contentItemId, onApproved }: { contentItemId: string; onApproved: () => void }) {
   const qc = useQueryClient();
-  const gatherFn = useServerFn(gatherSpeciesImages);
   const listFn = useServerFn(listSpeciesImageCandidates);
   const approveFn = useServerFn(approveSpeciesImage);
   const rejectFn = useServerFn(rejectSpeciesImage);
@@ -304,9 +303,18 @@ function SpeciesImagesSection({ contentItemId, onApproved }: { contentItemId: st
   });
 
   const gather = useMutation({
-    mutationFn: () => gatherFn({ data: { contentItemId } }),
-    onSuccess: (r: any) => {
-      toast.success(`Found ${r.created} candidate image(s)`);
+    // External work (Firecrawl/Top Shelf scrape + AI) runs in the Supabase Edge
+    // Function — the app just invokes it and refetches the candidates table
+    // (data-driven). See CLAUDE.md Rule 7.
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("gather-species-images", {
+        body: { contentItemId },
+      });
+      if (error) throw error;
+      return data as { created?: number };
+    },
+    onSuccess: (r) => {
+      toast.success(`Found ${r?.created ?? 0} candidate image(s)`);
       refetch();
     },
     onError: (e: any) => toast.error(e.message),
