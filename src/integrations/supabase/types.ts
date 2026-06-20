@@ -793,6 +793,7 @@ export type Database = {
           product_id: string | null
           source_notes: string | null
           source_type: Database["public"]["Enums"]["source_type"]
+          species_key: string | null
           storage_path: string
           updated_at: string
           uploader_id: string | null
@@ -811,6 +812,7 @@ export type Database = {
           product_id?: string | null
           source_notes?: string | null
           source_type?: Database["public"]["Enums"]["source_type"]
+          species_key?: string | null
           storage_path: string
           updated_at?: string
           uploader_id?: string | null
@@ -829,6 +831,7 @@ export type Database = {
           product_id?: string | null
           source_notes?: string | null
           source_type?: Database["public"]["Enums"]["source_type"]
+          species_key?: string | null
           storage_path?: string
           updated_at?: string
           uploader_id?: string | null
@@ -1026,74 +1029,6 @@ export type Database = {
             columns: ["content_item_id"]
             isOneToOne: false
             referencedRelation: "content_items"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      species_image_candidates: {
-        Row: {
-          ai_match_confidence: number | null
-          approved: boolean
-          approved_at: string | null
-          approved_by: string | null
-          attribution: string | null
-          commercial_ok: boolean | null
-          created_at: string
-          created_by: string | null
-          id: string
-          image_url: string
-          license: string | null
-          source: string
-          source_url: string
-          species_key: string | null
-          storage_path: string | null
-          updated_at: string
-          vendor_line_item_id: string | null
-        }
-        Insert: {
-          ai_match_confidence?: number | null
-          approved?: boolean
-          approved_at?: string | null
-          approved_by?: string | null
-          attribution?: string | null
-          commercial_ok?: boolean | null
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          image_url: string
-          license?: string | null
-          source: string
-          source_url: string
-          species_key?: string | null
-          storage_path?: string | null
-          updated_at?: string
-          vendor_line_item_id?: string | null
-        }
-        Update: {
-          ai_match_confidence?: number | null
-          approved?: boolean
-          approved_at?: string | null
-          approved_by?: string | null
-          attribution?: string | null
-          commercial_ok?: boolean | null
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          image_url?: string
-          license?: string | null
-          source?: string
-          source_url?: string
-          species_key?: string | null
-          storage_path?: string | null
-          updated_at?: string
-          vendor_line_item_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "species_image_candidates_vendor_line_item_id_fkey"
-            columns: ["vendor_line_item_id"]
-            isOneToOne: false
-            referencedRelation: "vendor_line_items"
             referencedColumns: ["id"]
           },
         ]
