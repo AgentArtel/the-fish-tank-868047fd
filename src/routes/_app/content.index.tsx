@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/page-header";
@@ -9,8 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { STATUS_LABELS, type ContentStatus } from "@/lib/workflow";
-import { getMe, getContentSettings, setVendorPhotosOk } from "@/lib/cms.functions";
-import { Plus } from "lucide-react";
+import { getMe, getContentSettings, setVendorPhotosOk, deleteContentItem } from "@/lib/cms.functions";
+import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -26,7 +26,12 @@ export const Route = createFileRoute("/_app/content/")({
 
 function ContentList() {
   const nav = useNavigate({ from: "/content/" });
+  const qc = useQueryClient();
   const { status, q } = Route.useSearch();
+  const meFn = useServerFn(getMe);
+  const delFn = useServerFn(deleteContentItem);
+  const { data: me } = useQuery({ queryKey: ["me"], queryFn: () => meFn() });
+  const isAdmin = (me?.roles ?? []).includes("admin");
   const { data, isLoading } = useQuery({
     queryKey: ["content", status, q],
     queryFn: async () => {
@@ -40,6 +45,15 @@ function ContentList() {
       return data ?? [];
     },
   });
+
+  const del = useMutation({
+    mutationFn: (id: string) => delFn({ data: { id } }),
+    onSuccess: () => { toast.success("Post deleted"); qc.invalidateQueries({ queryKey: ["content"] }); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const onDelete = (id: string, title: string) => {
+    if (confirm(`Delete "${title || "Untitled"}"? This can't be undone.`)) del.mutate(id);
+  };
 
   return (
     <div className="p-8">
@@ -60,19 +74,20 @@ function ContentList() {
       <div className="rounded-lg border bg-card overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-left">
-            <tr><th className="p-3">Title</th><th className="p-3">Type</th><th className="p-3">Status</th><th className="p-3">Scheduled</th></tr>
+            <tr><th className="p-3">Title</th><th className="p-3">Type</th><th className="p-3">Status</th><th className="p-3">Scheduled</th>{isAdmin && <th className="p-3 w-10"></th>}</tr>
           </thead>
           <tbody>
-            {isLoading && <tr><td colSpan={4} className="p-6 text-center text-muted-foreground">Loading…</td></tr>}
+            {isLoading && <tr><td colSpan={isAdmin ? 5 : 4} className="p-6 text-center text-muted-foreground">Loading…</td></tr>}
             {(data ?? []).map(item => (
               <tr key={item.id} className="border-t hover:bg-muted/30">
                 <td className="p-3"><Link to="/content/$id" params={{id:item.id}} className="font-medium hover:underline">{item.title}</Link></td>
                 <td className="p-3 text-muted-foreground">{item.content_type}</td>
                 <td className="p-3"><StatusBadge status={item.status as ContentStatus} /></td>
                 <td className="p-3 text-muted-foreground">{item.scheduled_date ? new Date(item.scheduled_date).toLocaleString() : "—"}</td>
+                {isAdmin && <td className="p-3"><Button variant="ghost" size="sm" className="h-7 text-muted-foreground hover:text-destructive" disabled={del.isPending} onClick={() => onDelete(item.id, item.title)} aria-label="Delete"><Trash2 className="w-4 h-4" /></Button></td>}
               </tr>
             ))}
-            {data?.length === 0 && <tr><td colSpan={4} className="p-6 text-center text-muted-foreground">No items.</td></tr>}
+            {data?.length === 0 && <tr><td colSpan={isAdmin ? 5 : 4} className="p-6 text-center text-muted-foreground">No items.</td></tr>}
           </tbody>
         </table>
       </div>
