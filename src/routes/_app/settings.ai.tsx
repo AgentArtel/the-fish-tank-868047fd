@@ -38,6 +38,13 @@ function AISettingsPage() {
   const [geminiFlash, setGeminiFlash] = useState("gemini-2.5-flash");
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+  const [seedResult, setSeedResult] = useState<null | {
+    scanned: number;
+    inserted: number;
+    skipped: number;
+    errors: Array<{ name: string; error: string }>;
+  }>(null);
 
   useEffect(() => {
     if (!data) return;
