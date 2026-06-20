@@ -164,6 +164,35 @@ export const buildArrivalPostFromBatch = createServerFn({ method: "POST" })
       .single();
     if (insErr) throw new Error(insErr.message);
 
+    // Auto-attach any previously-uploaded images for these species. So the
+    // second time a fish shows up in a PO, the draft post comes back already
+    // illustrated — no clicks needed.
+    const keys = Array.from(
+      new Set(livestock.map((l) => speciesKeyFromLine(l)).filter(Boolean) as string[]),
+    );
+    if (keys.length) {
+      const { data: assets } = await supabase
+        .from("media_assets")
+        .select("id, species_key, created_at")
+        .in("species_key", keys)
+        .eq("media_type", "image")
+        .order("created_at", { ascending: false });
+      // Pick the most-recent asset per species_key.
+      const picked = new Map<string, string>();
+      for (const a of assets ?? []) {
+        const k = (a as any).species_key as string;
+        if (!picked.has(k)) picked.set(k, (a as any).id);
+      }
+      if (picked.size) {
+        await supabase.from("content_media").insert(
+          Array.from(picked.values()).map((mediaAssetId) => ({
+            content_item_id: inserted.id,
+            media_asset_id: mediaAssetId,
+          })),
+        );
+      }
+    }
+
     return { contentItemId: inserted.id };
   });
 
