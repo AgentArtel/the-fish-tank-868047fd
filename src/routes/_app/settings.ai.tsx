@@ -12,6 +12,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { getAISettings, updateAISettings, testAISettings } from "@/lib/ai-settings.functions";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_app/settings/ai")({ component: AISettingsPage });
 
@@ -37,6 +38,13 @@ function AISettingsPage() {
   const [geminiFlash, setGeminiFlash] = useState("gemini-2.5-flash");
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+  const [seedResult, setSeedResult] = useState<null | {
+    scanned: number;
+    inserted: number;
+    skipped: number;
+    errors: Array<{ name: string; error: string }>;
+  }>(null);
 
   useEffect(() => {
     if (!data) return;
@@ -111,6 +119,24 @@ function AISettingsPage() {
       toast.error(e?.message ?? "Test failed");
     } finally {
       setTesting(false);
+    }
+  };
+
+  const seedGlossary = async () => {
+    if (seeding) return;
+    setSeeding(true);
+    setSeedResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("seed-topshelf-glossary", {
+        body: {},
+      });
+      if (error) throw new Error(error.message);
+      setSeedResult(data);
+      toast.success(`Seeded ${data.inserted} new species (${data.skipped} skipped)`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Seed failed");
+    } finally {
+      setSeeding(false);
     }
   };
 
@@ -253,6 +279,36 @@ function AISettingsPage() {
               )}
             </div>
           )}
+
+          <section className="rounded-lg border bg-card p-5 space-y-3">
+            <div>
+              <h2 className="text-base font-semibold">Species image library — one-time seed</h2>
+              <p className="text-xs text-muted-foreground mt-1">
+                Scrapes the Top Shelf saltwater fish glossary once and saves each fish photo to the
+                species library (tagged by scientific name). Future PO drafts auto-attach matching
+                photos. Safe to re-run — already-seeded species are skipped.
+              </p>
+            </div>
+            <Button onClick={seedGlossary} disabled={seeding} variant="secondary">
+              {seeding ? "Seeding…" : "Seed Top Shelf fish glossary"}
+            </Button>
+            {seedResult && (
+              <div className="text-xs rounded-md border bg-muted/30 p-3 space-y-1">
+                <div>
+                  Scanned <strong>{seedResult.scanned}</strong> · Inserted{" "}
+                  <strong>{seedResult.inserted}</strong> · Skipped{" "}
+                  <strong>{seedResult.skipped}</strong>
+                </div>
+                {seedResult.errors.length > 0 && (
+                  <div className="text-amber-700 dark:text-amber-400">
+                    {seedResult.errors.length} error{seedResult.errors.length === 1 ? "" : "s"}:{" "}
+                    {seedResult.errors.slice(0, 3).map((e) => e.name).join(", ")}
+                    {seedResult.errors.length > 3 ? "…" : ""}
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
         </>
       )}
     </div>
