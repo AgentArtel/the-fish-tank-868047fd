@@ -1,80 +1,45 @@
+## What changes
 
-## Goal
+### 1. Real CRUD on draft posts
+Replace the browser `confirm()` with the shadcn `AlertDialog` (matches the rest of the app), surface server errors inline, and remove the row optimistically with rollback on failure. Applies to both the content list (`/content`) and the content detail page (`/content/$id`).
 
-`gather-species-images` currently returns one weak Top Shelf hit per species and often picks the wrong fish. Take ownership of the scrape + match logic inside the edge function and iterate against live Firecrawl responses until the three verification species each return their actual fish as a high-confidence candidate.
+### 2. Cut the image scraper
+- Delete edge function `supabase/functions/gather-species-images/` and its entry in `supabase/config.toml`.
+- Drop `species_image_candidates` table (migration).
+- Remove server fns `listSpeciesImageCandidates`, `approveSpeciesImage`, `rejectSpeciesImage`, and the now-orphaned `materializeIntoMediaBucket` helper from `src/lib/cms.functions.ts`.
+- Remove the `SpeciesImagesSection` / `CandidateTile` components from `src/routes/_app/content.$id.tsx`.
 
-Data contract is unchanged: per livestock line, clear stale unapproved rows, then insert multiple `species_image_candidates` rows (top 3–5) with `ai_match_confidence` set per row and `approved=false`. The app/human picks the winner.
+### 3. Upload-once species image library
+The existing `media_assets` table already holds uploaded images. We tag each one with the species it represents, then look it up by species on every future post.
 
-## Approach
+**Schema:** add `species_key TEXT` (nullable) + index to `media_assets`. The key is `lower(trim(scientific_name))` when present, otherwise `lower(trim(clean_item_name))`.
 
-### 1. Probe the real Top Shelf endpoints (before writing code)
+**New section on the post detail page — "Species images":** lists each livestock line from the linked batch. For each line:
+- If a `media_asset` already exists for that `species_key`: show the thumbnail with an "Attach to post" / "Attached" button (no re-upload needed — this is the reuse path).
+- If none exists: an inline "Upload image" file picker that uploads to the `media` bucket, inserts a `media_asset` with `species_key` set, and auto-attaches it to the post via `content_media`.
 
-Use a throwaway script (run via `code--exec` with `FIRECRAWL_API_KEY` from secrets) to hit each candidate endpoint for the three verification species and inspect the actual JSON/HTML shape Firecrawl returns. Candidates, in priority order:
+**Auto-attach on post build:** `buildArrivalPostFromBatch` already creates the draft `content_item` from the batch's livestock lines. After insert, it now looks up `media_assets` by each line's `species_key` and inserts the matches into `content_media`. So the second time a species shows up in any PO, the post comes back pre-illustrated — zero clicks needed.
 
-- `/search/suggest.json?q=<q>&resources[type]=product&resources[limit]=10` — current path; verify what `image`, `featured_image`, `images[]`, `url`, `title`, `vendor`, `tags` actually contain.
-- `/search?q=<q>&type=product&view=json` (Shopify search JSON view, if exposed).
-- `/search?q=<q>&type=product` HTML — parse product cards from rendered markup as a fallback.
-- `/collections/saltwater-fish/products.json` (and `/collections/all/products.json`) — full product feed; cache-friendly, lets us do our own fuzzy match across titles/tags/body_html.
+**Button preserved:** the existing "Build new-arrivals post" button on the batch page is unchanged.
 
-Pick the endpoint(s) that come back cleanly via Firecrawl with images + titles + URLs + (ideally) tags or body text we can match against.
+## Technical notes
 
-### 2. Multi-query strategy per species
+- `media_assets` rows are global (no per-post FK), so adding `species_key` makes them naturally reusable across every post.
+- The species lookup is case/whitespace-insensitive; the same column populated client-side at upload time and server-side at post-build time so it stays consistent.
+- Cascade deletes already handle `content_media` and `content_platforms` when a `content_item` is deleted — no extra cleanup needed for the delete hardening.
+- Drop migration for `species_image_candidates` includes `DROP POLICY` and `REVOKE`/`DROP TABLE CASCADE` so RLS objects are cleaned up.
+- Edge function deletion uses `supabase--delete_edge_functions` to remove the deployed function, plus removing the local source + config entry.
 
-For each line, build a small ordered list of queries and union the results (dedup by product handle):
+## Files touched
 
-1. Clean common name (e.g. `Royal Gramma`).
-2. Scientific name (e.g. `Gramma loreto`).
-3. Last word of common name (e.g. `Gramma`, `Basslet`, `Firefish`) as a wider net.
-4. Strip noise tokens: `pack`, `WYSIWYG`, `sm/md/lg`, sizes, counts, parenthetical qualifiers, trailing punctuation.
-
-### 3. Score every product (not just first hit)
-
-For each product returned, compute a title-match score combining:
-
-- Token-set overlap between resolved common name and product title (case-insensitive, ignore stopwords like `the`, `aquacultured`, `captive`, `bred`, size suffixes).
-- Bonus if scientific name (or genus) appears in title / tags / body_html.
-- Penalty for obvious mismatch tokens (different family names, e.g. "Wrasse" when we're looking for a Gramma).
-
-Keep top N (~6) by title score for vision verification.
-
-### 4. AI-vision verification (filter + final rank)
-
-Score each surviving candidate with `aiMatchConfidence(imageUrl, scientific || common)`. Combine:
-
-- `final = 0.6 * vision_confidence + 0.4 * title_score` (or similar).
-- Drop candidates with `vision_confidence < 0.35` (filters wrong species even when title matched coincidentally).
-- Keep top 3–5 and insert as candidate rows with the vision score stored in `ai_match_confidence`.
-
-If Top Shelf returns nothing usable after filtering, fall back to Wikipedia + iNaturalist (already wired) so the human always has something to approve or reject.
-
-### 5. Iterate against the three verification species
-
-This is the key step the user asked for. Loop:
-
-1. Deploy current edge function with `supabase--deploy_edge_functions`.
-2. Either: invoke against a real content item via `supabase--curl_edge_functions`, OR run the scrape/match logic standalone in the sandbox (using the same Firecrawl key) against `Royal Gramma`, `Chalk Basslet`, `Helfrich's Firefish` to see ranked candidates.
-3. Inspect: are the top candidates actually that fish? Are wrong-species products filtered out by vision? Are the title-score weights right?
-4. Adjust query list, tokenization, weights, or endpoint choice; redeploy; repeat until each species reliably surfaces its real photo in the top candidates.
-5. Check `supabase--edge_function_logs` for failures/timeouts along the way.
-
-### 6. Keep the contract intact
-
-- `verify_jwt = true`, editor gate via `can_edit_content` — unchanged.
-- Clear stale unapproved rows for the batch's lines before inserting — unchanged.
-- Per-row fields: `vendor_line_item_id`, `species_key`, `source='topshelf'|'wikipedia'|'inaturalist'`, `source_url`, `image_url`, `license`, `attribution`, `commercial_ok=false` for Top Shelf, `ai_match_confidence`, `approved=false`, `created_by` — unchanged.
-- Return shape `{ created, perSpecies: [{ lineId, speciesKey, added, note? }] }` — unchanged. (May add a `topScore` per species in `note` for easier debugging.)
-
-## Files
-
-- `supabase/functions/gather-species-images/index.ts` — rewrite `fromTopShelf` + add scoring helpers + adjust orchestration in the per-line loop. No other files change.
+- `supabase/migrations/<new>.sql` — add `media_assets.species_key`, index; drop `species_image_candidates`.
+- `supabase/functions/gather-species-images/` — deleted.
+- `supabase/config.toml` — remove function entry.
+- `src/lib/cms.functions.ts` — remove scraper fns; extend `buildArrivalPostFromBatch` with the species-image auto-attach; add `uploadSpeciesImage` + `listSpeciesMediaForBatch` server fns (or use direct client calls — to be picked at build time).
+- `src/routes/_app/content.index.tsx` — AlertDialog + optimistic delete.
+- `src/routes/_app/content.$id.tsx` — AlertDialog + optimistic delete; replace `SpeciesImagesSection` with new upload/reuse `SpeciesMediaSection`.
 
 ## Out of scope
 
-- App-side changes (PR #69 stays as-is).
-- Schema changes.
-- Auto-approval — still human-gated.
-- Storage upload on approve (separate task).
-
-## Done when
-
-Invoking the function for a batch containing Royal Gramma (Gramma loreto), Chalk Basslet (Serranus tortugarum), and Helfrich's Firefish (Nemateleotris helfrichi) inserts 3+ candidates per line, and for each line the correct species appears as one of the top candidates by `ai_match_confidence`, with obvious wrong-species hits filtered out.
+- No changes to the "Build new-arrivals post" button itself or to any other batch UI.
+- No bulk import of historical media — only future uploads get tagged.
