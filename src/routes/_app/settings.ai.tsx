@@ -122,6 +122,24 @@ function AISettingsPage() {
     }
   };
 
+  const seedGlossary = async () => {
+    if (seeding) return;
+    setSeeding(true);
+    setSeedResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("seed-topshelf-glossary", {
+        body: {},
+      });
+      if (error) throw new Error(error.message);
+      setSeedResult(data);
+      toast.success(`Seeded ${data.inserted} new species (${data.skipped} skipped)`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Seed failed");
+    } finally {
+      setSeeding(false);
+    }
+  };
+
   return (
     <div className="p-8 max-w-3xl space-y-6">
       <PageHeader
