@@ -302,46 +302,31 @@ export const inviteUser = createServerFn({ method: "POST" })
   });
 
 // =========================================================================
-// Phase 2 — species image sourcing + human approve.
+// Species image library — manual upload, reused across PO posts.
 //
-// Draft-only / human-in-the-loop. Every external (Wikipedia / iNaturalist /
-// vendor-Firecrawl) and AI step is wrapped so one failure is skipped and never
-// breaks the whole run. NO auto-publish, NO Facebook. A human approves every
-// image before it becomes a media asset on the post.
+// One image per species lives in media_assets keyed by species_key. The next
+// time the same species shows up on a vendor batch, we look up the existing
+// asset and auto-attach it to the new draft post — no re-upload needed.
 // =========================================================================
-
-// Approved candidate images are materialized into media_assets / the media
-// library. The media library (media.tsx, getSignedUrl) signs from the "media"
-// bucket, so approved images must land there. downloadImage (reused) targets the
-// "inventory-media" bucket, which is the wrong bucket for media_assets — so on
-// APPROVE we fetch+upload into "media" with this tiny helper (no scraper logic;
-// just fetch → upload, mirroring downloadImage's shape). downloadImage stays the
-// precedent / reused helper for any inventory-media materialization.
-async function materializeIntoMediaBucket(
-  supabaseAdmin: any,
-  opts: { url: string; bucketPath: string },
-): Promise<string> {
-  const res = await fetch(opts.url, {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-      Accept: "image/*,*/*",
-    },
-  });
-  if (!res.ok) throw new Error(`Image fetch ${res.status} for ${opts.url}`);
-  const buf = new Uint8Array(await res.arrayBuffer());
-  const contentType = res.headers.get("content-type") || "image/jpeg";
-  const { error } = await supabaseAdmin.storage
-    .from("media")
-    .upload(opts.bucketPath, buf, { contentType, upsert: true });
-  if (error) throw new Error(`Image upload failed: ${error.message}`);
-  return opts.bucketPath;
-}
 
 const ARRIVAL_IMG_TYPES = ["fish", "coral", "invert", "live_rock"] as const;
 
-// List candidates for a post (grouped client-side). Active-staff read.
-export const listSpeciesImageCandidates = createServerFn({ method: "POST" })
+// Normalize a species name to the lookup key. Prefers scientific over common.
+export function speciesKeyFromLine(line: {
+  scientific_name?: string | null;
+  clean_item_name?: string | null;
+  raw_description?: string | null;
+}): string | null {
+  const raw = line.scientific_name || line.clean_item_name || line.raw_description;
+  if (!raw) return null;
+  const k = raw.toString().trim().toLowerCase();
+  return k || null;
+}
+
+// List livestock lines on the batch tied to this post + any media_assets that
+// already match those species (so we can show "already uploaded — attach" vs.
+// "needs upload"). Active-staff read.
+export const listSpeciesMediaForPost = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ contentItemId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
@@ -358,144 +343,59 @@ export const listSpeciesImageCandidates = createServerFn({ method: "POST" })
       .select("source_vendor_batch_id")
       .eq("id", data.contentItemId)
       .maybeSingle();
-    if (!item?.source_vendor_batch_id) return { lines: [], candidates: [] };
+    if (!item?.source_vendor_batch_id) return { lines: [], assetsByKey: {} as Record<string, any[]>, attachedAssetIds: [] as string[] };
 
     const { data: lines } = await supabase
       .from("vendor_line_items")
       .select("id, clean_item_name, raw_description, scientific_name, item_type")
       .eq("vendor_batch_id", item.source_vendor_batch_id)
       .eq("kind", "sellable")
-      // Livestock OR not-yet-classified (item_type NULL after AI extraction).
       .or(`item_type.is.null,item_type.in.(${ARRIVAL_IMG_TYPES.join(",")})`)
       .order("line_number", { nullsFirst: false });
 
-    const lineIds = (lines ?? []).map((l: any) => l.id);
-    let candidates: any[] = [];
-    if (lineIds.length) {
-      const { data: cands } = await supabase
-        .from("species_image_candidates")
-        .select(
-          "id, vendor_line_item_id, species_key, source, source_url, image_url, license, attribution, commercial_ok, ai_match_confidence, storage_path, approved, approved_at",
-        )
-        .in("vendor_line_item_id", lineIds)
-        .order("ai_match_confidence", { ascending: false, nullsFirst: false });
-      candidates = cands ?? [];
+    const keys = Array.from(
+      new Set((lines ?? []).map((l: any) => speciesKeyFromLine(l)).filter(Boolean) as string[]),
+    );
+    let assetsByKey: Record<string, any[]> = {};
+    if (keys.length) {
+      const { data: assets } = await supabase
+        .from("media_assets")
+        .select("id, file_name, storage_path, media_type, alt_text, species_key, created_at")
+        .in("species_key", keys)
+        .eq("media_type", "image")
+        .order("created_at", { ascending: false });
+      for (const a of assets ?? []) {
+        const k = (a as any).species_key as string;
+        (assetsByKey[k] ??= []).push(a);
+      }
     }
-    return { lines: lines ?? [], candidates };
+
+    const { data: attached } = await supabase
+      .from("content_media")
+      .select("media_asset_id")
+      .eq("content_item_id", data.contentItemId);
+
+    return {
+      lines: lines ?? [],
+      assetsByKey,
+      attachedAssetIds: (attached ?? []).map((r: any) => r.media_asset_id),
+    };
   });
 
-export const approveSpeciesImage = createServerFn({ method: "POST" })
+// Attach an existing media_asset to the post (idempotent on duplicate link).
+export const attachMediaToPost = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
-    z.object({ candidateId: z.string().uuid(), contentItemId: z.string().uuid() }).parse(d),
+    z.object({ contentItemId: z.string().uuid(), mediaAssetId: z.string().uuid() }).parse(d),
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     await requireEditor(supabase, userId);
-
-    const { data: cand, error: candErr } = await supabase
-      .from("species_image_candidates")
-      .select(
-        "id, vendor_line_item_id, species_key, source, source_url, image_url, license, attribution, commercial_ok, storage_path, approved",
-      )
-      .eq("id", data.candidateId)
-      .maybeSingle();
-    if (candErr) throw new Error(candErr.message);
-    if (!cand) throw new Error("Candidate not found");
-
-    // Confirm the post is linked to a batch (and exists). Draft-only — we never
-    // change the post's status here.
-    const { data: item } = await supabase
-      .from("content_items")
-      .select("id")
-      .eq("id", data.contentItemId)
-      .maybeSingle();
-    if (!item) throw new Error("Content item not found");
-
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-    // Materialize the remote image into the media bucket (idempotent path).
-    const ext = (cand.image_url.split("?")[0].split(".").pop() || "jpg").toLowerCase().slice(0, 5);
-    const safeExt = /^[a-z0-9]+$/.test(ext) ? ext : "jpg";
-    const bucketPath = `species/${data.candidateId}.${safeExt}`;
-    let storagePath = cand.storage_path as string | null;
-    if (!storagePath) {
-      storagePath = await materializeIntoMediaBucket(supabaseAdmin, {
-        url: cand.image_url,
-        bucketPath,
-      });
-    }
-
-    // Map the candidate license → media_assets usage_rights enum.
-    const usageRights =
-      cand.source === "vendor"
-        ? "vendor_allowed"
-        : cand.commercial_ok
-          ? "owned"
-          : "needs_permission";
-
-    const fileName = `${(cand.species_key || "species").toString().slice(0, 80)} (${cand.source})`;
-    const sourceNotes = [
-      cand.attribution ? `Attribution: ${cand.attribution}` : null,
-      cand.license ? `License: ${cand.license}` : null,
-      cand.source_url ? `Source: ${cand.source_url}` : null,
-    ]
-      .filter(Boolean)
-      .join(" | ");
-
-    const { data: asset, error: assetErr } = await supabase
-      .from("media_assets")
-      .insert({
-        file_name: fileName,
-        media_type: "image",
-        storage_path: storagePath,
-        source_type: "vendor_asset",
-        usage_rights: usageRights,
-        source_notes: sourceNotes || null,
-        alt_text: cand.species_key || null,
-        uploader_id: userId,
-      })
-      .select("id")
-      .single();
-    if (assetErr) throw new Error(assetErr.message);
-
-    // Link to the post via content_media (skip if already linked).
-    const { error: linkErr } = await supabase.from("content_media").insert({
+    const { error } = await supabase.from("content_media").insert({
       content_item_id: data.contentItemId,
-      media_asset_id: asset.id,
+      media_asset_id: data.mediaAssetId,
     });
-    if (linkErr && !/duplicate|unique/i.test(linkErr.message)) {
-      throw new Error(linkErr.message);
-    }
-
-    // Flag the candidate approved.
-    const { error: upErr } = await supabase
-      .from("species_image_candidates")
-      .update({
-        storage_path: storagePath,
-        approved: true,
-        approved_at: new Date().toISOString(),
-        approved_by: userId,
-      })
-      .eq("id", data.candidateId);
-    if (upErr) throw new Error(upErr.message);
-
-    return { ok: true, mediaAssetId: asset.id };
-  });
-
-export const rejectSpeciesImage = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ candidateId: z.string().uuid() }).parse(d))
-  .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
-    await requireEditor(supabase, userId);
-    // Reject = remove the candidate row (it was never approved/materialized).
-    const { error } = await supabase
-      .from("species_image_candidates")
-      .delete()
-      .eq("id", data.candidateId)
-      .eq("approved", false);
-    if (error) throw new Error(error.message);
+    if (error && !/duplicate|unique/i.test(error.message)) throw new Error(error.message);
     return { ok: true };
   });
 
