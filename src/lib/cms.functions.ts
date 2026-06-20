@@ -3,7 +3,6 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { isTransitionAllowed, type ContentStatus } from "./workflow";
 import { requireAdmin, requireEditor } from "@/lib/auth-guards";
-import { fetchViaFirecrawl, downloadImage } from "@/lib/scrape.functions";
 import { callAIChat } from "@/lib/ai-call.server";
 
 export const getMe = createServerFn({ method: "GET" })
@@ -387,33 +386,35 @@ async function fromINaturalist(scientificName: string): Promise<GatheredCandidat
   return out.filter((c) => c.commercial_ok);
 }
 
-// --- Source: vendor product page via Firecrawl (best-effort bonus tier) ---
-// Scrapes the vendor's website and extracts an og:image / first product image.
-// Keyed loosely on the species name appearing near the image; if nothing solid
-// is found we return [] (skip silently). Intentionally minimal — bonus tier.
-async function fromVendorFirecrawl(
-  vendorUrl: string,
-  scientificName: string,
-): Promise<GatheredCandidate[]> {
-  const html = await fetchViaFirecrawl(vendorUrl);
-  // Prefer an og:image; otherwise the first plausible <img src>.
-  const og = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i);
-  let img = og?.[1] ?? null;
-  if (!img) {
-    const first = html.match(/<img[^>]+src=["'](https?:\/\/[^"']+\.(?:jpe?g|png|webp)[^"']*)["']/i);
-    img = first?.[1] ?? null;
+// --- AI: resolve a messy livestock line name → a single scientific binomial ---
+// Livestock invoice lines are often common names, multi-species "packs", or have
+// the binomial buried in free text — so the scientific-name-keyed image APIs find
+// nothing. Ask the AI to extract/resolve one clean "Genus species". Best-effort:
+// returns null if it can't determine one.
+async function resolveScientificName(rawName: string): Promise<string | null> {
+  try {
+    const { json } = await callAIChat({
+      tier: "flash",
+      lovableModel: "google/gemini-2.5-flash",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `You are a marine-aquarium taxonomy expert. Given this livestock line-item name, reply with ONLY the single most likely species' scientific name as a binomial "Genus species" (for a multi-species pack, the primary/first species). If you cannot determine one, reply NONE. Name: "${rawName}"`,
+            },
+          ],
+        },
+      ],
+    });
+    const txt: string = (json?.choices?.[0]?.message?.content ?? "").trim();
+    if (!txt || /^none/i.test(txt)) return null;
+    const m = txt.match(/[A-Z][a-z]+ [a-z]+/);
+    return m?.[0] ?? null;
+  } catch {
+    return null;
   }
-  if (!img) return [];
-  return [
-    {
-      source: "vendor",
-      source_url: vendorUrl,
-      image_url: img,
-      license: "vendor_allowed",
-      attribution: `Vendor product page (${scientificName})`,
-      commercial_ok: true,
-    },
-  ];
 }
 
 // --- AI vision verify (best-effort): score "does this depict <species>?" ---
@@ -465,27 +466,6 @@ export const gatherSpeciesImages = createServerFn({ method: "POST" })
     }
     const batchId = item.source_vendor_batch_id;
 
-    // Batch → vendor website (gates the vendor-Firecrawl tier).
-    const { data: batch } = await supabase
-      .from("vendor_batches")
-      .select("id, vendor_id, vendors(website)")
-      .eq("id", batchId)
-      .maybeSingle();
-    const vendorUrl = (batch?.vendors as any)?.website?.toString().trim() || null;
-
-    // Workspace attestation gate for vendor photos (admin-only singleton).
-    let vendorPhotosOk = false;
-    try {
-      const { data: settings } = await supabase
-        .from("workspace_content_settings")
-        .select("vendor_photos_ok")
-        .limit(1)
-        .maybeSingle();
-      vendorPhotosOk = !!settings?.vendor_photos_ok;
-    } catch {
-      vendorPhotosOk = false;
-    }
-
     // Livestock lines on the batch.
     const { data: lines, error: linesErr } = await supabase
       .from("vendor_line_items")
@@ -519,28 +499,28 @@ export const gatherSpeciesImages = createServerFn({ method: "POST" })
     }> = [];
 
     for (const line of lines ?? []) {
-      const speciesKey =
-        line.scientific_name?.toString().trim() || line.clean_item_name?.toString().trim() || null;
-      // Skip lines with no usable name at all.
-      if (!speciesKey) {
-        perSpecies.push({ lineId: line.id, speciesKey: null, added: 0, note: "no usable name" });
+      const rawName =
+        line.clean_item_name?.toString().trim() || line.raw_description?.toString().trim() || null;
+      // The free image APIs key on a scientific binomial. Use the line's
+      // scientific_name if present; otherwise AI-resolve the messy line name
+      // (common names / packs / embedded binomials) to one.
+      let sciName = line.scientific_name?.toString().trim() || null;
+      if (!sciName && rawName) sciName = await resolveScientificName(rawName);
+      const speciesKey = sciName || rawName;
+      // No resolvable species name → nothing to look up; record and move on.
+      if (!sciName) {
+        perSpecies.push({
+          lineId: line.id,
+          speciesKey,
+          added: 0,
+          note: "no scientific name (couldn't resolve)",
+        });
         continue;
       }
-      // Scientific name is the lookup key for the free APIs; without it we can
-      // still try the vendor tier but the reliable workhorses need a binomial.
-      const sciName = line.scientific_name?.toString().trim() || speciesKey;
 
       const gathered: GatheredCandidate[] = [];
 
-      // Vendor-first (bonus tier) — only if attested AND vendor has a URL.
-      if (vendorPhotosOk && vendorUrl) {
-        try {
-          gathered.push(...(await fromVendorFirecrawl(vendorUrl, sciName)));
-        } catch {
-          /* skip — graceful degrade */
-        }
-      }
-      // Reliable workhorses.
+      // Reliable workhorses (scientific-name keyed, license-clean).
       try {
         gathered.push(...(await fromWikipedia(sciName)));
       } catch {
