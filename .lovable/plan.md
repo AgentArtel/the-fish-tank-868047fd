@@ -1,45 +1,35 @@
-## What changes
+## One-time seed: Top Shelf fish glossary → species image library
 
-### 1. Real CRUD on draft posts
-Replace the browser `confirm()` with the shadcn `AlertDialog` (matches the rest of the app), surface server errors inline, and remove the row optimistically with rollback on failure. Applies to both the content list (`/content`) and the content detail page (`/content/$id`).
+Scrape `https://topshelfaquatics.com/pages/fish-glossary` once, download every fish image, and load them into `media_assets` tagged with `species_key` so they auto-attach to future PO drafts (same upload-once flow we just shipped).
 
-### 2. Cut the image scraper
-- Delete edge function `supabase/functions/gather-species-images/` and its entry in `supabase/config.toml`.
-- Drop `species_image_candidates` table (migration).
-- Remove server fns `listSpeciesImageCandidates`, `approveSpeciesImage`, `rejectSpeciesImage`, and the now-orphaned `materializeIntoMediaBucket` helper from `src/lib/cms.functions.ts`.
-- Remove the `SpeciesImagesSection` / `CandidateTile` components from `src/routes/_app/content.$id.tsx`.
+### How it runs
 
-### 3. Upload-once species image library
-The existing `media_assets` table already holds uploaded images. We tag each one with the species it represents, then look it up by species on every future post.
+A new admin-only Supabase Edge Function `seed-topshelf-glossary` (per project rule 7: external HTTP belongs in an edge function, not the app Worker). Triggered manually by an admin via a small button on `/settings.ai` (or wherever you prefer — say the word). No cron, no schedule, no UI elsewhere.
 
-**Schema:** add `species_key TEXT` (nullable) + index to `media_assets`. The key is `lower(trim(scientific_name))` when present, otherwise `lower(trim(clean_item_name))`.
+### What it does
 
-**New section on the post detail page — "Species images":** lists each livestock line from the linked batch. For each line:
-- If a `media_asset` already exists for that `species_key`: show the thumbnail with an "Attach to post" / "Attached" button (no re-upload needed — this is the reuse path).
-- If none exists: an inline "Upload image" file picker that uploads to the `media` bucket, inserts a `media_asset` with `species_key` set, and auto-attaches it to the post via `content_media`.
+1. Fetch the glossary page via Firecrawl (`scrape`, formats `['html','links']`).
+2. Parse out each fish entry — pair the `<img>` with its nearby caption (common name, and scientific name when present in italics/parentheses).
+3. For each entry:
+   - Compute `species_key` = `lower(trim(scientific_name))` if available, else `lower(trim(common_name))` — same rule as `buildArrivalPostFromBatch`.
+   - Skip if a `media_assets` row already exists with that `species_key` (idempotent — safe to re-run).
+   - Download the image, upload to the existing `media-assets` storage bucket under `species-seed/topshelf/<species_key>.<ext>`.
+   - Insert a `media_assets` row: `species_key`, `storage_path`, `public_url`, `kind='image'`, `source='topshelf-glossary'`, `attribution='Top Shelf Aquatics'`, `created_by = caller`.
+4. Return `{ scanned, inserted, skipped, errors[] }` so the admin sees the result inline.
 
-**Auto-attach on post build:** `buildArrivalPostFromBatch` already creates the draft `content_item` from the batch's livestock lines. After insert, it now looks up `media_assets` by each line's `species_key` and inserts the matches into `content_media`. So the second time a species shows up in any PO, the post comes back pre-illustrated — zero clicks needed.
+### Out of scope
 
-**Button preserved:** the existing "Build new-arrivals post" button on the batch page is unchanged.
+- No changes to PO flow, content detail page, or `buildArrivalPostFromBatch` — they already read `media_assets` by `species_key`, so seeded rows just show up.
+- No vendor scraper, no AI matching, no candidate-review step. Trust the glossary's own labels.
+- No corals/inverts — fish glossary only. (Easy to add a second page later.)
 
-## Technical notes
+### Files
 
-- `media_assets` rows are global (no per-post FK), so adding `species_key` makes them naturally reusable across every post.
-- The species lookup is case/whitespace-insensitive; the same column populated client-side at upload time and server-side at post-build time so it stays consistent.
-- Cascade deletes already handle `content_media` and `content_platforms` when a `content_item` is deleted — no extra cleanup needed for the delete hardening.
-- Drop migration for `species_image_candidates` includes `DROP POLICY` and `REVOKE`/`DROP TABLE CASCADE` so RLS objects are cleaned up.
-- Edge function deletion uses `supabase--delete_edge_functions` to remove the deployed function, plus removing the local source + config entry.
+- `supabase/functions/seed-topshelf-glossary/index.ts` — new edge function (Firecrawl + parse + upload + insert).
+- `supabase/config.toml` — register the function.
+- `src/lib/cms.functions.ts` — thin `seedTopshelfGlossary` server fn that invokes the edge fn (admin-gated).
+- `src/routes/_app/settings.ai.tsx` (or your pick) — "Seed Top Shelf fish glossary" button + result toast.
 
-## Files touched
+### Open question
 
-- `supabase/migrations/<new>.sql` — add `media_assets.species_key`, index; drop `species_image_candidates`.
-- `supabase/functions/gather-species-images/` — deleted.
-- `supabase/config.toml` — remove function entry.
-- `src/lib/cms.functions.ts` — remove scraper fns; extend `buildArrivalPostFromBatch` with the species-image auto-attach; add `uploadSpeciesImage` + `listSpeciesMediaForBatch` server fns (or use direct client calls — to be picked at build time).
-- `src/routes/_app/content.index.tsx` — AlertDialog + optimistic delete.
-- `src/routes/_app/content.$id.tsx` — AlertDialog + optimistic delete; replace `SpeciesImagesSection` with new upload/reuse `SpeciesMediaSection`.
-
-## Out of scope
-
-- No changes to the "Build new-arrivals post" button itself or to any other batch UI.
-- No bulk import of historical media — only future uploads get tagged.
+Where do you want the trigger button? Options: **Settings → AI**, **Media library page**, or a one-off **admin tools** spot. Default I'll use if you don't say: Settings → AI.
