@@ -258,6 +258,7 @@ Deno.serve(async (req) => {
     scanned: cards.length,
     inserted,
     skipped,
+    resetDeleted,
     errors,
   });
 });
