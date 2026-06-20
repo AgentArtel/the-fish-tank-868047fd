@@ -151,6 +151,35 @@ Deno.serve(async (req) => {
   });
   if (!roleRow) return json({ error: "Admins only" }, 403);
 
+  // Optional: wipe previously-seeded entries (DB rows + storage objects) so we
+  // can re-seed with a different keying strategy. Triggered with {"reset":true}.
+  let body: { reset?: boolean } = {};
+  try {
+    body = await req.json();
+  } catch {
+    // empty body is fine
+  }
+
+  let resetDeleted = 0;
+  if (body.reset) {
+    const { data: oldRows } = await admin
+      .from("media_assets")
+      .select("id, storage_path")
+      .like("source_notes", "%Top Shelf glossary%");
+    const paths = (oldRows ?? []).map((r: any) => r.storage_path).filter(Boolean);
+    if (paths.length) {
+      // Storage supports batch removal up to 1000 paths.
+      for (let i = 0; i < paths.length; i += 500) {
+        await admin.storage.from(BUCKET).remove(paths.slice(i, i + 500));
+      }
+      const ids = (oldRows ?? []).map((r: any) => r.id);
+      // content_media has FK on media_asset_id; drop any links first.
+      await admin.from("content_media").delete().in("media_asset_id", ids);
+      await admin.from("media_assets").delete().in("id", ids);
+      resetDeleted = ids.length;
+    }
+  }
+
   // 1. Pull every glossary entry via the storefront GraphQL endpoint.
   let cards: Card[];
   try {
