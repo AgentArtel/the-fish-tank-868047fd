@@ -317,98 +317,81 @@ function MediaTile({ asset, onRemove }: { asset: any; onRemove: () => void }) {
   );
 }
 
-// --- Phase 2: per-species image candidates (find → AI-verify → human approve) ---
-function SpeciesImagesSection({ contentItemId, onApproved }: { contentItemId: string; onApproved: () => void }) {
+// Per-species media: upload once, reused on every future post.
+// For each livestock line on the linked batch, we look up media_assets by the
+// species_key. If one exists → "Attach to post" (one click). If not → file
+// picker uploads it, tags it with the species_key, and auto-attaches.
+function SpeciesMediaSection({ contentItemId, onChanged }: { contentItemId: string; onChanged: () => void }) {
   const qc = useQueryClient();
-  const listFn = useServerFn(listSpeciesImageCandidates);
-  const approveFn = useServerFn(approveSpeciesImage);
-  const rejectFn = useServerFn(rejectSpeciesImage);
+  const listFn = useServerFn(listSpeciesMediaForPost);
+  const attachFn = useServerFn(attachMediaToPost);
 
   const { data, refetch, isFetching } = useQuery({
-    queryKey: ["species-candidates", contentItemId],
+    queryKey: ["species-media", contentItemId],
     queryFn: () => listFn({ data: { contentItemId } }),
   });
 
-  const gather = useMutation({
-    // External work (Firecrawl/Top Shelf scrape + AI) runs in the Supabase Edge
-    // Function — the app just invokes it and refetches the candidates table
-    // (data-driven). See CLAUDE.md Rule 7.
-    mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke("gather-species-images", {
-        body: { contentItemId },
-      });
-      if (error) throw error;
-      return data as { created?: number };
-    },
-    onSuccess: (r) => {
-      toast.success(`Found ${r?.created ?? 0} candidate image(s)`);
-      refetch();
-    },
-    onError: (e: any) => toast.error(e.message),
-  });
-
-  const approve = useMutation({
-    mutationFn: (candidateId: string) => approveFn({ data: { candidateId, contentItemId } }),
+  const attach = useMutation({
+    mutationFn: (mediaAssetId: string) => attachFn({ data: { contentItemId, mediaAssetId } }),
     onSuccess: () => {
-      toast.success("Image approved & added to the post");
+      toast.success("Image attached to post");
       refetch();
-      onApproved();
+      onChanged();
       qc.invalidateQueries({ queryKey: ["content-media", contentItemId] });
     },
     onError: (e: any) => toast.error(e.message),
   });
 
-  const reject = useMutation({
-    mutationFn: (candidateId: string) => rejectFn({ data: { candidateId } }),
-    onSuccess: () => { toast.success("Candidate removed"); refetch(); },
-    onError: (e: any) => toast.error(e.message),
-  });
+  const onUploaded = () => {
+    refetch();
+    onChanged();
+    qc.invalidateQueries({ queryKey: ["content-media", contentItemId] });
+    qc.invalidateQueries({ queryKey: ["all-media"] });
+  };
 
   const lines: any[] = data?.lines ?? [];
-  const candidates: any[] = data?.candidates ?? [];
-  const byLine = new Map<string, any[]>();
-  for (const c of candidates) {
-    const arr = byLine.get(c.vendor_line_item_id) ?? [];
-    arr.push(c);
-    byLine.set(c.vendor_line_item_id, arr);
-  }
+  const assetsByKey: Record<string, any[]> = data?.assetsByKey ?? {};
+  const attached = new Set<string>(data?.attachedAssetIds ?? []);
 
   return (
     <Section title="Species images">
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-xs text-muted-foreground">
-          Find royalty-free / vendor images per species, AI-verified, then approve each one. Draft only — nothing publishes.
-        </p>
-        <Button size="sm" variant="secondary" disabled={gather.isPending}
-          onClick={() => gather.mutate()}>
-          <ImageDown className="w-3 h-3 mr-1" /> {gather.isPending ? "Finding…" : "Find images"}
-        </Button>
-      </div>
+      <p className="text-xs text-muted-foreground mb-3">
+        Upload one photo per species. Next time the same fish shows up on a PO, the post will come back already illustrated — no re-upload needed.
+      </p>
       {isFetching && lines.length === 0 && <p className="text-xs text-muted-foreground">Loading…</p>}
       {lines.length === 0 && !isFetching && (
         <p className="text-xs text-muted-foreground">No livestock lines on the linked batch.</p>
       )}
-      <div className="space-y-4">
+      <div className="space-y-3">
         {lines.map((l) => {
-          const cands = byLine.get(l.id) ?? [];
+          const key = speciesKeyFromLine(l);
+          const assets = key ? assetsByKey[key] ?? [] : [];
           const name = l.clean_item_name || l.raw_description || "Unnamed";
           return (
             <div key={l.id} className="border rounded-md p-3">
-              <div className="text-sm font-medium">
-                {name}
-                {l.scientific_name && <span className="italic text-muted-foreground"> ({l.scientific_name})</span>}
+              <div className="flex items-start justify-between gap-3">
+                <div className="text-sm font-medium">
+                  {name}
+                  {l.scientific_name && <span className="italic text-muted-foreground"> ({l.scientific_name})</span>}
+                  {!key && <Badge variant="destructive" className="ml-2 text-[10px]">no species name</Badge>}
+                </div>
+                {key && <UploadSpeciesImage speciesKey={key} contentItemId={contentItemId} altText={name} onDone={onUploaded} />}
               </div>
-              {cands.length === 0 ? (
-                <p className="text-xs text-muted-foreground mt-1">No candidates yet — use “Find images”.</p>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-2">
-                  {cands.map((c) => (
-                    <CandidateTile key={c.id} cand={c}
-                      onApprove={() => approve.mutate(c.id)}
-                      onReject={() => reject.mutate(c.id)}
-                      busy={approve.isPending || reject.isPending} />
+              {assets.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+                  {assets.map((a) => (
+                    <SpeciesAssetTile
+                      key={a.id}
+                      asset={a}
+                      attached={attached.has(a.id)}
+                      busy={attach.isPending}
+                      onAttach={() => attach.mutate(a.id)}
+                    />
                   ))}
                 </div>
+              )}
+              {key && assets.length === 0 && (
+                <p className="text-xs text-muted-foreground mt-2">No image saved yet — upload one above.</p>
               )}
             </div>
           );
@@ -418,37 +401,74 @@ function SpeciesImagesSection({ contentItemId, onApproved }: { contentItemId: st
   );
 }
 
-function CandidateTile({ cand, onApprove, onReject, busy }: { cand: any; onApprove: () => void; onReject: () => void; busy: boolean }) {
-  const conf = cand.ai_match_confidence;
+function UploadSpeciesImage({ speciesKey, contentItemId, altText, onDone }: {
+  speciesKey: string; contentItemId: string; altText: string; onDone: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const handle = async (file: File) => {
+    setBusy(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not signed in");
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const path = `${user.id}/species/${Date.now()}-${safeName}`;
+      const { error: upErr } = await supabase.storage.from("media").upload(path, file);
+      if (upErr) throw upErr;
+      const { data: asset, error: insErr } = await supabase.from("media_assets").insert({
+        storage_path: path, file_name: file.name, media_type: "image",
+        source_type: "phone_upload", usage_rights: "owned",
+        alt_text: altText || null, species_key: speciesKey, uploader_id: user.id,
+      }).select("id").single();
+      if (insErr) throw insErr;
+      // Auto-attach to this post.
+      await supabase.from("content_media").insert({
+        content_item_id: contentItemId, media_asset_id: asset.id,
+      });
+      toast.success("Uploaded & attached");
+      onDone();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Upload failed");
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  };
+  return (
+    <>
+      <input ref={inputRef} type="file" accept="image/*" className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) handle(f); }} />
+      <Button size="sm" variant="secondary" disabled={busy} onClick={() => inputRef.current?.click()}>
+        <Upload className="w-3 h-3 mr-1" /> {busy ? "Uploading…" : "Upload image"}
+      </Button>
+    </>
+  );
+}
+
+function SpeciesAssetTile({ asset, attached, busy, onAttach }: {
+  asset: any; attached: boolean; busy: boolean; onAttach: () => void;
+}) {
+  const getUrl = useServerFn(getSignedUrl);
+  const { data } = useQuery({
+    queryKey: ["signed", asset.storage_path],
+    queryFn: () => getUrl({ data: { path: asset.storage_path } }),
+    staleTime: 50 * 60 * 1000,
+  });
   return (
     <div className="border rounded overflow-hidden text-xs">
       <div className="aspect-square bg-muted">
-        <img src={cand.image_url} alt={cand.species_key ?? ""} className="w-full h-full object-cover" loading="lazy" />
+        {data?.url && <img src={data.url} alt={asset.alt_text ?? ""} className="w-full h-full object-cover" loading="lazy" />}
       </div>
-      <div className="p-2 space-y-1">
-        <div className="flex flex-wrap gap-1">
-          <Badge variant="outline" className="text-[10px]">{cand.source}</Badge>
-          {conf != null && (
-            <Badge variant="outline" className="text-[10px]">AI {Math.round(Number(conf) * 100)}%</Badge>
-          )}
-          {cand.commercial_ok === false && (
-            <Badge variant="destructive" className="text-[10px]">non-commercial</Badge>
-          )}
-        </div>
-        {cand.attribution && <div className="text-[10px] text-muted-foreground truncate" title={cand.attribution}>{cand.attribution}</div>}
-        {cand.approved ? (
-          <Badge className="text-[10px]">Approved</Badge>
+      <div className="p-2">
+        {attached ? (
+          <Badge className="text-[10px]"><Check className="w-3 h-3 mr-1" /> Attached</Badge>
         ) : (
-          <div className="flex gap-1">
-            <Button size="sm" variant="default" className="h-7 flex-1" disabled={busy} onClick={onApprove}>
-              <Check className="w-3 h-3" />
-            </Button>
-            <Button size="sm" variant="outline" className="h-7 flex-1" disabled={busy} onClick={onReject}>
-              <X className="w-3 h-3" />
-            </Button>
-          </div>
+          <Button size="sm" variant="default" className="h-7 w-full" disabled={busy} onClick={onAttach}>
+            Attach to post
+          </Button>
         )}
       </div>
     </div>
   );
 }
+
