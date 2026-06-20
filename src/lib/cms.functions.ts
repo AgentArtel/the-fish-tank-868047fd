@@ -340,15 +340,18 @@ export const inviteUser = createServerFn({ method: "POST" })
 
 const ARRIVAL_IMG_TYPES = ["fish", "coral", "invert", "live_rock"] as const;
 
-// Normalize a species name to the lookup key. Prefers scientific over common.
+// Normalize a species name to the lookup key. Prefers the common name (which
+// is what shows up on vendor POs); scientific name is the fallback. Keep the
+// normalization simple and identical to the seeder: lowercase, collapse all
+// non-alphanumerics to single spaces, trim.
 export function speciesKeyFromLine(line: {
   scientific_name?: string | null;
   clean_item_name?: string | null;
   raw_description?: string | null;
 }): string | null {
-  const raw = line.scientific_name || line.clean_item_name || line.raw_description;
+  const raw = line.clean_item_name || line.raw_description || line.scientific_name;
   if (!raw) return null;
-  const k = raw.toString().trim().toLowerCase();
+  const k = raw.toString().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   return k || null;
 }
 

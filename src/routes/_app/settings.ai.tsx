@@ -122,17 +122,19 @@ function AISettingsPage() {
     }
   };
 
-  const seedGlossary = async () => {
+  const seedGlossary = async (reset = false) => {
     if (seeding) return;
+    if (reset && !confirm("Delete all previously-seeded Top Shelf images and re-seed from scratch? Any post attachments to those images will also be removed.")) return;
     setSeeding(true);
     setSeedResult(null);
     try {
       const { data, error } = await supabase.functions.invoke("seed-topshelf-glossary", {
-        body: {},
+        body: { reset },
       });
       if (error) throw new Error(error.message);
       setSeedResult(data);
-      toast.success(`Seeded ${data.inserted} new species (${data.skipped} skipped)`);
+      const resetMsg = data.resetDeleted ? ` · Removed ${data.resetDeleted}` : "";
+      toast.success(`Seeded ${data.inserted} new species (${data.skipped} skipped)${resetMsg}`);
     } catch (e: any) {
       toast.error(e?.message ?? "Seed failed");
     } finally {
@@ -284,14 +286,20 @@ function AISettingsPage() {
             <div>
               <h2 className="text-base font-semibold">Species image library — one-time seed</h2>
               <p className="text-xs text-muted-foreground mt-1">
-                Scrapes the Top Shelf saltwater fish glossary once and saves each fish photo to the
-                species library (tagged by scientific name). Future PO drafts auto-attach matching
-                photos. Safe to re-run — already-seeded species are skipped.
+                Scrapes the Top Shelf saltwater fish glossary and saves each fish photo to the
+                species library (keyed on common name, so it matches what's on POs). Future PO drafts
+                auto-attach matching photos. Safe to re-run — already-seeded species are skipped.
+                Use "Reset & re-seed" to wipe prior seeded entries and start over.
               </p>
             </div>
-            <Button onClick={seedGlossary} disabled={seeding} variant="secondary">
-              {seeding ? "Seeding…" : "Seed Top Shelf fish glossary"}
-            </Button>
+            <div className="flex gap-2 flex-wrap">
+              <Button onClick={() => seedGlossary(false)} disabled={seeding} variant="secondary">
+                {seeding ? "Seeding…" : "Seed Top Shelf fish glossary"}
+              </Button>
+              <Button onClick={() => seedGlossary(true)} disabled={seeding} variant="outline">
+                Reset & re-seed
+              </Button>
+            </div>
             {seedResult && (
               <div className="text-xs rounded-md border bg-muted/30 p-3 space-y-1">
                 <div>
