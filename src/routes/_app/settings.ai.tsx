@@ -122,17 +122,19 @@ function AISettingsPage() {
     }
   };
 
-  const seedGlossary = async () => {
+  const seedGlossary = async (reset = false) => {
     if (seeding) return;
+    if (reset && !confirm("Delete all previously-seeded Top Shelf images and re-seed from scratch? Any post attachments to those images will also be removed.")) return;
     setSeeding(true);
     setSeedResult(null);
     try {
       const { data, error } = await supabase.functions.invoke("seed-topshelf-glossary", {
-        body: {},
+        body: { reset },
       });
       if (error) throw new Error(error.message);
       setSeedResult(data);
-      toast.success(`Seeded ${data.inserted} new species (${data.skipped} skipped)`);
+      const resetMsg = data.resetDeleted ? ` · Removed ${data.resetDeleted}` : "";
+      toast.success(`Seeded ${data.inserted} new species (${data.skipped} skipped)${resetMsg}`);
     } catch (e: any) {
       toast.error(e?.message ?? "Seed failed");
     } finally {
