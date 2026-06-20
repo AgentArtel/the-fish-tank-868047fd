@@ -11,7 +11,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { useState, useEffect } from "react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import {
   CONTENT_TYPES, PLATFORMS, PLATFORM_LABELS, STATUS_LABELS,
@@ -19,10 +23,9 @@ import {
 } from "@/lib/workflow";
 import {
   updateContentStatus, getSignedUrl, getMe, deleteContentItem,
-  listSpeciesImageCandidates,
-  approveSpeciesImage, rejectSpeciesImage,
+  listSpeciesMediaForPost, attachMediaToPost, speciesKeyFromLine,
 } from "@/lib/cms.functions";
-import { Copy, Trash2, ArrowLeft, ImageDown, Check, X } from "lucide-react";
+import { Copy, Trash2, ArrowLeft, Upload, Check } from "lucide-react";
 
 export const Route = createFileRoute("/_app/content/$id")({ component: ContentDetail });
 
@@ -35,6 +38,7 @@ function ContentDetail() {
   const delFn = useServerFn(deleteContentItem);
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: () => meFn() });
   const isAdmin = (me?.roles ?? []).includes("admin");
+  const [confirmDel, setConfirmDel] = useState(false);
   const remove = useMutation({
     mutationFn: () => delFn({ data: { id } }),
     onSuccess: () => {
@@ -42,8 +46,9 @@ function ContentDetail() {
       qc.invalidateQueries({ queryKey: ["content"] });
       nav({ to: "/content" });
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(`Delete failed: ${e?.message ?? "unknown error"}`),
   });
+
 
   const { data: item } = useQuery({
     queryKey: ["content", id],
