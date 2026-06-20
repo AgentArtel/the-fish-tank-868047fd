@@ -1,13 +1,13 @@
 // Edge function: seed-topshelf-glossary
 //
-// One-time (idempotent) seed: scrape the Top Shelf saltwater fish glossary,
-// download every fish image, and insert one media_assets row per species —
-// tagged with species_key so future PO drafts auto-attach them.
+// One-time (idempotent) seed: pull every fish entry from the Top Shelf
+// glossary's Shopify Storefront GraphQL endpoint (the same one the page
+// itself uses), download each image, and insert one media_assets row per
+// species — tagged with species_key so future PO drafts auto-attach them.
 //
 // Admin-only. Triggered manually from Settings → AI.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
-import { DOMParser, type Element } from "https://deno.land/x/deno_dom@v0.1.45/deno-dom-wasm.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,14 +15,19 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const GLOSSARY_URL = "https://topshelfaquatics.com/pages/fish-glossary";
+// These are baked into the public page markup (data-endpoint / data-token on
+// the <section class="glossary-grid"> element). They're a public Storefront
+// API token — safe to use server-side without secrets management.
+const SHOPIFY_GQL = "https://763aab.myshopify.com/api/2024-07/graphql.json";
+const STOREFRONT_TOKEN = "e769c8926d6b26e7efbf0c3d5d4f1935";
+const METAOBJECT_TYPE = "fish_glossary_template";
 const BUCKET = "media";
 
-type CardRow = {
+type Card = {
+  handle: string;
   common_name: string;
   scientific_name: string | null;
   image_url: string;
-  detail_url: string | null;
 };
 
 function json(body: unknown, status = 200) {
@@ -50,64 +55,70 @@ function safeSlug(s: string) {
     .slice(0, 80);
 }
 
-async function fetchGlossaryHtml(firecrawlKey: string): Promise<string> {
-  // Click "View More" repeatedly so all cards render, then return the full HTML.
-  const actions: Array<Record<string, unknown>> = [
-    { type: "wait", milliseconds: 2000 },
-  ];
-  for (let i = 0; i < 23; i++) {
-    actions.push({ type: "click", selector: "[data-glossary-more]" });
-    actions.push({ type: "wait", milliseconds: 500 });
+const GQL_QUERY = `
+  query Glossary($type: String!, $first: Int!, $after: String) {
+    metaobjects(type: $type, first: $first, after: $after) {
+      edges {
+        cursor
+        node {
+          handle
+          common: field(key: "common_name") { value }
+          sci: field(key: "scientific_name") { value }
+          name: field(key: "name") { value }
+          img: field(key: "image") {
+            reference { ... on MediaImage { image { url } } }
+          }
+        }
+      }
+      pageInfo { hasNextPage endCursor }
+    }
   }
-  actions.push({ type: "scroll", direction: "down" });
-  actions.push({ type: "wait", milliseconds: 800 });
+`;
 
-  const res = await fetch("https://api.firecrawl.dev/v2/scrape", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${firecrawlKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      url: GLOSSARY_URL,
-      formats: ["html"],
-      onlyMainContent: false,
-      waitFor: 3000,
-      actions,
-    }),
-  });
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`Firecrawl scrape failed ${res.status}: ${txt.slice(0, 500)}`);
-  }
-  const body = await res.json();
-  const html: string | undefined =
-    body?.data?.html ?? body?.html ?? body?.data?.rawHtml ?? body?.rawHtml;
-  if (!html) throw new Error("Firecrawl returned no HTML");
-  return html;
-}
+type GqlNode = {
+  handle: string;
+  common: { value: string | null } | null;
+  sci: { value: string | null } | null;
+  name: { value: string | null } | null;
+  img: { reference: { image: { url: string } | null } | null } | null;
+};
 
-function parseCards(html: string): CardRow[] {
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  if (!doc) return [];
-  const cards = Array.from(doc.querySelectorAll("a.glossary-card")) as Element[];
-  const rows: CardRow[] = [];
-  for (const card of cards) {
-    const title = card.querySelector(".glossary-card-title")?.textContent?.trim() ?? "";
-    const sub = card.querySelector(".glossary-card-subtitle")?.textContent?.trim() ?? "";
-    const img = card.querySelector("img") as Element | null;
-    let src = img?.getAttribute("src") || img?.getAttribute("data-src") || "";
-    if (src && src.startsWith("//")) src = "https:" + src;
-    // Drop Shopify resize params to grab the largest available variant.
-    src = src.replace(/(\?|&)width=\d+/g, "").replace(/(\?|&)height=\d+/g, "");
-    const href = card.getAttribute("href") || null;
-    if (!title || !src) continue;
-    rows.push({
-      common_name: title,
-      scientific_name: sub || null,
-      image_url: src,
-      detail_url: href,
+async function fetchAllCards(): Promise<Card[]> {
+  const rows: Card[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < 20; page++) {
+    const res = await fetch(SHOPIFY_GQL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Storefront-Access-Token": STOREFRONT_TOKEN,
+      },
+      body: JSON.stringify({
+        query: GQL_QUERY,
+        variables: { type: METAOBJECT_TYPE, first: 250, after: cursor },
+      }),
     });
+    if (!res.ok) {
+      throw new Error(`Shopify GraphQL ${res.status}: ${(await res.text()).slice(0, 400)}`);
+    }
+    const body = await res.json();
+    if (body.errors) throw new Error(`GraphQL errors: ${JSON.stringify(body.errors).slice(0, 400)}`);
+    const mo = body?.data?.metaobjects;
+    const edges: Array<{ cursor: string; node: GqlNode }> = mo?.edges ?? [];
+    for (const { node } of edges) {
+      const common = node.common?.value || node.name?.value || "";
+      const sci = node.sci?.value || null;
+      const url = node.img?.reference?.image?.url || "";
+      if (!common || !url) continue;
+      rows.push({
+        handle: node.handle,
+        common_name: common.trim(),
+        scientific_name: sci ? sci.trim() : null,
+        image_url: url,
+      });
+    }
+    if (!mo?.pageInfo?.hasNextPage) break;
+    cursor = mo.pageInfo.endCursor;
   }
   return rows;
 }
@@ -118,8 +129,6 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const firecrawlKey = Deno.env.get("FIRECRAWL_API_KEY");
-  if (!firecrawlKey) return json({ error: "FIRECRAWL_API_KEY not configured" }, 500);
 
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) return json({ error: "Missing Authorization header" }, 401);
@@ -139,11 +148,10 @@ Deno.serve(async (req) => {
   });
   if (!roleRow) return json({ error: "Admins only" }, 403);
 
-  // 1. Scrape and parse.
-  let cards: CardRow[];
+  // 1. Pull every glossary entry via the storefront GraphQL endpoint.
+  let cards: Card[];
   try {
-    const html = await fetchGlossaryHtml(firecrawlKey);
-    cards = parseCards(html);
+    cards = await fetchAllCards();
   } catch (e) {
     return json({ error: String((e as Error).message ?? e) }, 502);
   }
@@ -167,7 +175,7 @@ Deno.serve(async (req) => {
     );
   }
 
-  // 3. Download → upload → insert, one species at a time (avoid bursting).
+  // 3. Download → upload → insert, one species at a time.
   for (const card of cards) {
     const key = speciesKey(card);
     if (!key) {
@@ -201,9 +209,7 @@ Deno.serve(async (req) => {
         species_key: key,
         alt_text: altParts.join(" "),
         source_type: "vendor_asset",
-        source_notes: card.detail_url
-          ? `Seeded from Top Shelf glossary: ${card.detail_url}`
-          : "Seeded from Top Shelf glossary",
+        source_notes: `Seeded from Top Shelf glossary: https://topshelfaquatics.com/pages/saltwater-fish/${card.handle}`,
         usage_rights: "vendor_allowed",
         usage_status: "unused",
         uploader_id: userId,
