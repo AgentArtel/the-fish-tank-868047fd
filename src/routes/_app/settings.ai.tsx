@@ -279,6 +279,36 @@ function AISettingsPage() {
               )}
             </div>
           )}
+
+          <section className="rounded-lg border bg-card p-5 space-y-3">
+            <div>
+              <h2 className="text-base font-semibold">Species image library — one-time seed</h2>
+              <p className="text-xs text-muted-foreground mt-1">
+                Scrapes the Top Shelf saltwater fish glossary once and saves each fish photo to the
+                species library (tagged by scientific name). Future PO drafts auto-attach matching
+                photos. Safe to re-run — already-seeded species are skipped.
+              </p>
+            </div>
+            <Button onClick={seedGlossary} disabled={seeding} variant="secondary">
+              {seeding ? "Seeding…" : "Seed Top Shelf fish glossary"}
+            </Button>
+            {seedResult && (
+              <div className="text-xs rounded-md border bg-muted/30 p-3 space-y-1">
+                <div>
+                  Scanned <strong>{seedResult.scanned}</strong> · Inserted{" "}
+                  <strong>{seedResult.inserted}</strong> · Skipped{" "}
+                  <strong>{seedResult.skipped}</strong>
+                </div>
+                {seedResult.errors.length > 0 && (
+                  <div className="text-amber-700 dark:text-amber-400">
+                    {seedResult.errors.length} error{seedResult.errors.length === 1 ? "" : "s"}:{" "}
+                    {seedResult.errors.slice(0, 3).map((e) => e.name).join(", ")}
+                    {seedResult.errors.length > 3 ? "…" : ""}
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
         </>
       )}
     </div>
