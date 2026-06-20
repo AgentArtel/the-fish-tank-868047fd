@@ -27,9 +27,11 @@
    long-running/heavy I/O lives in a Supabase Edge Function (`supabase/functions/`) — never a TanStack
    `createServerFn` (those run on the Cloudflare Worker and hit its subrequest/CPU/time budget). App
    server fns are limited to **auth-gated DB reads/writes**; the UI is **data-driven** — it invokes the
-   edge fn and reacts to the table state the edge fn writes, never blocking on external I/O. Edge functions
-   are **Lovable's lane** to build; the app stays a thin invoke + table-read consumer. If you're about to
-   add a `fetch` to a third party or an AI call inside a server fn — **stop**, it belongs in an edge fn.
+   edge fn and reacts to the table state the edge fn writes, never blocking on external I/O. Division of
+   labor: **Lovable owns edge-function deploy, secrets, and integration-testing; either party may author
+   the Deno code** (Claude authors most once the foundation + reusable AI/Firecrawl helpers exist). The app
+   stays a thin invoke + table-read consumer. If you're about to add a `fetch` to a third party or an AI
+   call inside a server fn — **stop**, it belongs in an edge fn.
 
 ## Project invariants (domain rules — never override without sign-off)
 - **External integrations live in edge functions, not the app Worker.** (Engineering Rule 7.) Third-party
