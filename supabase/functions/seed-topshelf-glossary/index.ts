@@ -55,9 +55,9 @@ async function fetchGlossaryHtml(firecrawlKey: string): Promise<string> {
   const actions: Array<Record<string, unknown>> = [
     { type: "wait", milliseconds: 2000 },
   ];
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 23; i++) {
     actions.push({ type: "click", selector: "[data-glossary-more]" });
-    actions.push({ type: "wait", milliseconds: 700 });
+    actions.push({ type: "wait", milliseconds: 500 });
   }
   actions.push({ type: "scroll", direction: "down" });
   actions.push({ type: "wait", milliseconds: 800 });
