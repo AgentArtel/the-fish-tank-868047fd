@@ -222,7 +222,7 @@ function ContentDetail() {
           </Section>
 
           {item.source_vendor_batch_id && (
-            <SpeciesImagesSection contentItemId={id} onApproved={refetchMedia} />
+            <SpeciesMediaSection contentItemId={id} onChanged={refetchMedia} />
           )}
 
           <Button onClick={save}>Save changes</Button>
