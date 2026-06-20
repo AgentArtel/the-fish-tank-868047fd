@@ -38,7 +38,10 @@ function json(body: unknown, status = 200) {
 }
 
 function speciesKey(c: { scientific_name: string | null; common_name: string }) {
-  const raw = (c.scientific_name || c.common_name || "").trim().toLowerCase();
+  // Match the app's speciesKeyFromLine: PO line items carry the common name,
+  // not the scientific name — so we key on common name and normalize the same
+  // way on both sides (lowercase, non-alphanumerics → single space, trim).
+  const raw = (c.common_name || c.scientific_name || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   return raw || null;
 }
 
