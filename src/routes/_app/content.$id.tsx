@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,7 +18,7 @@ import {
   allowedNext, type ContentStatus, type Platform,
 } from "@/lib/workflow";
 import {
-  updateContentStatus, getSignedUrl,
+  updateContentStatus, getSignedUrl, getMe, deleteContentItem,
   gatherSpeciesImages, listSpeciesImageCandidates,
   approveSpeciesImage, rejectSpeciesImage,
 } from "@/lib/cms.functions";
@@ -29,7 +29,21 @@ export const Route = createFileRoute("/_app/content/$id")({ component: ContentDe
 function ContentDetail() {
   const { id } = Route.useParams();
   const qc = useQueryClient();
+  const nav = useNavigate();
   const updateStatusFn = useServerFn(updateContentStatus);
+  const meFn = useServerFn(getMe);
+  const delFn = useServerFn(deleteContentItem);
+  const { data: me } = useQuery({ queryKey: ["me"], queryFn: () => meFn() });
+  const isAdmin = (me?.roles ?? []).includes("admin");
+  const remove = useMutation({
+    mutationFn: () => delFn({ data: { id } }),
+    onSuccess: () => {
+      toast.success("Post deleted");
+      qc.invalidateQueries({ queryKey: ["content"] });
+      nav({ to: "/content" });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   const { data: item } = useQuery({
     queryKey: ["content", id],
@@ -105,7 +119,12 @@ function ContentDetail() {
         <ArrowLeft className="w-3 h-3" /> Back to content
       </Link>
       <PageHeader title={form.title || "Untitled"} description={`Last updated ${new Date(item.updated_at).toLocaleString()}`}
-        action={<div className="flex items-center gap-2"><StatusBadge status={item.status} /></div>} />
+        action={<div className="flex items-center gap-2"><StatusBadge status={item.status} />{isAdmin && (
+          <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" disabled={remove.isPending}
+            onClick={() => { if (confirm(`Delete "${form.title || "Untitled"}"? This can't be undone.`)) remove.mutate(); }}>
+            <Trash2 className="w-4 h-4 mr-1" /> Delete
+          </Button>
+        )}</div>} />
 
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">

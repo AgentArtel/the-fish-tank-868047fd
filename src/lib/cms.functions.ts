@@ -169,6 +169,20 @@ export const buildArrivalPostFromBatch = createServerFn({ method: "POST" })
     return { contentItemId: inserted.id };
   });
 
+// Delete a content item (admin-only, matching the content_items DELETE RLS).
+// content_media / content_platforms cascade on delete; species_image_candidates
+// are per vendor line (shared) and are left untouched.
+export const deleteContentItem = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await requireAdmin(supabase, userId);
+    const { error } = await supabase.from("content_items").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 export const getSignedUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ path: z.string().min(1) }).parse(d))
