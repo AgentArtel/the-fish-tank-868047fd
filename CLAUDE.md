@@ -22,8 +22,21 @@
 4. **Plan fully, edit once.**
 5. **Cache invalidation** — wire mutation `onSuccess` to invalidate the right TanStack Query keys.
 6. **Don't reinvent the wheel** — reuse and restyle what exists.
+7. **External integrations are Supabase Edge Functions — NEVER app server functions.** Any third-party
+   HTTP/`fetch`, web scraping, AI inference (`callAIChat`), external API/SDK, image download/OCR, or
+   long-running/heavy I/O lives in a Supabase Edge Function (`supabase/functions/`) — never a TanStack
+   `createServerFn` (those run on the Cloudflare Worker and hit its subrequest/CPU/time budget). App
+   server fns are limited to **auth-gated DB reads/writes**; the UI is **data-driven** — it invokes the
+   edge fn and reacts to the table state the edge fn writes, never blocking on external I/O. Edge functions
+   are **Lovable's lane** to build; the app stays a thin invoke + table-read consumer. If you're about to
+   add a `fetch` to a third party or an AI call inside a server fn — **stop**, it belongs in an edge fn.
 
 ## Project invariants (domain rules — never override without sign-off)
+- **External integrations live in edge functions, not the app Worker.** (Engineering Rule 7.) Third-party
+  I/O, scraping, and AI inference belong in Supabase Edge Functions; the app invokes them and reacts to the
+  data they write. No new app-side external I/O — ever — without explicit sign-off. The existing violations
+  (all integrations are currently app-side — there are *no* edge functions yet) are being migrated
+  incrementally: see `.lovable/scope-edge-function-migration.md`.
 - **AI is draft-only.** AI parsing cannot approve pricing, mark review approved, convert to
   inventory, or create `inventory_items`. A human always decides.
 - **Pricing approval is admin-only.** Baseline is 3× wholesale; admin must approve before an item
