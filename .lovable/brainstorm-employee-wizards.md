@@ -36,11 +36,52 @@ Photo-on-file gate (`useGoLiveWithPhoto` / `PhotoOnFileWizard`), the batch recei
    moves stock into it; flipping `availability_status='dead_lost'` does **not** move `quantity_lost`, and
    `quantity_on_hold` is never moved by status changes either.
 
-**Plus one structural blocker (a `[Decision]`):** `requireEditor` = **admin | creator | reviewer only**.
-**`staff` is NOT an editor** — today a "staff" account can't run a single mutating server fn. Every
-"employee data-entry" wizard below assumes floor staff can write. Either `staff` joins the editor set
-for a defined set of safe actions, or we add a narrower `requireFloorStaff` tier. **This must be decided
-before P0 ships** (see Admin-vs-employee section).
+**Plus one structural blocker — now DECIDED (see next section):** `requireEditor` was
+**admin | creator | reviewer only**, so `staff` couldn't run any mutating server fn. The owner's 3-role
+decision resolves it: **floor staff IS the employee write-tier.**
+
+---
+
+## ⭐ Owner decisions + added scope (2026-06-21)
+
+### Roles → just three: `admin · dev · floor staff`
+Collapse the 6-role set (admin/manager/creator/reviewer/staff/viewer) to **three**:
+- **admin** — owner/manager oversight: pricing approval, go-live, Clover config, user management + all below. *(absorbs manager, reviewer)*
+- **dev** — technical superuser: admin + integrations / AI keys / debug. *(you & me)*
+- **floor staff** — the **employee write-tier**: runs the input/match/update wizards (receive, count,
+  mortality, hold, relocate, manual sale, trade-in). **Cannot** approve pricing, go-live, or touch Clover
+  config. *(absorbs staff, creator, viewer)*
+
+**This resolves the structural blocker:** floor staff is the write tier (the `requireFloorStaff` guard,
+option (b) further below). Foundation = **Phase 0**, spec in `.lovable/handoff-phase0-roles-rls.md`:
+`[DB=Lovable]` collapse the role enum + update RLS + add floor-staff write policies/RPCs for the safe ops ·
+`[App=Claude]` refactor `auth-guards` + the users UI + each wizard's guard. *(Open detail: does floor staff
+draft CMS content, or is content admin-only? minor.)*
+
+### Added wizards
+- **11. Trade-in intake (fish & coral)** · floor staff · **net-new** · **P1** — a customer brings stock (no
+  PO, no vendor): capture species/qty/condition + **value/credit given** + link the customer → draft
+  inventory (pending review/pricing). Reuses the Coral Discovery / Quick Add capture pattern.
+  *Depends on the store-credit decision.*
+- **12. Process a return / refund** · floor staff (+admin for write-off) · **net-new** · **P1** — resolves
+  the Clover refund/void `needs_review` events that today dead-end: restock (qty back) vs write-off, and
+  refund-to-cash vs **store credit**. Pairs with wizard 2.
+
+### Added gaps (beyond the original 3 holes)
+- **Store credit / customer dollar-balance** `[Decision]` — there's loyalty *points* but no **credit
+  balance**; trade-ins *give* it, refunds *return to* it. Underpins 11 + 12. Likely a new table + RPC
+  `[DB=Lovable]`. **Decide: do we want store credit?**
+- **Re-pricing / markdowns on existing inventory** · **P1** `[App]` — pricing approval covers only *new*
+  items; no flow to change an existing item's price (sales, clearance, grown-up livestock).
+- **Quarantine → floor release** · **P1** `[App]` — the `quarantine` availability status exists but has no
+  transition flow; QT mortality should feed wizard 4.
+- **Vendor DOA / shortage credit claims** · **P2** — DOA is captured on receive, but no path to claim the
+  credit back from the supplier.
+
+### Note — the Clover sale path changed (post-migration)
+The sale ledger is now the shared **`apply_inventory_sale` RPC** (manual + Clover), and Clover ingest is a
+**Supabase edge function** — `applyInventorySale` / `clover.ingest.server.ts` were deleted. Wizards 2 & 8
+call the RPC, not the old helper.
 
 ---
 
@@ -369,8 +410,10 @@ admin-only; no `available` without photo+price+location; live-sale admin-only).
 | 6 | Relocate stock | floor staff | net-new tiny + 1 fn; reuse `setInventoryRackPosition` | P1 |
 | 7 | Hold / reserve | floor staff | net-new + RPC (fills `quantity_on_hold` gap) | P1 |
 | 8 | Manual sale | floor staff | **pure reuse** (`logInventorySale`) + wizard shell | P1 |
-| 9 | Coral frag-off | propagator | reuse `applyInventorySale` colony + `catalogCoralItem` | P2 |
+| 9 | Coral frag-off | propagator | reuse `apply_inventory_sale` colony + `catalogCoralItem` | P2 |
 | 10 | End-of-day reconcile | closing mgr | reuse / roll-up of 2/3/4/7 | P2 |
+| 11 | Trade-in intake (fish & coral) | floor staff | net-new; reuse Coral Discovery / Quick Add capture | P1 |
+| 12 | Process return / refund | floor staff (+admin write-off) | net-new; resolves Clover `needs_review` | P1 |
 
 > **Engineering-rule check:** every "new server fn" above is an **auth-gated DB read/write** (no
 > third-party `fetch`, no AI, no scraping) — legal as a TanStack `createServerFn`. The only external I/O
