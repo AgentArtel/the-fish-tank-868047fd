@@ -370,13 +370,23 @@ function SpeciesMediaSection({ contentItemId, onChanged }: { contentItemId: stri
           const name = l.clean_item_name || l.raw_description || "Unnamed";
           return (
             <div key={l.id} className="border rounded-md p-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="text-sm font-medium">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="text-sm font-medium min-w-0 flex-1">
                   {name}
                   {l.scientific_name && <span className="italic text-muted-foreground"> ({l.scientific_name})</span>}
                   {!key && <Badge variant="destructive" className="ml-2 text-[10px]">no species name</Badge>}
                 </div>
-                {key && <UploadSpeciesImage speciesKey={key} contentItemId={contentItemId} altText={name} onDone={onUploaded} />}
+                <div className="flex flex-wrap gap-2">
+                  {key && (
+                    <GalleryPickButton
+                      contentItemId={contentItemId}
+                      speciesKey={key}
+                      attachedIds={attached}
+                      onDone={onUploaded}
+                    />
+                  )}
+                  {key && <UploadSpeciesImage speciesKey={key} contentItemId={contentItemId} altText={name} onDone={onUploaded} />}
+                </div>
               </div>
               {assets.length > 0 && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
@@ -392,7 +402,7 @@ function SpeciesMediaSection({ contentItemId, onChanged }: { contentItemId: stri
                 </div>
               )}
               {key && assets.length === 0 && (
-                <p className="text-xs text-muted-foreground mt-2">No image saved yet — upload one above.</p>
+                <p className="text-xs text-muted-foreground mt-2">No suggested matches — use Choose from gallery or Upload.</p>
               )}
             </div>
           );
