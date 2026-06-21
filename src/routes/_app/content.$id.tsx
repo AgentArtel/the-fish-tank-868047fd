@@ -556,7 +556,7 @@ function GalleryPickButton({ contentItemId, speciesKey, attachedIds, onDone }: {
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
-        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 overflow-auto flex-1 pr-1">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 overflow-auto flex-1 pr-1 items-start">
           {isLoading && (
             <p className="col-span-full text-sm text-muted-foreground text-center py-6">Loading images…</p>
           )}
@@ -566,14 +566,19 @@ function GalleryPickButton({ contentItemId, speciesKey, attachedIds, onDone }: {
               type="button"
               disabled={busyId === a.id}
               onClick={() => pick(a)}
-              className="border rounded overflow-hidden text-left hover:border-primary disabled:opacity-50 bg-card"
+              className="group flex min-w-0 flex-col overflow-hidden rounded-md border bg-card text-left transition-colors hover:border-primary disabled:opacity-50"
             >
-              <div className="aspect-square bg-muted">
+              <div className="relative aspect-square w-full shrink-0 overflow-hidden bg-muted">
                 {urlMap[a.storage_path] ? (
-                  <img src={urlMap[a.storage_path]} alt={a.alt_text ?? ""} className="w-full h-full object-cover" loading="lazy" />
-                ) : null}
+                  <img src={urlMap[a.storage_path]} alt={a.alt_text ?? ""} className="absolute inset-0 h-full w-full object-contain" loading="lazy" />
+                ) : (
+                  <div className="absolute inset-0 animate-pulse bg-muted" />
+                )}
               </div>
-              <div className="p-1 text-[10px] truncate">{a.species_key || a.file_name}</div>
+              <div className="min-h-10 w-full px-2 py-1 text-[10px] leading-tight">
+                <div className="truncate font-medium">{a.species_key || "Unmatched image"}</div>
+                <div className="truncate text-muted-foreground">{a.file_name}</div>
+              </div>
             </button>
           ))}
           {!isLoading && filtered.length === 0 && (
