@@ -25,7 +25,8 @@ import {
   updateContentStatus, getSignedUrl, getMe, deleteContentItem,
   listSpeciesMediaForPost, attachMediaToPost, speciesKeyFromLine,
 } from "@/lib/cms.functions";
-import { Copy, Trash2, ArrowLeft, Upload, Check } from "lucide-react";
+import { Copy, Trash2, ArrowLeft, Upload, Check, ImageIcon } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/_app/content/$id")({ component: ContentDetail });
 
