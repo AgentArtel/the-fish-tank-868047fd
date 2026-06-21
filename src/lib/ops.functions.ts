@@ -479,7 +479,7 @@ export const setInventoryLiveSale = createServerFn({ method: "POST" })
   });
 
 // Keep availability in sync with stock at the 0 ⇄ sold_out boundary (the qty
-// mutators don't otherwise touch status, unlike applyInventorySale). Restock of a
+// mutators don't otherwise touch status, unlike the apply_inventory_sale RPC). Restock of a
 // sold_out item attempts to bring it back available; if it no longer meets the gate
 // (photo/price/location), the DB trigger rejects and we leave it sold_out.
 async function syncAvailabilityToStock(db: any, id: string) {
@@ -2406,99 +2406,14 @@ export const getCoralDiscoveryOverview = createServerFn({ method: "POST" })
   });
 
 // ============================================================================
-// Sale tracking (Phase 1a) — generalized ledger + apply helper.
-// Coral colony: log a frag-off event, never decrement (colony is stock-untracked).
-// Coral frag / fish / dry good: decrement quantity_available, bump quantity_sold
-// (clamped to respect the qty-balance CHECK), flip to sold_out at 0.
-// Tables/columns (inventory_sale_events, colony_gone) cast `as any` until the
-// Phase-1a migration regenerates types. Reused by manual logging now + Clover later.
+// Sale tracking (Phase 1a) — manual sale via the shared `apply_inventory_sale`
+// SECURITY DEFINER RPC, which atomically inserts the inventory_sale_events row,
+// decrements stock through `decrement_inventory_stock` (skipping colony coral),
+// and writes the loyalty earn row when enabled. The SAME RPC backs the Clover
+// sync edge function, so the money path (ledger + decrement + loyalty) has a
+// single source of truth and can't drift. Idempotent on
+// (clover_order_id, clover_line_item_id) → returns duplicate=true.
 // ============================================================================
-export async function applyInventorySale(
-  supabase: any,
-  opts: {
-    inventoryItemId: string;
-    qty: number;
-    unitPriceCents?: number | null;
-    source?: "manual" | "clover";
-    kind?: "sale" | "refund" | "void";
-    cloverRefs?: { orderId?: string; lineItemId?: string; paymentId?: string; itemName?: string };
-    customerId?: string | null;
-    userId?: string;
-    // Reef Club earn config, passed in by the caller (read once per sync batch).
-    // null/omitted = loyalty off; no earn row is written.
-    loyalty?: { earnPercent: number } | null;
-  },
-) {
-  const { data: item, error } = await supabase
-    .from("inventory_items")
-    .select("id, item_type, attrs")
-    .eq("id", opts.inventoryItemId)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!item) throw new Error("Inventory item not found");
-
-  const source = opts.source ?? "manual";
-  const kind = opts.kind ?? "sale";
-  const unit = opts.unitPriceCents ?? null;
-  const stockMode = (item.attrs as any)?.stock_mode ?? null;
-  const isColony = item.item_type === "coral" && stockMode === "colony";
-
-  const totalCents = unit != null ? Math.round(unit * opts.qty) : null;
-  const { data: saleRow, error: le } = await supabase
-    .from("inventory_sale_events")
-    .insert({
-      inventory_item_id: opts.inventoryItemId,
-      qty: opts.qty,
-      unit_price_cents: unit,
-      total_cents: totalCents,
-      source,
-      kind,
-      // refunds/voids land in the review queue (no auto-reverse, per decision)
-      status: kind === "sale" ? "applied" : "needs_review",
-      clover_order_id: opts.cloverRefs?.orderId ?? null,
-      clover_line_item_id: opts.cloverRefs?.lineItemId ?? null,
-      clover_payment_id: opts.cloverRefs?.paymentId ?? null,
-      clover_item_name: opts.cloverRefs?.itemName ?? null,
-      customer_id: opts.customerId ?? null,
-      created_by: opts.userId ?? null,
-    })
-    .select("id")
-    .single();
-  if (le) throw new Error(le.message);
-
-  // Reef Club: earn store credit on a member's purchase, via the shared idempotent
-  // helper (same path retroactive attribution uses). Only fires when loyalty is
-  // enabled and the sale is linked to a customer. BEST-EFFORT BY DESIGN: a loyalty
-  // failure must never break the sale-of-record or stock decrement. Any miss is
-  // recoverable — `attachSaleToCustomer` / the earn backfill re-credit applied
-  // sales that lack an `earn` ledger row, idempotently.
-  if (kind === "sale" && opts.customerId && opts.loyalty && opts.loyalty.earnPercent > 0) {
-    try {
-      const { recordSaleEarn } = await import("@/lib/loyalty.server");
-      await recordSaleEarn(supabase, {
-        customerId: opts.customerId,
-        saleEventId: saleRow.id,
-        totalCents,
-        earnPercent: opts.loyalty.earnPercent,
-        userId: opts.userId ?? null,
-      });
-    } catch {
-      // swallow — the sale is committed; credit is recovered by backfill.
-    }
-  }
-
-  if (kind === "sale" && !isColony) {
-    // Atomic, row-locked decrement (clamps to available, bumps sold, flips to
-    // sold_out at zero) — closes the read-modify-write lost-update race between
-    // concurrent manual + Clover sales of the same item.
-    const { error: ue } = await supabase.rpc("decrement_inventory_stock", {
-      _id: opts.inventoryItemId,
-      _qty: opts.qty,
-    });
-    if (ue) throw new Error(ue.message);
-  }
-  return { ok: true, saleEventId: saleRow.id as string };
-}
 
 // Manual "log a sale" (editor). Heads/frags + optional per-head price (cents).
 export const logInventorySale = createServerFn({ method: "POST" })
@@ -2514,14 +2429,24 @@ export const logInventorySale = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await requireEditor(context.supabase, context.userId);
-    return await applyInventorySale(context.supabase as any, {
-      inventoryItemId: data.inventoryItemId,
-      qty: data.qty,
-      unitPriceCents: data.unitPriceCents ?? null,
-      source: "manual",
-      kind: "sale",
-      userId: context.userId,
+    const { data: rows, error } = await (context.supabase as any).rpc("apply_inventory_sale", {
+      _inventory_item_id: data.inventoryItemId,
+      _qty: data.qty,
+      _unit_price_cents: data.unitPriceCents ?? null,
+      _source: "manual",
+      _kind: "sale",
+      _customer_id: null,
+      _user_id: context.userId,
     });
+    if (error) throw new Error(error.message);
+    // The RPC RETURNS TABLE(sale_event_id, duplicate, earn_cents) → a single row.
+    const row = Array.isArray(rows) ? rows[0] : rows;
+    return {
+      ok: true,
+      saleEventId: (row?.sale_event_id ?? null) as string | null,
+      duplicate: !!row?.duplicate,
+      earnCents: (row?.earn_cents ?? 0) as number,
+    };
   });
 
 // Toggle a colony as fully gone → flips availability to sold_out.
