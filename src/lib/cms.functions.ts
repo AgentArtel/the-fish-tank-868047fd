@@ -66,8 +66,8 @@ export const updateContentStatus = createServerFn({ method: "POST" })
         .from("user_roles")
         .select("role")
         .eq("user_id", userId);
-      const ok = (roles ?? []).some((r: any) => r.role === "admin" || r.role === "reviewer");
-      if (!ok) throw new Error("Only reviewers or admins can approve");
+      const ok = (roles ?? []).some((r: any) => r.role === "admin" || r.role === "dev");
+      if (!ok) throw new Error("Only admins or devs can approve");
     }
     const patch = {
       status: data.next,
@@ -187,7 +187,10 @@ export const buildArrivalPostFromBatch = createServerFn({ method: "POST" })
       for (const l of livestock) {
         for (const k of speciesKeyCandidates(l)) {
           const id = assetByKey.get(k);
-          if (id) { pickedIds.add(id); break; }
+          if (id) {
+            pickedIds.add(id);
+            break;
+          }
         }
       }
       if (pickedIds.size) {
@@ -241,11 +244,15 @@ export const getSignedUrls = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const { data: prof } = await supabase
-      .from("profiles").select("is_active").eq("id", userId).maybeSingle();
+      .from("profiles")
+      .select("is_active")
+      .eq("id", userId)
+      .maybeSingle();
     if (!prof?.is_active) throw new Error("Forbidden: account pending approval");
     if (data.paths.length === 0) return { urls: {} as Record<string, string> };
     const { data: signed, error } = await context.supabase.storage
-      .from("media").createSignedUrls(data.paths, 3600);
+      .from("media")
+      .createSignedUrls(data.paths, 3600);
     if (error) throw new Error(error.message);
     const urls: Record<string, string> = {};
     for (const s of signed ?? []) {
@@ -254,7 +261,7 @@ export const getSignedUrls = createServerFn({ method: "POST" })
     return { urls };
   });
 
-const ROLE_ENUM = z.enum(["admin", "manager", "creator", "reviewer", "staff", "viewer"]);
+const ROLE_ENUM = z.enum(["admin", "dev", "floor_staff"]);
 
 export const approveUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -369,7 +376,11 @@ const ARRIVAL_IMG_TYPES = ["fish", "coral", "invert", "live_rock"] as const;
 // Normalize a raw species name to the lookup key shape used by the seeder.
 function normKey(raw: string | null | undefined): string | null {
   if (!raw) return null;
-  const k = raw.toString().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const k = raw
+    .toString()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
   return k || null;
 }
 
@@ -388,9 +399,9 @@ export function speciesKeyCandidates(line: {
   };
   const common = (line.clean_item_name || line.raw_description || "").toString();
   if (common) {
-    add(common);                             // full
-    add(common.split(";")[0]);               // strip "; Atl."
-    add(common.replace(/\([^)]*\)/g, " "));  // strip "(Hippo)"
+    add(common); // full
+    add(common.split(";")[0]); // strip "; Atl."
+    add(common.replace(/\([^)]*\)/g, " ")); // strip "(Hippo)"
     add(common.split(";")[0].replace(/\([^)]*\)/g, " ")); // both
   }
   add(line.scientific_name);
@@ -427,7 +438,12 @@ export const listSpeciesMediaForPost = createServerFn({ method: "POST" })
       .select("source_vendor_batch_id")
       .eq("id", data.contentItemId)
       .maybeSingle();
-    if (!item?.source_vendor_batch_id) return { lines: [], assetsByKey: {} as Record<string, any[]>, attachedAssetIds: [] as string[] };
+    if (!item?.source_vendor_batch_id)
+      return {
+        lines: [],
+        assetsByKey: {} as Record<string, any[]>,
+        attachedAssetIds: [] as string[],
+      };
 
     const { data: lines } = await supabase
       .from("vendor_line_items")
