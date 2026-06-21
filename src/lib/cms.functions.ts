@@ -418,20 +418,37 @@ export const listSpeciesMediaForPost = createServerFn({ method: "POST" })
       .or(`item_type.is.null,item_type.in.(${ARRIVAL_IMG_TYPES.join(",")})`)
       .order("line_number", { nullsFirst: false });
 
-    const keys = Array.from(
-      new Set((lines ?? []).map((l: any) => speciesKeyFromLine(l)).filter(Boolean) as string[]),
-    );
+    // Gather every candidate key across every line, fetch matching assets,
+    // then bucket per line by *any* of that line's candidate keys hitting.
+    const allKeys = new Set<string>();
+    for (const l of lines ?? []) for (const k of speciesKeyCandidates(l as any)) allKeys.add(k);
+
     let assetsByKey: Record<string, any[]> = {};
-    if (keys.length) {
+    if (allKeys.size) {
       const { data: assets } = await supabase
         .from("media_assets")
         .select("id, file_name, storage_path, media_type, alt_text, species_key, created_at")
-        .in("species_key", keys)
+        .in("species_key", Array.from(allKeys))
         .eq("media_type", "image")
         .order("created_at", { ascending: false });
+      const bySpeciesKey = new Map<string, any[]>();
       for (const a of assets ?? []) {
         const k = (a as any).species_key as string;
-        (assetsByKey[k] ??= []).push(a);
+        (bySpeciesKey.get(k) ?? bySpeciesKey.set(k, []).get(k))!.push(a);
+      }
+      // Bucket per line's primary key so the UI keeps its existing shape.
+      for (const l of lines ?? []) {
+        const primary = speciesKeyFromLine(l as any);
+        if (!primary) continue;
+        const seen = new Set<string>();
+        const bucket: any[] = (assetsByKey[primary] ??= []);
+        for (const k of speciesKeyCandidates(l as any)) {
+          for (const a of bySpeciesKey.get(k) ?? []) {
+            if (seen.has(a.id)) continue;
+            seen.add(a.id);
+            bucket.push(a);
+          }
+        }
       }
     }
 
