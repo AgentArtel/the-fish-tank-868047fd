@@ -2109,6 +2109,8 @@ export type Database = {
         Returns: boolean
       }
       is_active_user: { Args: { _user_id: string }; Returns: boolean }
+      is_admin_or_dev: { Args: { _user_id: string }; Returns: boolean }
+      is_floor_staff_or_above: { Args: { _user_id: string }; Returns: boolean }
       loyalty_redeem: {
         Args: {
           _amount_cents: number
@@ -2134,6 +2136,19 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      record_inventory_loss: {
+        Args: {
+          _inventory_item_id: string
+          _note?: string
+          _qty: number
+          _reason: string
+        }
+        Returns: {
+          availability_status: string
+          quantity_available: number
+          quantity_lost: number
+        }[]
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
     }
@@ -2143,8 +2158,9 @@ export type Database = {
         | "creator"
         | "reviewer"
         | "manager"
-        | "staff"
+        | "floor_staff"
         | "viewer"
+        | "dev"
       availability_status:
         | "available"
         | "sold"
@@ -2419,7 +2435,15 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "creator", "reviewer", "manager", "staff", "viewer"],
+      app_role: [
+        "admin",
+        "creator",
+        "reviewer",
+        "manager",
+        "floor_staff",
+        "viewer",
+        "dev",
+      ],
       availability_status: [
         "available",
         "sold",
