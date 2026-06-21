@@ -25,7 +25,8 @@ import {
   updateContentStatus, getSignedUrl, getMe, deleteContentItem,
   listSpeciesMediaForPost, attachMediaToPost, speciesKeyFromLine,
 } from "@/lib/cms.functions";
-import { Copy, Trash2, ArrowLeft, Upload, Check } from "lucide-react";
+import { Copy, Trash2, ArrowLeft, Upload, Check, ImageIcon } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/_app/content/$id")({ component: ContentDetail });
 
@@ -369,13 +370,23 @@ function SpeciesMediaSection({ contentItemId, onChanged }: { contentItemId: stri
           const name = l.clean_item_name || l.raw_description || "Unnamed";
           return (
             <div key={l.id} className="border rounded-md p-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="text-sm font-medium">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="text-sm font-medium min-w-0 flex-1">
                   {name}
                   {l.scientific_name && <span className="italic text-muted-foreground"> ({l.scientific_name})</span>}
                   {!key && <Badge variant="destructive" className="ml-2 text-[10px]">no species name</Badge>}
                 </div>
-                {key && <UploadSpeciesImage speciesKey={key} contentItemId={contentItemId} altText={name} onDone={onUploaded} />}
+                <div className="flex flex-wrap gap-2">
+                  {key && (
+                    <GalleryPickButton
+                      contentItemId={contentItemId}
+                      speciesKey={key}
+                      attachedIds={attached}
+                      onDone={onUploaded}
+                    />
+                  )}
+                  {key && <UploadSpeciesImage speciesKey={key} contentItemId={contentItemId} altText={name} onDone={onUploaded} />}
+                </div>
               </div>
               {assets.length > 0 && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
@@ -391,7 +402,7 @@ function SpeciesMediaSection({ contentItemId, onChanged }: { contentItemId: stri
                 </div>
               )}
               {key && assets.length === 0 && (
-                <p className="text-xs text-muted-foreground mt-2">No image saved yet — upload one above.</p>
+                <p className="text-xs text-muted-foreground mt-2">No suggested matches — use Choose from gallery or Upload.</p>
               )}
             </div>
           );
@@ -471,4 +482,103 @@ function SpeciesAssetTile({ asset, attached, busy, onAttach }: {
     </div>
   );
 }
+
+// Browse the full image library, search, click to attach. On pick we also
+// stamp the asset's species_key so this fish auto-matches next time.
+function GalleryPickButton({ contentItemId, speciesKey, attachedIds, onDone }: {
+  contentItemId: string; speciesKey: string; attachedIds: Set<string>; onDone: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const { data: gallery } = useQuery({
+    queryKey: ["gallery-images"],
+    enabled: open,
+    queryFn: async () => (await supabase
+      .from("media_assets")
+      .select("id, file_name, storage_path, species_key, alt_text")
+      .eq("media_type", "image")
+      .order("species_key", { ascending: true, nullsFirst: false })
+      .limit(1000)).data ?? [],
+  });
+  const filtered = (gallery ?? []).filter((a: any) => {
+    if (!q.trim()) return true;
+    const needle = q.toLowerCase();
+    return (a.species_key ?? "").toLowerCase().includes(needle)
+      || (a.file_name ?? "").toLowerCase().includes(needle);
+  });
+  const pick = async (a: any) => {
+    setBusyId(a.id);
+    try {
+      // Learn the mapping so this species auto-matches next time.
+      if (a.species_key !== speciesKey) {
+        await supabase.from("media_assets").update({ species_key: speciesKey }).eq("id", a.id);
+      }
+      if (!attachedIds.has(a.id)) {
+        const { error } = await supabase.from("content_media").insert({
+          content_item_id: contentItemId, media_asset_id: a.id,
+        });
+        if (error && !/duplicate|unique/i.test(error.message)) throw error;
+      }
+      toast.success("Attached");
+      onDone();
+      setOpen(false);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to attach");
+    } finally {
+      setBusyId(null);
+    }
+  };
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline">
+          <ImageIcon className="w-3 h-3 mr-1" /> Choose from gallery
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Pick an image for "{speciesKey}"</DialogTitle>
+        </DialogHeader>
+        <Input
+          autoFocus
+          placeholder="Search by species or filename…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 overflow-auto flex-1">
+          {filtered.map((a: any) => (
+            <GalleryTile key={a.id} asset={a} busy={busyId === a.id} onPick={() => pick(a)} />
+          ))}
+          {filtered.length === 0 && (
+            <p className="col-span-full text-sm text-muted-foreground text-center py-6">No images.</p>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function GalleryTile({ asset, busy, onPick }: { asset: any; busy: boolean; onPick: () => void }) {
+  const getUrl = useServerFn(getSignedUrl);
+  const { data } = useQuery({
+    queryKey: ["signed", asset.storage_path],
+    queryFn: () => getUrl({ data: { path: asset.storage_path } }),
+    staleTime: 50 * 60 * 1000,
+  });
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={onPick}
+      className="border rounded overflow-hidden text-left hover:border-primary disabled:opacity-50"
+    >
+      <div className="aspect-square bg-muted">
+        {data?.url && <img src={data.url} alt={asset.alt_text ?? ""} className="w-full h-full object-cover" loading="lazy" />}
+      </div>
+      <div className="p-1 text-[10px] truncate">{asset.species_key || asset.file_name}</div>
+    </button>
+  );
+}
+
 
