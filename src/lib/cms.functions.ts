@@ -254,7 +254,7 @@ export const getSignedUrls = createServerFn({ method: "POST" })
     return { urls };
   });
 
-const ROLE_ENUM = z.enum(["admin", "manager", "creator", "reviewer", "staff", "viewer"]);
+const ROLE_ENUM = z.enum(["admin", "dev", "floor_staff"]);
 
 export const approveUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
