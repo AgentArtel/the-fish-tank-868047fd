@@ -568,7 +568,7 @@ function GalleryPickButton({ contentItemId, speciesKey, attachedIds, onDone }: {
               onClick={() => pick(a)}
               className="group flex min-w-0 flex-col overflow-hidden rounded-md border bg-card text-left transition-colors hover:border-primary disabled:opacity-50"
             >
-              <div className="relative aspect-square w-full shrink-0 overflow-hidden bg-muted">
+              <div className="relative h-32 w-full shrink-0 overflow-hidden bg-muted sm:h-40">
                 {urlMap[a.storage_path] ? (
                   <img src={urlMap[a.storage_path]} alt={a.alt_text ?? ""} className="absolute inset-0 h-full w-full object-contain" loading="lazy" />
                 ) : (
