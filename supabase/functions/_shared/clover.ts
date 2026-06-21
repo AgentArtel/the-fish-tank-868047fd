@@ -1,19 +1,65 @@
-// Clover REST API client (server-only). Credentials are loaded from the
-// admin-only `clover_credentials` table at call time and passed in here —
-// nothing is read from process.env so admins can rotate creds via the UI.
-// Money is in cents throughout.
+// Shared Clover REST client + auth helpers for the clover-* edge functions.
+// Money is in cents. Creds are loaded from the `clover_credentials` table via
+// the service role — never from env — so admins can rotate via the app UI.
 
-export type CloverCreds = {
-  token: string;
-  merchantId: string;
-  baseUrl: string;
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+
+export const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-// Load creds via the service-role client. Caller MUST have already authorized
-// the request (admin or editor) before invoking this.
-export async function loadCloverCreds(): Promise<CloverCreds | null> {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data } = await supabaseAdmin
+export function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+export function makeAdmin(): SupabaseClient {
+  const url = Deno.env.get("SUPABASE_URL")!;
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
+// Authorize: caller must be an active admin (matches the app's testCloverConnection /
+// importCloverCatalog / syncCloverSalesChunk guards). Returns { admin, userId }.
+// Service-role callers (e.g. pg_cron with the service key as Authorization) bypass
+// this check — `_internal` mode skips user-token verification.
+export async function requireAdminCaller(req: Request): Promise<{
+  admin: SupabaseClient;
+  userId: string | null;
+  error?: Response;
+}> {
+  const admin = makeAdmin();
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) {
+    return { admin, userId: null, error: json({ error: "Missing Authorization header" }, 401) };
+  }
+  const jwt = authHeader.replace(/^Bearer\s+/i, "");
+  // If the caller used the service-role key directly (cron), allow.
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  if (jwt === serviceKey) return { admin, userId: null };
+
+  const { data: userRes, error: userErr } = await admin.auth.getUser(jwt);
+  if (userErr || !userRes?.user) {
+    return { admin, userId: null, error: json({ error: "Invalid auth token" }, 401) };
+  }
+  const userId = userRes.user.id;
+  const { data: isAdmin } = await admin.rpc("has_role", { _user_id: userId, _role: "admin" });
+  if (!isAdmin) {
+    return { admin, userId, error: json({ error: "Admins only" }, 403) };
+  }
+  return { admin, userId };
+}
+
+export type CloverCreds = { token: string; merchantId: string; baseUrl: string };
+
+export async function loadCloverCreds(admin: SupabaseClient): Promise<CloverCreds | null> {
+  const { data } = await admin
     .from("clover_credentials")
     .select("api_token, merchant_id, base_url")
     .maybeSingle();
@@ -27,19 +73,18 @@ export async function loadCloverCreds(): Promise<CloverCreds | null> {
   };
 }
 
-export async function requireCloverCreds(): Promise<CloverCreds> {
-  const c = await loadCloverCreds();
-  if (!c) {
+export async function requireCloverCreds(admin: SupabaseClient): Promise<CloverCreds> {
+  const c = await loadCloverCreds(admin);
+  if (!c)
     throw new Error(
       "Clover not configured — enter the API token and merchant ID under Settings → Clover.",
     );
-  }
   return c;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function cloverGet(
+export async function cloverGet(
   creds: CloverCreds,
   path: string,
   params?: Record<string, string | number>,
@@ -77,10 +122,8 @@ export async function cloverTestConnection(
     const j = await cloverGet(creds, `/v3/merchants/${creds.merchantId}`);
     return { id: j.id, name: j.name };
   } catch (e: any) {
-    // Some Clover API tokens carry Inventory + Orders read scope but NOT
-    // merchant-info read — so /merchants/{mid} 401s even though the creds are
-    // valid for everything we actually use. Fall back to an endpoint we rely on
-    // (items); if that works, the connection is good.
+    // Some tokens lack merchant-info scope but have inventory/orders scope —
+    // fall back to a read we actually rely on.
     if (!/HTTP 401|HTTP 403/.test(e?.message ?? "")) throw e;
     await cloverGet(creds, `/v3/merchants/${creds.merchantId}/items`, { limit: 1 });
     return { id: creds.merchantId, name: `merchant ${creds.merchantId}` };
@@ -97,9 +140,6 @@ export async function cloverListItems(creds: CloverCreds): Promise<CloverItem[]>
     });
     const els: any[] = j.elements ?? [];
     for (const e of els) {
-      // Skip items hidden/archived in Clover — they shouldn't become sellable
-      // workspace drafts. Pagination still walks the full set (break uses the
-      // raw page length below), so this only filters what we return.
       if (e.hidden) continue;
       out.push({
         id: e.id,
@@ -146,34 +186,18 @@ export async function cloverListRecentOrders(
   const out: CloverOrder[] = [];
   let offset = 0;
   while (offset < 50_000) {
-    const page = await cloverListRecentOrdersPage(creds, sinceMs, offset, 100);
-    out.push(...page);
-    if (page.length < 100) break;
+    const j = await cloverGet(creds, `/v3/merchants/${creds.merchantId}/orders`, {
+      filter: `modifiedTime>=${sinceMs}`,
+      expand: "lineItems,payments,customers",
+      limit: 100,
+      offset,
+    });
+    const els: any[] = j.elements ?? [];
+    for (const o of els) out.push(mapCloverOrder(o));
+    if (els.length < 100) break;
     offset += 100;
   }
   return out;
-}
-
-// One page of orders modified since `sinceMs` (for the chunked manual sync). The
-// caller advances `offset` by the returned length and stops when a short page
-// (< limit) comes back. Shares the element→CloverOrder mapping with the all-pages
-// fetch above.
-export async function cloverListRecentOrdersPage(
-  creds: CloverCreds,
-  sinceMs: number,
-  offset: number,
-  limit: number,
-): Promise<CloverOrder[]> {
-  const j = await cloverGet(creds, `/v3/merchants/${creds.merchantId}/orders`, {
-    filter: `modifiedTime>=${sinceMs}`,
-    // `customers` attaches the buyer when the order has one (most POS orders are
-    // anonymous walk-ins → no customer). Email/phone come through only if the API
-    // token carries the customer-PII read scopes; we read them defensively.
-    expand: "lineItems,payments,customers",
-    limit,
-    offset,
-  });
-  return ((j.elements ?? []) as any[]).map(mapCloverOrder);
 }
 
 function mapCloverOrder(o: any): CloverOrder {
@@ -205,4 +229,19 @@ function mapCloverOrder(o: any): CloverOrder {
       refunded: !!li.refunded,
     })),
   };
+}
+
+// Same heuristic as src/lib/coral-type.ts — kept inline so edge fns don't need
+// to import the app's TS. Match if the name contains a coral keyword.
+const CORAL_KEYWORDS = [
+  "coral","acro","acropora","monti","montipora","zoa","zoanthid","palytho","paly",
+  "mushroom","ricordea","rhodactis","discosoma","euphyllia","hammer","torch","frogspawn",
+  "chalice","favia","favites","goniopora","gonio","alveopora","duncan","blasto",
+  "lobophyllia","lobo","scolymia","scoly","trachyphyllia","trachy","wellso","platygyra",
+  "stylophora","stylo","seriatopora","birdsnest","pocillopora","pocci","leptastrea",
+  "leptoseris","cyphastrea","psammacora","pavona","turbinaria","sps","lps",
+];
+export function looksLikeCoral(name: string): boolean {
+  const s = (name || "").toLowerCase();
+  return CORAL_KEYWORDS.some((k) => s.includes(k));
 }
