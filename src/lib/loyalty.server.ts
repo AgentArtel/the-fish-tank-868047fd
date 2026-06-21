@@ -1,5 +1,5 @@
-// Reef Club — server-only DB helpers shared by the earn-on-sync path
-// (ops.functions.ts / clover.ingest.server.ts) and the loyalty server fns.
+// Reef Club — server-only DB helpers shared by the sale-earn path
+// (the apply_inventory_sale RPC) and the loyalty server fns.
 
 import {
   DEFAULT_EARN_PERCENT,
@@ -30,7 +30,7 @@ export async function loadLoyaltyConfig(db: any): Promise<LoyaltyConfig> {
 }
 
 // Write the `earn` ledger row for one linked member sale. Single source of truth
-// for earning, used by both the live sync (applyInventorySale) and retroactive
+// for earning, used by both the sale path (the apply_inventory_sale RPC) and retroactive
 // attribution (attachSaleToCustomer). Idempotent: the ledger's
 // UNIQUE(sale_event_id, kind) means a repeat is swallowed, never double-credited.
 // Returns the cents credited, or 0 when nothing was written (no value, or already
