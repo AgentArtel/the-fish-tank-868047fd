@@ -2050,6 +2050,26 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_inventory_sale: {
+        Args: {
+          _clover_item_name?: string
+          _clover_line_item_id?: string
+          _clover_order_id?: string
+          _clover_payment_id?: string
+          _customer_id?: string
+          _inventory_item_id: string
+          _kind?: string
+          _qty: number
+          _source?: string
+          _unit_price_cents?: number
+          _user_id?: string
+        }
+        Returns: {
+          duplicate: boolean
+          earn_cents: number
+          sale_event_id: string
+        }[]
+      }
       can_edit_content: { Args: { _user_id: string }; Returns: boolean }
       customer_loyalty_summary: {
         Args: { _customer_id: string }
