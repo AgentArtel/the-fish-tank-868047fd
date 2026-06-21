@@ -22,7 +22,7 @@ import {
   allowedNext, type ContentStatus, type Platform,
 } from "@/lib/workflow";
 import {
-  updateContentStatus, getSignedUrl, getMe, deleteContentItem,
+  updateContentStatus, getSignedUrl, getSignedUrls, getMe, deleteContentItem,
   listSpeciesMediaForPost, attachMediaToPost, speciesKeyFromLine,
 } from "@/lib/cms.functions";
 import { Copy, Trash2, ArrowLeft, Upload, Check, ImageIcon } from "lucide-react";
