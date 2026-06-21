@@ -9,15 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useMe } from "@/hooks/use-me";
-import {
-  getCloverOverview,
-  testCloverConnection,
-  importCloverCatalog,
-  createWorkspaceItemsFromClover,
-  syncCloverSalesChunk,
-  getCloverSettings,
-  saveCloverSettings,
-} from "@/lib/clover.functions";
+import { supabase } from "@/integrations/supabase/client";
+import { getCloverOverview, getCloverSettings, saveCloverSettings } from "@/lib/clover.functions";
 import {
   Loader2,
   Plug,
@@ -47,10 +40,6 @@ function CloverSettings() {
   const isAdmin = (me.data?.roles ?? []).includes("admin");
 
   const overviewFn = useServerFn(getCloverOverview);
-  const testFn = useServerFn(testCloverConnection);
-  const importFn = useServerFn(importCloverCatalog);
-  const createItemsFn = useServerFn(createWorkspaceItemsFromClover);
-  const syncSalesChunkFn = useServerFn(syncCloverSalesChunk);
   const { data, isLoading } = useQuery({
     queryKey: ["clover-overview"],
     queryFn: () => overviewFn(),
@@ -62,11 +51,18 @@ function CloverSettings() {
   const [syncing, setSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
 
+  // All external Clover work runs in Supabase Edge Functions (clover-test-connection /
+  // clover-import-catalog / clover-sync-sales). The app just invokes them and reacts to
+  // the table state they write (counts come from the clover-overview query, refreshed
+  // here). The import edge fn does the full catalog pass server-side — no browser loop.
   const test = async () => {
     setTesting(true);
     try {
-      const r = await testFn();
-      toast.success(`Connected to ${r.merchant.name}`);
+      const { data: r, error } = await supabase.functions.invoke("clover-test-connection", {
+        body: {},
+      });
+      if (error) throw new Error(error.message);
+      toast.success(r?.merchant?.name ? `Connected to ${r.merchant.name}` : "Connected to Clover");
       qc.invalidateQueries({ queryKey: ["clover-overview"] });
     } catch (e: any) {
       toast.error(e?.message ?? "Connection failed");
@@ -77,24 +73,18 @@ function CloverSettings() {
 
   const runImport = async () => {
     setImporting(true);
-    setImportStatus("Syncing Clover catalog…");
+    setImportStatus("Importing Clover catalog…");
     try {
-      // Step 1 — sync the link rows (cheap, one request).
-      const r = await importFn();
-      // Step 2 — create the workspace items in small chunks the Worker can finish,
-      // looping from the browser until nothing is left to create.
-      let createdTotal = 0;
-      let guard = 0;
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        const c = await createItemsFn({ data: { limit: 200 } });
-        createdTotal += c.created + c.relinked;
-        setImportStatus(`Creating workspace items… ${createdTotal} linked, ${c.remaining} to go`);
-        qc.invalidateQueries({ queryKey: ["clover-overview"] });
-        if (c.done || c.processed === 0) break;
-        if (++guard > 100) break; // safety: never loop forever
-      }
-      toast.success(`Imported ${r.fetched} Clover items — ${createdTotal} created/linked this run`);
+      const { data: r, error } = await supabase.functions.invoke("clover-import-catalog", {
+        body: {},
+      });
+      if (error) throw new Error(error.message);
+      const fetched = r?.fetched;
+      toast.success(
+        typeof fetched === "number"
+          ? `Imported ${fetched} Clover items`
+          : "Clover catalog import complete",
+      );
       qc.invalidateQueries({ queryKey: ["clover-overview"] });
       qc.invalidateQueries({ queryKey: ["inventory"] });
     } catch (e: any) {
@@ -109,36 +99,19 @@ function CloverSettings() {
     setSyncing(true);
     setSyncStatus("Syncing recent Clover sales…");
     try {
-      // Chunked: the server processes a page of orders per call (Worker-safe); we
-      // loop until `done`, advancing the offset. runStartMs is fixed for the whole
-      // sync so the watermark (written on the final page) marks when it began.
-      const runStartMs = Date.now();
-      const sinceMs = runStartMs - 30 * 86_400_000; // 30-day window
-      let offset = 0;
-      let lineItemsSeen = 0;
-      let applied = 0;
-      let needsReview = 0;
-      let ordersScanned = 0;
-      let errorCount = 0;
-      let guard = 0;
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        const r = await syncSalesChunkFn({ data: { sinceMs, runStartMs, offset, limit: 40 } });
-        ordersScanned += r.ordersScanned;
-        lineItemsSeen += r.lineItemsSeen;
-        applied += r.applied;
-        needsReview += r.needsReview;
-        errorCount += r.errors.length;
-        offset = r.nextOffset;
-        setSyncStatus(`Syncing sales… ${ordersScanned} orders, ${applied} applied to stock`);
-        qc.invalidateQueries({ queryKey: ["clover-overview"] });
-        if (r.done) break;
-        if (++guard > 2000) break; // safety: ≤ 80k orders/run
-      }
+      const { data: r, error } = await supabase.functions.invoke("clover-sync-sales", {
+        body: {},
+      });
+      if (error) throw new Error(error.message);
+      const applied = r?.applied;
+      const needsReview = r?.needsReview;
       toast.success(
-        `Synced ${lineItemsSeen} Clover line items — ${applied} applied to stock, ${needsReview} need review`,
+        typeof applied === "number"
+          ? `Sale sync complete — ${applied} applied to stock${
+              typeof needsReview === "number" ? `, ${needsReview} need review` : ""
+            }`
+          : "Clover sale sync complete",
       );
-      if (errorCount) toast.warning(`${errorCount} line items errored — check logs`);
       qc.invalidateQueries({ queryKey: ["clover-overview"] });
     } catch (e: any) {
       toast.error(e?.message ?? "Sale sync failed");
@@ -231,10 +204,9 @@ function CloverSettings() {
             Pulls every Clover item and{" "}
             <span className="font-medium">creates a linked workspace item</span> for it (read-only
             against Clover). New items come in as drafts — quantity 0, priced from Clover,{" "}
-            <span className="font-medium">not for sale</span> until you add a photo. Items are
-            created in small batches with a live count above, so it's safe even for large catalogs —
-            keep this tab open until it finishes. Re-run anytime to pick up Clover changes
-            (already-linked items keep your workspace edits).
+            <span className="font-medium">not for sale</span> until you add a photo. The import runs
+            server-side in one pass; the counts above refresh when it finishes. Re-run anytime to
+            pick up Clover changes (already-linked items keep your workspace edits).
           </p>
         </div>
 
