@@ -166,26 +166,33 @@ export const buildArrivalPostFromBatch = createServerFn({ method: "POST" })
 
     // Auto-attach any previously-uploaded images for these species. So the
     // second time a fish shows up in a PO, the draft post comes back already
-    // illustrated — no clicks needed.
-    const keys = Array.from(
-      new Set(livestock.map((l) => speciesKeyFromLine(l)).filter(Boolean) as string[]),
-    );
-    if (keys.length) {
+    // illustrated — no clicks needed. We try every candidate key per line
+    // (common name with/without "; suffix"/parentheticals, plus scientific).
+    const allKeys = new Set<string>();
+    for (const l of livestock) for (const k of speciesKeyCandidates(l)) allKeys.add(k);
+    if (allKeys.size) {
       const { data: assets } = await supabase
         .from("media_assets")
         .select("id, species_key, created_at")
-        .in("species_key", keys)
+        .in("species_key", Array.from(allKeys))
         .eq("media_type", "image")
         .order("created_at", { ascending: false });
-      // Pick the most-recent asset per species_key.
-      const picked = new Map<string, string>();
+      const assetByKey = new Map<string, string>();
       for (const a of assets ?? []) {
         const k = (a as any).species_key as string;
-        if (!picked.has(k)) picked.set(k, (a as any).id);
+        if (!assetByKey.has(k)) assetByKey.set(k, (a as any).id);
       }
-      if (picked.size) {
+      // Pick the first hit per line (across its candidate keys), dedupe.
+      const pickedIds = new Set<string>();
+      for (const l of livestock) {
+        for (const k of speciesKeyCandidates(l)) {
+          const id = assetByKey.get(k);
+          if (id) { pickedIds.add(id); break; }
+        }
+      }
+      if (pickedIds.size) {
         await supabase.from("content_media").insert(
-          Array.from(picked.values()).map((mediaAssetId) => ({
+          Array.from(pickedIds).map((mediaAssetId) => ({
             content_item_id: inserted.id,
             media_asset_id: mediaAssetId,
           })),
@@ -340,19 +347,45 @@ export const inviteUser = createServerFn({ method: "POST" })
 
 const ARRIVAL_IMG_TYPES = ["fish", "coral", "invert", "live_rock"] as const;
 
-// Normalize a species name to the lookup key. Prefers the common name (which
-// is what shows up on vendor POs); scientific name is the fallback. Keep the
-// normalization simple and identical to the seeder: lowercase, collapse all
-// non-alphanumerics to single spaces, trim.
+// Normalize a raw species name to the lookup key shape used by the seeder.
+function normKey(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const k = raw.toString().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return k || null;
+}
+
+// Build every candidate key for a PO line. The seeder mixes common-name and
+// scientific-name file keys, and PO common names often carry suffixes like
+// "; Atl." / "(Hippo)" — we strip those to widen the hit rate.
+export function speciesKeyCandidates(line: {
+  scientific_name?: string | null;
+  clean_item_name?: string | null;
+  raw_description?: string | null;
+}): string[] {
+  const out = new Set<string>();
+  const add = (s: string | null | undefined) => {
+    const k = normKey(s);
+    if (k) out.add(k);
+  };
+  const common = (line.clean_item_name || line.raw_description || "").toString();
+  if (common) {
+    add(common);                             // full
+    add(common.split(";")[0]);               // strip "; Atl."
+    add(common.replace(/\([^)]*\)/g, " "));  // strip "(Hippo)"
+    add(common.split(";")[0].replace(/\([^)]*\)/g, " ")); // both
+  }
+  add(line.scientific_name);
+  return Array.from(out);
+}
+
+// Primary key (for display / single-row lookups). Kept for callers that
+// expect one canonical key per line — the first candidate.
 export function speciesKeyFromLine(line: {
   scientific_name?: string | null;
   clean_item_name?: string | null;
   raw_description?: string | null;
 }): string | null {
-  const raw = line.clean_item_name || line.raw_description || line.scientific_name;
-  if (!raw) return null;
-  const k = raw.toString().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-  return k || null;
+  return speciesKeyCandidates(line)[0] ?? null;
 }
 
 // List livestock lines on the batch tied to this post + any media_assets that
@@ -385,20 +418,37 @@ export const listSpeciesMediaForPost = createServerFn({ method: "POST" })
       .or(`item_type.is.null,item_type.in.(${ARRIVAL_IMG_TYPES.join(",")})`)
       .order("line_number", { nullsFirst: false });
 
-    const keys = Array.from(
-      new Set((lines ?? []).map((l: any) => speciesKeyFromLine(l)).filter(Boolean) as string[]),
-    );
+    // Gather every candidate key across every line, fetch matching assets,
+    // then bucket per line by *any* of that line's candidate keys hitting.
+    const allKeys = new Set<string>();
+    for (const l of lines ?? []) for (const k of speciesKeyCandidates(l as any)) allKeys.add(k);
+
     let assetsByKey: Record<string, any[]> = {};
-    if (keys.length) {
+    if (allKeys.size) {
       const { data: assets } = await supabase
         .from("media_assets")
         .select("id, file_name, storage_path, media_type, alt_text, species_key, created_at")
-        .in("species_key", keys)
+        .in("species_key", Array.from(allKeys))
         .eq("media_type", "image")
         .order("created_at", { ascending: false });
+      const bySpeciesKey = new Map<string, any[]>();
       for (const a of assets ?? []) {
         const k = (a as any).species_key as string;
-        (assetsByKey[k] ??= []).push(a);
+        (bySpeciesKey.get(k) ?? bySpeciesKey.set(k, []).get(k))!.push(a);
+      }
+      // Bucket per line's primary key so the UI keeps its existing shape.
+      for (const l of lines ?? []) {
+        const primary = speciesKeyFromLine(l as any);
+        if (!primary) continue;
+        const seen = new Set<string>();
+        const bucket: any[] = (assetsByKey[primary] ??= []);
+        for (const k of speciesKeyCandidates(l as any)) {
+          for (const a of bySpeciesKey.get(k) ?? []) {
+            if (seen.has(a.id)) continue;
+            seen.add(a.id);
+            bucket.push(a);
+          }
+        }
       }
     }
 
