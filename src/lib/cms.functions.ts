@@ -166,26 +166,33 @@ export const buildArrivalPostFromBatch = createServerFn({ method: "POST" })
 
     // Auto-attach any previously-uploaded images for these species. So the
     // second time a fish shows up in a PO, the draft post comes back already
-    // illustrated — no clicks needed.
-    const keys = Array.from(
-      new Set(livestock.map((l) => speciesKeyFromLine(l)).filter(Boolean) as string[]),
-    );
-    if (keys.length) {
+    // illustrated — no clicks needed. We try every candidate key per line
+    // (common name with/without "; suffix"/parentheticals, plus scientific).
+    const allKeys = new Set<string>();
+    for (const l of livestock) for (const k of speciesKeyCandidates(l)) allKeys.add(k);
+    if (allKeys.size) {
       const { data: assets } = await supabase
         .from("media_assets")
         .select("id, species_key, created_at")
-        .in("species_key", keys)
+        .in("species_key", Array.from(allKeys))
         .eq("media_type", "image")
         .order("created_at", { ascending: false });
-      // Pick the most-recent asset per species_key.
-      const picked = new Map<string, string>();
+      const assetByKey = new Map<string, string>();
       for (const a of assets ?? []) {
         const k = (a as any).species_key as string;
-        if (!picked.has(k)) picked.set(k, (a as any).id);
+        if (!assetByKey.has(k)) assetByKey.set(k, (a as any).id);
       }
-      if (picked.size) {
+      // Pick the first hit per line (across its candidate keys), dedupe.
+      const pickedIds = new Set<string>();
+      for (const l of livestock) {
+        for (const k of speciesKeyCandidates(l)) {
+          const id = assetByKey.get(k);
+          if (id) { pickedIds.add(id); break; }
+        }
+      }
+      if (pickedIds.size) {
         await supabase.from("content_media").insert(
-          Array.from(picked.values()).map((mediaAssetId) => ({
+          Array.from(pickedIds).map((mediaAssetId) => ({
             content_item_id: inserted.id,
             media_asset_id: mediaAssetId,
           })),
