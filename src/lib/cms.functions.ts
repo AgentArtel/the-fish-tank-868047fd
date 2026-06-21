@@ -235,6 +235,25 @@ export const getSignedUrl = createServerFn({ method: "POST" })
     return { url: signed.signedUrl };
   });
 
+export const getSignedUrls = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ paths: z.array(z.string().min(1)).max(500) }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: prof } = await supabase
+      .from("profiles").select("is_active").eq("id", userId).maybeSingle();
+    if (!prof?.is_active) throw new Error("Forbidden: account pending approval");
+    if (data.paths.length === 0) return { urls: {} as Record<string, string> };
+    const { data: signed, error } = await context.supabase.storage
+      .from("media").createSignedUrls(data.paths, 3600);
+    if (error) throw new Error(error.message);
+    const urls: Record<string, string> = {};
+    for (const s of signed ?? []) {
+      if (s.path && s.signedUrl) urls[s.path] = s.signedUrl;
+    }
+    return { urls };
+  });
+
 const ROLE_ENUM = z.enum(["admin", "manager", "creator", "reviewer", "staff", "viewer"]);
 
 export const approveUser = createServerFn({ method: "POST" })
