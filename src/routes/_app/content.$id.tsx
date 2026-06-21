@@ -491,7 +491,8 @@ function GalleryPickButton({ contentItemId, speciesKey, attachedIds, onDone }: {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
-  const { data: gallery } = useQuery({
+  const signUrls = useServerFn(getSignedUrls);
+  const { data: gallery, isLoading } = useQuery({
     queryKey: ["gallery-images"],
     enabled: open,
     queryFn: async () => (await supabase
@@ -499,7 +500,7 @@ function GalleryPickButton({ contentItemId, speciesKey, attachedIds, onDone }: {
       .select("id, file_name, storage_path, species_key, alt_text")
       .eq("media_type", "image")
       .order("species_key", { ascending: true, nullsFirst: false })
-      .limit(1000)).data ?? [],
+      .limit(500)).data ?? [],
   });
   const filtered = (gallery ?? []).filter((a: any) => {
     if (!q.trim()) return true;
@@ -507,10 +508,19 @@ function GalleryPickButton({ contentItemId, speciesKey, attachedIds, onDone }: {
     return (a.species_key ?? "").toLowerCase().includes(needle)
       || (a.file_name ?? "").toLowerCase().includes(needle);
   });
+  // Batch-sign visible tiles (first 120 of current filter) in one request.
+  const visible = filtered.slice(0, 120);
+  const pathsKey = visible.map((a: any) => a.storage_path).join("|");
+  const { data: signed } = useQuery({
+    queryKey: ["gallery-signed", pathsKey],
+    enabled: open && visible.length > 0,
+    staleTime: 50 * 60 * 1000,
+    queryFn: async () => signUrls({ data: { paths: visible.map((a: any) => a.storage_path) } }),
+  });
+  const urlMap = signed?.urls ?? {};
   const pick = async (a: any) => {
     setBusyId(a.id);
     try {
-      // Learn the mapping so this species auto-matches next time.
       if (a.species_key !== speciesKey) {
         await supabase.from("media_assets").update({ species_key: speciesKey }).eq("id", a.id);
       }
@@ -536,7 +546,7 @@ function GalleryPickButton({ contentItemId, speciesKey, attachedIds, onDone }: {
           <ImageIcon className="w-3 h-3 mr-1" /> Choose from gallery
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col gap-3">
         <DialogHeader>
           <DialogTitle>Pick an image for "{speciesKey}"</DialogTitle>
         </DialogHeader>
@@ -546,38 +556,37 @@ function GalleryPickButton({ contentItemId, speciesKey, attachedIds, onDone }: {
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
-        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 overflow-auto flex-1">
-          {filtered.map((a: any) => (
-            <GalleryTile key={a.id} asset={a} busy={busyId === a.id} onPick={() => pick(a)} />
+        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 overflow-auto flex-1 pr-1">
+          {isLoading && (
+            <p className="col-span-full text-sm text-muted-foreground text-center py-6">Loading images…</p>
+          )}
+          {!isLoading && visible.map((a: any) => (
+            <button
+              key={a.id}
+              type="button"
+              disabled={busyId === a.id}
+              onClick={() => pick(a)}
+              className="border rounded overflow-hidden text-left hover:border-primary disabled:opacity-50 bg-card"
+            >
+              <div className="aspect-square bg-muted">
+                {urlMap[a.storage_path] ? (
+                  <img src={urlMap[a.storage_path]} alt={a.alt_text ?? ""} className="w-full h-full object-cover" loading="lazy" />
+                ) : null}
+              </div>
+              <div className="p-1 text-[10px] truncate">{a.species_key || a.file_name}</div>
+            </button>
           ))}
-          {filtered.length === 0 && (
+          {!isLoading && filtered.length === 0 && (
             <p className="col-span-full text-sm text-muted-foreground text-center py-6">No images.</p>
+          )}
+          {!isLoading && filtered.length > visible.length && (
+            <p className="col-span-full text-xs text-muted-foreground text-center py-2">
+              Showing {visible.length} of {filtered.length}. Search to narrow.
+            </p>
           )}
         </div>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function GalleryTile({ asset, busy, onPick }: { asset: any; busy: boolean; onPick: () => void }) {
-  const getUrl = useServerFn(getSignedUrl);
-  const { data } = useQuery({
-    queryKey: ["signed", asset.storage_path],
-    queryFn: () => getUrl({ data: { path: asset.storage_path } }),
-    staleTime: 50 * 60 * 1000,
-  });
-  return (
-    <button
-      type="button"
-      disabled={busy}
-      onClick={onPick}
-      className="border rounded overflow-hidden text-left hover:border-primary disabled:opacity-50"
-    >
-      <div className="aspect-square bg-muted">
-        {data?.url && <img src={data.url} alt={asset.alt_text ?? ""} className="w-full h-full object-cover" loading="lazy" />}
-      </div>
-      <div className="p-1 text-[10px] truncate">{asset.species_key || asset.file_name}</div>
-    </button>
   );
 }
 
