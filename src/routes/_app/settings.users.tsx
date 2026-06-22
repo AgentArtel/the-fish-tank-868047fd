@@ -7,8 +7,20 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { approveUser, setUserActive, inviteUser, setUserRole } from "@/lib/cms.functions";
 import { APP_ROLES, APP_ROLE_LABELS, APP_ROLE_DESCRIPTIONS, type AppRole } from "@/lib/ops";
 import { Plus } from "lucide-react";
@@ -17,12 +29,22 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/settings/users")({ component: UsersPage });
 
-function RoleSelect({ value, onChange, className }: { value: AppRole; onChange: (v: AppRole) => void; className?: string }) {
+function RoleSelect({
+  value,
+  onChange,
+  className,
+}: {
+  value: AppRole;
+  onChange: (v: AppRole) => void;
+  className?: string;
+}) {
   return (
     <Select value={value} onValueChange={(v) => onChange(v as AppRole)}>
-      <SelectTrigger className={className}><SelectValue /></SelectTrigger>
+      <SelectTrigger className={className}>
+        <SelectValue />
+      </SelectTrigger>
       <SelectContent>
-        {APP_ROLES.map(r => (
+        {APP_ROLES.map((r) => (
           <SelectItem key={r} value={r}>
             <div className="flex flex-col">
               <span>{APP_ROLE_LABELS[r]}</span>
@@ -81,16 +103,30 @@ function UsersPage() {
                 key={u.id}
                 user={u}
                 onApprove={async (role) => {
-                  try { await approveFn({ data: { userId: u.id, role: role as any } }); toast.success("Approved"); refresh(); }
-                  catch (e: any) { toast.error(e.message); }
+                  try {
+                    await approveFn({ data: { userId: u.id, role: role as any } });
+                    toast.success("Approved");
+                    refresh();
+                  } catch (e: any) {
+                    toast.error(e.message);
+                  }
                 }}
                 onChangeRole={async (role) => {
-                  try { await setRoleFn({ data: { userId: u.id, role: role as any } }); toast.success(`Role set to ${APP_ROLE_LABELS[role]}`); refresh(); }
-                  catch (e: any) { toast.error(e.message); }
+                  try {
+                    await setRoleFn({ data: { userId: u.id, role: role as any } });
+                    toast.success(`Role set to ${APP_ROLE_LABELS[role]}`);
+                    refresh();
+                  } catch (e: any) {
+                    toast.error(e.message);
+                  }
                 }}
                 onToggleActive={async () => {
-                  try { await setActiveFn({ data: { userId: u.id, active: !u.is_active } }); refresh(); }
-                  catch (e: any) { toast.error(e.message); }
+                  try {
+                    await setActiveFn({ data: { userId: u.id, active: !u.is_active } });
+                    refresh();
+                  } catch (e: any) {
+                    toast.error(e.message);
+                  }
                 }}
               />
             ))}
@@ -101,14 +137,19 @@ function UsersPage() {
   );
 }
 
-function UserRow({ user, onApprove, onChangeRole, onToggleActive }: {
+function UserRow({
+  user,
+  onApprove,
+  onChangeRole,
+  onToggleActive,
+}: {
   user: any;
   onApprove: (role: AppRole) => void;
   onChangeRole: (role: AppRole) => void;
   onToggleActive: () => void;
 }) {
-  const currentRole = (user.roles?.[0] as AppRole) ?? "creator";
-  const [pendingRole, setPendingRole] = useState<AppRole>("creator");
+  const currentRole = (user.roles?.[0] as AppRole) ?? "floor_staff";
+  const [pendingRole, setPendingRole] = useState<AppRole>("floor_staff");
 
   return (
     <tr className="border-t">
@@ -117,9 +158,11 @@ function UserRow({ user, onApprove, onChangeRole, onToggleActive }: {
         <div className="text-xs text-muted-foreground">{user.email}</div>
       </td>
       <td className="p-3">
-        {user.is_active
-          ? <Badge className="bg-emerald-100 text-emerald-800 border-0">Active</Badge>
-          : <Badge variant="outline">Pending</Badge>}
+        {user.is_active ? (
+          <Badge className="bg-emerald-100 text-emerald-800 border-0">Active</Badge>
+        ) : (
+          <Badge variant="outline">Pending</Badge>
+        )}
       </td>
       <td className="p-3">
         {user.is_active && user.roles.length > 0 ? (
@@ -132,10 +175,14 @@ function UserRow({ user, onApprove, onChangeRole, onToggleActive }: {
         {!user.is_active ? (
           <div className="flex gap-2 items-center justify-end">
             <RoleSelect value={pendingRole} onChange={setPendingRole} className="w-36 h-8" />
-            <Button size="sm" onClick={() => onApprove(pendingRole)}>Approve</Button>
+            <Button size="sm" onClick={() => onApprove(pendingRole)}>
+              Approve
+            </Button>
           </div>
         ) : (
-          <Button size="sm" variant="outline" onClick={onToggleActive}>Deactivate</Button>
+          <Button size="sm" variant="outline" onClick={onToggleActive}>
+            Deactivate
+          </Button>
         )}
       </td>
     </tr>
@@ -147,7 +194,7 @@ function InviteUserDialog({ onDone }: { onDone: () => void }) {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
-  const [role, setRole] = useState<AppRole>("creator");
+  const [role, setRole] = useState<AppRole>("floor_staff");
   const [busy, setBusy] = useState(false);
   const submit = async () => {
     if (!email) return;
@@ -155,26 +202,54 @@ function InviteUserDialog({ onDone }: { onDone: () => void }) {
     try {
       await invite({ data: { email, role, display_name: displayName || undefined } });
       toast.success(`Invite sent to ${email}`);
-      setOpen(false); setEmail(""); setDisplayName(""); setRole("creator");
+      setOpen(false);
+      setEmail("");
+      setDisplayName("");
+      setRole("floor_staff");
       onDone();
-    } catch (e: any) { toast.error(e.message); }
-    finally { setBusy(false); }
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setBusy(false);
+    }
   };
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild><Button><Plus className="w-4 h-4 mr-1" /> Invite user</Button></DialogTrigger>
+      <DialogTrigger asChild>
+        <Button>
+          <Plus className="w-4 h-4 mr-1" /> Invite user
+        </Button>
+      </DialogTrigger>
       <DialogContent>
-        <DialogHeader><DialogTitle>Invite a user</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>Invite a user</DialogTitle>
+        </DialogHeader>
         <div className="space-y-3">
-          <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="employee@example.com" /></div>
-          <div className="space-y-1.5"><Label>Display name (optional)</Label><Input value={displayName} onChange={e=>setDisplayName(e.target.value)} /></div>
+          <div className="space-y-1.5">
+            <Label>Email</Label>
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="employee@example.com"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Display name (optional)</Label>
+            <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+          </div>
           <div className="space-y-1.5">
             <Label>Role</Label>
             <RoleSelect value={role} onChange={setRole} />
             <p className="text-[11px] text-muted-foreground">{APP_ROLE_DESCRIPTIONS[role]}</p>
           </div>
-          <Button onClick={submit} disabled={!email || busy} className="w-full">{busy ? "Sending…" : "Send invite"}</Button>
-          <p className="text-xs text-muted-foreground">An email will be sent with a sign-in link. The user is activated immediately and assigned the selected role.</p>
+          <Button onClick={submit} disabled={!email || busy} className="w-full">
+            {busy ? "Sending…" : "Send invite"}
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            An email will be sent with a sign-in link. The user is activated immediately and
+            assigned the selected role.
+          </p>
         </div>
       </DialogContent>
     </Dialog>

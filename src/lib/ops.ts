@@ -206,23 +206,23 @@ export const STORE_LOCATION_CONTAINER_KINDS: StoreLocationKind[] = [
   "coral_system",
 ];
 
-export const APP_ROLES = ["admin", "manager", "creator", "reviewer", "staff", "viewer"] as const;
+// The role model is just three: admin · dev · floor_staff. admin/dev are the
+// editor/superuser tier (dev = technical admin-tier); floor_staff is the employee
+// write-tier (count, mortality, hold, relocate, manual sale, receive, trade-in via
+// SECURITY DEFINER RPCs). Mirrors the DB `app_role` enum + is_admin_or_dev /
+// is_floor_staff_or_above helpers.
+export const APP_ROLES = ["admin", "dev", "floor_staff"] as const;
 export type AppRole = (typeof APP_ROLES)[number];
 export const APP_ROLE_LABELS: Record<AppRole, string> = {
   admin: "Admin",
-  manager: "Manager",
-  creator: "Creator",
-  reviewer: "Reviewer",
-  staff: "Staff",
-  viewer: "Viewer",
+  dev: "Dev",
+  floor_staff: "Floor staff",
 };
 export const APP_ROLE_DESCRIPTIONS: Record<AppRole, string> = {
   admin: "Full access. Approves pricing, manages users, deletes anything.",
-  manager: "Edit everything except pricing approval and user management.",
-  creator: "Create and edit drafts (intake, content, inventory).",
-  reviewer: "Edit and review intake, content, and inventory.",
-  staff: "Read-only floor access. Can browse inventory and locations.",
-  viewer: "Read-only. No editing anywhere.",
+  dev: "Technical superuser. Same access as admin.",
+  floor_staff:
+    "Employee floor tier. Runs intake, counts, mortality, holds, relocations, and sales via guided wizards.",
 };
 
 export const ITEM_TYPES = [
