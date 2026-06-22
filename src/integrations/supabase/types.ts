@@ -2325,6 +2325,7 @@ export type Database = {
         | "pricing_change"
         | "converted_from_line"
         | "note"
+        | "loss"
       inventory_availability_status:
         | "incoming"
         | "quarantine"
@@ -2611,6 +2612,7 @@ export const Constants = {
         "pricing_change",
         "converted_from_line",
         "note",
+        "loss",
       ],
       inventory_availability_status: [
         "incoming",
