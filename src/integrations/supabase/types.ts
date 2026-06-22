@@ -2244,6 +2244,16 @@ export type Database = {
           quantity_lost: number
         }[]
       }
+      record_trade_in: {
+        Args: {
+          _customer_id: string
+          _lines: Json
+          _location_id: string
+          _new_customer: Json
+          _note?: string
+        }
+        Returns: Json
+      }
       redeem_store_credit: {
         Args: {
           _amount_cents: number
@@ -2268,6 +2278,17 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      search_customers_for_staff: {
+        Args: { _q?: string }
+        Returns: {
+          email: string
+          first_name: string
+          id: string
+          last_name: string
+          last_seen_at: string
+          phone: string
+        }[]
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
@@ -2326,6 +2347,7 @@ export type Database = {
         | "converted_from_line"
         | "note"
         | "loss"
+        | "trade_in"
       inventory_availability_status:
         | "incoming"
         | "quarantine"
@@ -2613,6 +2635,7 @@ export const Constants = {
         "converted_from_line",
         "note",
         "loss",
+        "trade_in",
       ],
       inventory_availability_status: [
         "incoming",
