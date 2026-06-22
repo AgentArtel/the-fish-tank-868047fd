@@ -63,9 +63,13 @@ draft CMS content, or is content admin-only? minor.)*
   PO, no vendor): capture species/qty/condition + **value/credit given** + link the customer → draft
   inventory (pending review/pricing). Reuses the Coral Discovery / Quick Add capture pattern.
   *Depends on the store-credit decision.*
-- **12. Process a return / refund** · floor staff (+admin for write-off) · **net-new** · **P1** — resolves
-  the Clover refund/void `needs_review` events that today dead-end: restock (qty back) vs write-off, and
-  refund-to-cash vs **store credit**. Pairs with wizard 2.
+- **12. Process a return / refund** · floor staff (+admin for write-off) · **net-new** · **🅑 BACKLOG
+  (owner decision)** — resolves the Clover refund/void `needs_review` events that today dead-end: restock
+  (qty back) vs write-off, and refund-to-cash vs **store credit**. Pairs with wizard 2.
+  **Parked 2026-06-22:** deferred pending business-owner sign-off on refund policy (cash vs credit rules,
+  restock vs write-off authority, who eats shrinkage). The store-credit *plumbing* it needs is already
+  shipped (`grant_store_credit`, `source='return'/'refund'`), so this is unblocked technically — it's a
+  **policy** decision, not an engineering one. Pick back up once the owner rules on refund policy.
 
 ### Added gaps (beyond the original 3 holes)
 - **Store credit / customer dollar-balance** `[Decision]` — there's loyalty *points* but no **credit

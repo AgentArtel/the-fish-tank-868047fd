@@ -15,6 +15,7 @@ import {
   Waves,
   PackageOpen,
   ChevronLeft,
+  Repeat,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -179,6 +180,12 @@ function QuickAddDialog({ onClose }: { onClose: () => void }) {
               title="Receive a vendor order"
               desc="Enter a vendor invoice / order sheet — AI extracts the lines, admin approves pricing."
               onClick={() => go("/batches")}
+            />
+            <IntentCard
+              icon={Repeat}
+              title="Take in a customer trade-in"
+              desc="Customer brings fish/coral for store credit — drafts the stock and grants the credit."
+              onClick={() => go("/inventory/trade-in")}
             />
           </div>
         ) : (
