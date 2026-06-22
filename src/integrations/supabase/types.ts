@@ -1033,6 +1033,50 @@ export type Database = {
           },
         ]
       }
+      store_credit_ledger: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          id: string
+          kind: string
+          reason: string | null
+          related_ref: string | null
+          source: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          created_by?: string | null
+          customer_id: string
+          id?: string
+          kind: string
+          reason?: string | null
+          related_ref?: string | null
+          source: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string
+          id?: string
+          kind?: string
+          reason?: string | null
+          related_ref?: string | null
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_credit_ledger_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       store_location_media: {
         Row: {
           caption: string | null
@@ -2050,6 +2094,31 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      adjust_store_credit: {
+        Args: {
+          _amount_cents: number
+          _customer_id: string
+          _reason: string
+          _related_ref?: string
+        }
+        Returns: {
+          amount_cents: number
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          id: string
+          kind: string
+          reason: string | null
+          related_ref: string | null
+          source: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "store_credit_ledger"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       apply_inventory_sale: {
         Args: {
           _clover_item_name?: string
@@ -2101,6 +2170,32 @@ export type Database = {
           quantity_sold: number
         }[]
       }
+      grant_store_credit: {
+        Args: {
+          _amount_cents: number
+          _customer_id: string
+          _reason?: string
+          _related_ref?: string
+          _source: string
+        }
+        Returns: {
+          amount_cents: number
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          id: string
+          kind: string
+          reason: string | null
+          related_ref: string | null
+          source: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "store_credit_ledger"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -2149,8 +2244,39 @@ export type Database = {
           quantity_lost: number
         }[]
       }
+      redeem_store_credit: {
+        Args: {
+          _amount_cents: number
+          _customer_id: string
+          _reason?: string
+          _related_ref?: string
+        }
+        Returns: {
+          amount_cents: number
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          id: string
+          kind: string
+          reason: string | null
+          related_ref: string | null
+          source: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "store_credit_ledger"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      store_credit_summary: {
+        Args: { _customer_id: string }
+        Returns: {
+          balance_cents: number
+        }[]
+      }
     }
     Enums: {
       app_role:
