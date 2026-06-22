@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Badge } from "@/components/ui/badge";
 import { ReefClubCard } from "@/components/reef-club-card";
+import { StoreCreditCard } from "@/components/store-credit-card";
 import { getCustomer } from "@/lib/customers.functions";
 import { fmtMoney, ITEM_TYPE_LABELS, type ItemType } from "@/lib/ops";
 import { ArrowLeft, Mail, Phone } from "lucide-react";
@@ -83,6 +84,8 @@ function CustomerDetail() {
       </div>
 
       <ReefClubCard customerId={id} />
+
+      <StoreCreditCard customerId={id} />
 
       <section>
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
