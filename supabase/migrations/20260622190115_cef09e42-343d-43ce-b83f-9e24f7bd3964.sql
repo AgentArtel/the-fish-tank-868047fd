@@ -1,0 +1,1 @@
+ALTER TYPE public.inventory_activity_action ADD VALUE IF NOT EXISTS 'loss';
