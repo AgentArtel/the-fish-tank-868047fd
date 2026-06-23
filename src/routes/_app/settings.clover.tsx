@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
@@ -20,6 +20,7 @@ import {
   RefreshCw,
   Save,
   KeyRound,
+  ArrowRight,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_app/settings/clover")({ component: CloverSettings });
@@ -189,6 +190,14 @@ function CloverSettings() {
             </Badge>
           )}
         </div>
+
+        {((data?.unlinked ?? 0) > 0 || (data?.salesNeedingReview ?? 0) > 0) && (
+          <Button asChild size="sm" variant="outline" className="w-fit">
+            <Link to="/inventory/clover-reconcile">
+              Open Clover reconcile <ArrowRight className="w-4 h-4 ml-1" />
+            </Link>
+          </Button>
+        )}
 
         <div className="border-t pt-3">
           <Button onClick={runImport} disabled={importing || !data?.configured} size="sm">

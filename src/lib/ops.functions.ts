@@ -5,6 +5,7 @@ import { classifyCoralType, coralTypeLabel } from "@/lib/coral-type";
 import { callAIChat } from "@/lib/ai-call.server";
 import { suggestRetail } from "@/lib/ops";
 import { isAdmin, requireActive, requireEditor } from "@/lib/auth-guards";
+import { nameScore } from "@/lib/name-match";
 import type { TablesInsert } from "@/integrations/supabase/types";
 
 type InventoryItemInsert = TablesInsert<"inventory_items">;
@@ -1706,28 +1707,7 @@ export const parseInventoryMarkdown = createServerFn({ method: "POST" })
 // ============================================================
 // Sprint 1.6 — PO reconciliation against Quick Add batches
 // ============================================================
-
-function normalizeName(s: string | null | undefined): string {
-  return (s ?? "")
-    .toLowerCase()
-    .replace(/[^a-z0-9 ]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function nameScore(a: string, b: string): number {
-  const na = normalizeName(a);
-  const nb = normalizeName(b);
-  if (!na || !nb) return 0;
-  if (na === nb) return 1;
-  if (na.includes(nb) || nb.includes(na)) return 0.85;
-  const ta = new Set(na.split(" ").filter(Boolean));
-  const tb = new Set(nb.split(" ").filter(Boolean));
-  if (ta.size === 0 || tb.size === 0) return 0;
-  let shared = 0;
-  for (const t of ta) if (tb.has(t)) shared++;
-  return shared / Math.max(ta.size, tb.size);
-}
+// nameScore/normalizeName live in src/lib/name-match.ts (shared with Clover reconcile).
 
 export const promoteQuickAddBatchVendor = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
