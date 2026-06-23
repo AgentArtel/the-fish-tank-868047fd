@@ -42,6 +42,7 @@ import {
   BarChart3,
   Repeat,
   RefreshCcw,
+  ClipboardList,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_app")({
@@ -89,6 +90,7 @@ const GROUPS: NavGroup[] = [
         badge: "pricingPending",
       },
       { to: "/inventory", label: "Stock", icon: Boxes, badge: "missingTags" },
+      { to: "/inventory/count", label: "Stock Count", icon: ClipboardList },
       { to: "/inventory/coral-discovery", label: "Coral Discovery", icon: Waves },
       { to: "/inventory/trade-in", label: "Trade-in", icon: Repeat },
       { to: "/inventory/clover-reconcile", label: "Clover Reconcile", icon: RefreshCcw },
