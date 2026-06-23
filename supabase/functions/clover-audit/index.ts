@@ -16,6 +16,17 @@ Deno.serve(async (req) => {
     });
     const categories = await cloverGet(creds, `/v3/merchants/${mId}/categories`, { limit: 100 });
 
+    // Also pull items via the Coral category (livestock) to test itemStock on livestock specifically.
+    const coralCat = categories?.elements?.find((c: any) => /coral|fish/i.test(c.name));
+    let livestockItems: unknown = null;
+    if (coralCat?.id) {
+      livestockItems = await cloverGet(
+        creds,
+        `/v3/merchants/${mId}/categories/${coralCat.id}/items`,
+        { expand: "categories,itemStock,tags", limit: 5 },
+      );
+    }
+
     // Pick a likely livestock item (best-effort: first item; client can switch).
     const first = items?.elements?.[0];
     let single: unknown = null;
