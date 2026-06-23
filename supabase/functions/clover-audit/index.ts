@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
       category_count: categories?.elements?.length ?? 0,
     };
 
-    return json({ summary, items_expanded: items, categories, single_item: single });
+    return json({ summary, items_expanded: items, categories, single_item: single, livestock_items: livestockItems });
   } catch (e) {
     return json({ error: String((e as Error).message ?? e) }, 500);
   }
