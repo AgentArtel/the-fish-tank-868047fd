@@ -267,9 +267,14 @@ export type Database = {
       }
       clover_item_links: {
         Row: {
+          clover_category_id: string | null
+          clover_category_name: string | null
+          clover_code: string | null
           clover_item_id: string
+          clover_modified_time: number | null
           clover_name: string | null
           clover_price_cents: number | null
+          clover_price_type: string | null
           created_at: string
           id: string
           inventory_item_id: string | null
@@ -278,9 +283,14 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          clover_category_id?: string | null
+          clover_category_name?: string | null
+          clover_code?: string | null
           clover_item_id: string
+          clover_modified_time?: number | null
           clover_name?: string | null
           clover_price_cents?: number | null
+          clover_price_type?: string | null
           created_at?: string
           id?: string
           inventory_item_id?: string | null
@@ -289,9 +299,14 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          clover_category_id?: string | null
+          clover_category_name?: string | null
+          clover_code?: string | null
           clover_item_id?: string
+          clover_modified_time?: number | null
           clover_name?: string | null
           clover_price_cents?: number | null
+          clover_price_type?: string | null
           created_at?: string
           id?: string
           inventory_item_id?: string | null
@@ -900,6 +915,7 @@ export type Database = {
           retail_price: number | null
           scientific_name: string | null
           size: string | null
+          slug: string | null
           source_vendor_batch_id: string | null
           source_vendor_line_item_id: string | null
           specimen_notes: string | null
@@ -943,6 +959,7 @@ export type Database = {
           retail_price?: number | null
           scientific_name?: string | null
           size?: string | null
+          slug?: string | null
           source_vendor_batch_id?: string | null
           source_vendor_line_item_id?: string | null
           specimen_notes?: string | null
@@ -986,6 +1003,7 @@ export type Database = {
           retail_price?: number | null
           scientific_name?: string | null
           size?: string | null
+          slug?: string | null
           source_vendor_batch_id?: string | null
           source_vendor_line_item_id?: string | null
           specimen_notes?: string | null
@@ -1565,6 +1583,7 @@ export type Database = {
         Row: {
           announcement: string | null
           created_at: string
+          data: Json
           default_og_image_path: string | null
           id: boolean
           site_title: string | null
@@ -1576,6 +1595,7 @@ export type Database = {
         Insert: {
           announcement?: string | null
           created_at?: string
+          data?: Json
           default_og_image_path?: string | null
           id?: boolean
           site_title?: string | null
@@ -1587,6 +1607,7 @@ export type Database = {
         Update: {
           announcement?: string | null
           created_at?: string
+          data?: Json
           default_og_image_path?: string | null
           id?: boolean
           site_title?: string | null
@@ -3143,6 +3164,7 @@ export type Database = {
           product_id: string | null
           retail_price: number | null
           scientific_name: string | null
+          slug: string | null
           specimen_notes: string | null
           updated_at: string | null
         }

@@ -1,21 +1,126 @@
 // Edge function: clover-import-catalog
-// Full Clover catalog → upsert clover_item_links → create workspace inventory
-// drafts for any still-unlinked items, in ONE server-side pass. Replaces the
-// browser-chunked importCloverCatalog + createWorkspaceItemsFromClover pair —
-// no Cloudflare Worker budget here, so we don't need to chunk back to the client.
 //
-// Orphan-safety key (attrs.clover_item_id) is preserved: a prior interrupted run
-// may have created the inventory_item but missed writing the link row, so we
-// re-link by attrs.clover_item_id before creating duplicates.
+// Per-handoff rewrite (.lovable/handoff-clover-import-rewrite.md):
+//   - Iterate /categories then /categories/{id}/items?expand=itemStock,tags
+//     (flat /items silently drops `expand` for this merchant).
+//   - Flat pass over /items for uncategorized items (id/name/price/code only).
+//   - Dedup by clover_item_id across both passes.
+//   - Capture clover_category_id/name, clover_code (UPC), clover_price_type,
+//     clover_modified_time on clover_item_links.
+//   - DO NOT import itemStock.quantity (all zero — meaningless).
+//   - Seed inventory_items.item_type ONLY when null, from category:
+//       Coral->coral · Fish->fish · Inverts->invert · Dry Goods/Food/Water->dry_good
+//   - Leave quantities + pricing_status alone.
+//
+// Orphan-safety key (attrs.clover_item_id) preserved.
 
 import {
   corsHeaders,
   json,
   requireAdminCaller,
   requireCloverCreds,
-  cloverListItems,
+  cloverGet,
   looksLikeCoral,
+  type CloverCreds,
 } from "../_shared/clover.ts";
+
+type EnrichedItem = {
+  id: string;
+  name: string;
+  priceCents: number | null;
+  priceType: string | null;
+  code: string | null;
+  modifiedTime: number | null;
+  categoryId: string | null;
+  categoryName: string | null;
+};
+
+// Coral · Fish · Inverts · Dry Goods · Food · Water  → item_type
+function categoryToItemType(name: string | null): string | null {
+  if (!name) return null;
+  const n = name.trim().toLowerCase();
+  if (n === "coral" || n === "corals") return "coral";
+  if (n === "fish") return "fish";
+  if (n === "inverts" || n === "invert" || n === "invertebrates") return "invert";
+  if (n === "dry goods" || n === "food" || n === "water") return "dry_good";
+  return null;
+}
+
+async function listCategories(creds: CloverCreds): Promise<Array<{ id: string; name: string }>> {
+  const out: Array<{ id: string; name: string }> = [];
+  let offset = 0;
+  while (offset < 5_000) {
+    const j = await cloverGet(creds, `/v3/merchants/${creds.merchantId}/categories`, {
+      limit: 100,
+      offset,
+    });
+    const els: any[] = j.elements ?? [];
+    for (const c of els) out.push({ id: c.id, name: c.name ?? "(unnamed)" });
+    if (els.length < 100) break;
+    offset += 100;
+  }
+  return out;
+}
+
+async function listItemsInCategory(
+  creds: CloverCreds,
+  cat: { id: string; name: string },
+): Promise<EnrichedItem[]> {
+  const out: EnrichedItem[] = [];
+  let offset = 0;
+  while (offset < 20_000) {
+    const j = await cloverGet(
+      creds,
+      `/v3/merchants/${creds.merchantId}/categories/${cat.id}/items`,
+      { expand: "itemStock,tags", limit: 100, offset },
+    );
+    const els: any[] = j.elements ?? [];
+    for (const e of els) {
+      if (e.hidden) continue;
+      out.push({
+        id: e.id,
+        name: e.name ?? "(unnamed)",
+        priceCents: typeof e.price === "number" ? e.price : null,
+        priceType: e.priceType ?? null,
+        code: e.code ?? null,
+        modifiedTime: typeof e.modifiedTime === "number" ? e.modifiedTime : null,
+        categoryId: cat.id,
+        categoryName: cat.name,
+      });
+    }
+    if (els.length < 100) break;
+    offset += 100;
+  }
+  return out;
+}
+
+async function listAllItemsFlat(creds: CloverCreds): Promise<EnrichedItem[]> {
+  const out: EnrichedItem[] = [];
+  let offset = 0;
+  while (offset < 50_000) {
+    const j = await cloverGet(creds, `/v3/merchants/${creds.merchantId}/items`, {
+      limit: 100,
+      offset,
+    });
+    const els: any[] = j.elements ?? [];
+    for (const e of els) {
+      if (e.hidden) continue;
+      out.push({
+        id: e.id,
+        name: e.name ?? "(unnamed)",
+        priceCents: typeof e.price === "number" ? e.price : null,
+        priceType: e.priceType ?? null,
+        code: e.code ?? null,
+        modifiedTime: typeof e.modifiedTime === "number" ? e.modifiedTime : null,
+        categoryId: null,
+        categoryName: null,
+      });
+    }
+    if (els.length < 100) break;
+    offset += 100;
+  }
+  return out;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -26,21 +131,49 @@ Deno.serve(async (req) => {
 
   try {
     const creds = await requireCloverCreds(admin);
-    const items = await cloverListItems(creds);
     const nowIso = new Date().toISOString();
 
-    // 1) Index existing workspace inventory by name + by attrs.clover_item_id provenance.
-    const { data: inv } = await admin.from("inventory_items").select("id, item_name, attrs");
+    // ---- Fetch ----
+    const categories = await listCategories(creds);
+
+    // Per-category pass (honors expand)
+    const byId = new Map<string, EnrichedItem>();
+    let perCatCount = 0;
+    for (const cat of categories) {
+      const items = await listItemsInCategory(creds, cat);
+      perCatCount += items.length;
+      for (const it of items) {
+        // First write wins for category attribution.
+        if (!byId.has(it.id)) byId.set(it.id, it);
+      }
+    }
+
+    // Final flat pass — fills in uncategorized items only.
+    const flat = await listAllItemsFlat(creds);
+    let flatAdded = 0;
+    for (const it of flat) {
+      if (byId.has(it.id)) continue;
+      byId.set(it.id, it);
+      flatAdded++;
+    }
+
+    const items = Array.from(byId.values());
+
+    // ---- Index existing inventory + links ----
+    const { data: inv } = await admin
+      .from("inventory_items")
+      .select("id, item_name, item_type, attrs");
     const invByName = new Map<string, string>();
     const invByCloverId = new Map<string, string>();
+    const invTypeById = new Map<string, string | null>();
     for (const it of (inv as any[]) ?? []) {
       const nm = (it.item_name ?? "").trim().toLowerCase();
       if (nm && !invByName.has(nm)) invByName.set(nm, it.id);
       const cid = (it.attrs as any)?.clover_item_id;
       if (cid && !invByCloverId.has(cid)) invByCloverId.set(cid, it.id);
+      invTypeById.set(it.id, it.item_type ?? null);
     }
 
-    // 2) Existing link rows — preserve already-assigned inventory_item_id.
     const { data: existingLinks } = await admin
       .from("clover_item_links")
       .select("clover_item_id, inventory_item_id");
@@ -48,25 +181,28 @@ Deno.serve(async (req) => {
       ((existingLinks as any[]) ?? []).map((r) => [r.clover_item_id, r]),
     );
 
-    // 3) First link-upsert pass: link to any pre-existing inventory_item we can find.
-    const initialLinks: any[] = [];
-    let alreadyLinked = 0;
-    for (const ci of items) {
+    // ---- Pass 1: upsert links (with enrichment) ----
+    const initialLinks = items.map((ci) => {
       const invId =
         linkByClover.get(ci.id)?.inventory_item_id ??
         invByCloverId.get(ci.id) ??
         invByName.get(ci.name.trim().toLowerCase()) ??
         null;
-      if (invId) alreadyLinked++;
-      initialLinks.push({
+      return {
         clover_item_id: ci.id,
         inventory_item_id: invId,
         clover_name: ci.name,
         clover_price_cents: ci.priceCents,
+        clover_category_id: ci.categoryId,
+        clover_category_name: ci.categoryName,
+        clover_code: ci.code,
+        clover_price_type: ci.priceType,
+        clover_modified_time: ci.modifiedTime,
         link_status: invId ? "linked" : "unlinked",
         last_synced_at: nowIso,
-      });
-    }
+      };
+    });
+    let alreadyLinked = initialLinks.filter((l) => l.inventory_item_id).length;
     for (let i = 0; i < initialLinks.length; i += 500) {
       const { error: e } = await admin
         .from("clover_item_links")
@@ -74,8 +210,7 @@ Deno.serve(async (req) => {
       if (e) throw new Error(e.message);
     }
 
-    // 4) Create workspace drafts for all still-unlinked clover items, in chunks.
-    //    Done in the single server-side request — no browser loop.
+    // ---- Pass 2: create drafts for still-unlinked items + relink ----
     let created = 0;
     let relinked = 0;
     let processed = 0;
@@ -84,7 +219,9 @@ Deno.serve(async (req) => {
     while (true) {
       const { data: pending } = await admin
         .from("clover_item_links")
-        .select("clover_item_id, clover_name, clover_price_cents")
+        .select(
+          "clover_item_id, clover_name, clover_price_cents, clover_category_name, clover_price_type",
+        )
         .is("inventory_item_id", null)
         .order("clover_item_id")
         .limit(CHUNK);
@@ -92,7 +229,6 @@ Deno.serve(async (req) => {
       if (batch.length === 0) break;
       processed += batch.length;
 
-      // Orphan-safety: re-link by attrs.clover_item_id before duplicating.
       const cloverIds = batch.map((b) => b.clover_item_id);
       const { data: orphans } = await admin
         .from("inventory_items")
@@ -107,10 +243,14 @@ Deno.serve(async (req) => {
       const toCreate = batch.filter((b) => !itemByClover.has(b.clover_item_id));
       if (toCreate.length) {
         const rows = toCreate.map((b) => {
-          const hasPrice = typeof b.clover_price_cents === "number";
+          const hasPrice =
+            typeof b.clover_price_cents === "number" && b.clover_price_type !== "VARIABLE";
+          const typeFromCat = categoryToItemType(b.clover_category_name);
+          const itemType =
+            typeFromCat ?? (looksLikeCoral(b.clover_name ?? "") ? "coral" : null);
           return {
             item_name: b.clover_name ?? "(unnamed)",
-            item_type: looksLikeCoral(b.clover_name ?? "") ? "coral" : null,
+            item_type: itemType,
             quantity_received: 0,
             quantity_available: 0,
             wholesale_cost: null,
@@ -152,7 +292,7 @@ Deno.serve(async (req) => {
           };
         })
         .filter(Boolean);
-      relinked += linkUpserts.length - (toCreate.length || 0);
+      relinked += Math.max(0, linkUpserts.length - (toCreate.length || 0));
       if (linkUpserts.length) {
         const { error: e } = await admin
           .from("clover_item_links")
@@ -160,7 +300,6 @@ Deno.serve(async (req) => {
         if (e) throw new Error(e.message);
       }
 
-      // Checkpoint after each chunk.
       await admin
         .from("clover_connection")
         .update({ connected: true, last_import_at: nowIso })
@@ -169,13 +308,49 @@ Deno.serve(async (req) => {
       if (batch.length < CHUNK) break;
     }
 
+    // ---- Pass 3: seed item_type on linked rows where still null ----
+    // (Backfill for pre-existing inventory_items that imported before this rewrite.)
+    let typeSeeded = 0;
+    const { data: linkedForSeed } = await admin
+      .from("clover_item_links")
+      .select("inventory_item_id, clover_category_name, clover_name")
+      .not("inventory_item_id", "is", null)
+      .not("clover_category_name", "is", null);
+
+    const updatesByType = new Map<string, string[]>();
+    for (const row of (linkedForSeed as any[]) ?? []) {
+      const invId = row.inventory_item_id as string;
+      const currentType = invTypeById.get(invId);
+      if (currentType) continue; // never clobber
+      const t = categoryToItemType(row.clover_category_name);
+      if (!t) continue;
+      if (!updatesByType.has(t)) updatesByType.set(t, []);
+      updatesByType.get(t)!.push(invId);
+    }
+    for (const [t, ids] of updatesByType) {
+      for (let i = 0; i < ids.length; i += 500) {
+        const slice = ids.slice(i, i + 500);
+        const { error: e } = await admin
+          .from("inventory_items")
+          .update({ item_type: t })
+          .in("id", slice)
+          .is("item_type", null);
+        if (e) throw new Error(e.message);
+        typeSeeded += slice.length;
+      }
+    }
+
     return json({
       ok: true,
-      fetched: items.length,
+      categoriesIterated: categories.length,
+      perCategoryItems: perCatCount,
+      flatAddedUncategorized: flatAdded,
+      totalUniqueItems: items.length,
       alreadyLinked,
       processed,
       created,
-      relinked: Math.max(0, relinked),
+      relinked,
+      typeSeeded,
     });
   } catch (e) {
     return json({ ok: false, error: (e as Error).message ?? String(e) }, 500);
