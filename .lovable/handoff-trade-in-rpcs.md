@@ -83,3 +83,18 @@ record_trade_in(
 Confirm both RPCs are in (+ the activity-action enum value you chose: `trade_in` vs `intake`), and I'll
 flip the wizard from "waiting on RPC" to live + ask you to integration-test (create from new + existing
 customer, multi-line, credit lands, items appear as drafts in pricing review, anonymous rejected).
+
+---
+
+## ✅ Done & verified (2026-06-23)
+Both RPCs shipped (`trade_in` enum added; `intake` kept free for vendor-receive). App-side merged in
+#75. All 6 integration checks passed against the live RPCs. **Feature is live.**
+
+### Cleanup for Lovable (DB lane)
+Integration-test data was left in the **live DB** so pricing review could be eyeballed — please clear it
+once you're done looking:
+- customer `7a3dbe2d…` (the test trade-in customer)
+- the 4 draft `inventory_items` from those test runs (find via `attrs.trade_in` / `received_by` =
+  the test session, or the `7a3dbe2d…` customer link)
+
+Nothing else outstanding on trade-in.
