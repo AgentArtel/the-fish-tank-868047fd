@@ -14,6 +14,164 @@ export type Database = {
   }
   public: {
     Tables: {
+      article_products: {
+        Row: {
+          article_id: string
+          created_at: string
+          inventory_item_id: string
+          sort_order: number
+        }
+        Insert: {
+          article_id: string
+          created_at?: string
+          inventory_item_id: string
+          sort_order?: number
+        }
+        Update: {
+          article_id?: string
+          created_at?: string
+          inventory_item_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "article_products_article_id_fkey"
+            columns: ["article_id"]
+            isOneToOne: false
+            referencedRelation: "articles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "article_products_article_id_fkey"
+            columns: ["article_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_articles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "article_products_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "article_products_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_inventory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      articles: {
+        Row: {
+          author_id: string | null
+          body_md: string | null
+          created_at: string
+          created_by: string | null
+          excerpt: string | null
+          hero_media_id: string | null
+          id: string
+          kind: Database["public"]["Enums"]["article_kind"]
+          og_image_path: string | null
+          publish_at: string | null
+          published_by: string | null
+          reviewed_at: string | null
+          reviewer_id: string | null
+          seo_description: string | null
+          seo_title: string | null
+          slug: string
+          status: Database["public"]["Enums"]["article_status"]
+          subtitle: string | null
+          tags: string[]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          author_id?: string | null
+          body_md?: string | null
+          created_at?: string
+          created_by?: string | null
+          excerpt?: string | null
+          hero_media_id?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["article_kind"]
+          og_image_path?: string | null
+          publish_at?: string | null
+          published_by?: string | null
+          reviewed_at?: string | null
+          reviewer_id?: string | null
+          seo_description?: string | null
+          seo_title?: string | null
+          slug: string
+          status?: Database["public"]["Enums"]["article_status"]
+          subtitle?: string | null
+          tags?: string[]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string | null
+          body_md?: string | null
+          created_at?: string
+          created_by?: string | null
+          excerpt?: string | null
+          hero_media_id?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["article_kind"]
+          og_image_path?: string | null
+          publish_at?: string | null
+          published_by?: string | null
+          reviewed_at?: string | null
+          reviewer_id?: string | null
+          seo_description?: string | null
+          seo_title?: string | null
+          slug?: string
+          status?: Database["public"]["Enums"]["article_status"]
+          subtitle?: string | null
+          tags?: string[]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "articles_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "content_authors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "articles_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_authors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "articles_hero_media_id_fkey"
+            columns: ["hero_media_id"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "articles_reviewer_id_fkey"
+            columns: ["reviewer_id"]
+            isOneToOne: false
+            referencedRelation: "content_authors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "articles_reviewer_id_fkey"
+            columns: ["reviewer_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_authors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campaigns: {
         Row: {
           created_at: string
@@ -215,6 +373,63 @@ export type Database = {
             columns: ["hero_media_id"]
             isOneToOne: false
             referencedRelation: "v_public_media"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_authors: {
+        Row: {
+          avatar_media_id: string | null
+          bio_md: string | null
+          created_at: string
+          credentials: string | null
+          display_name: string
+          id: string
+          is_active: boolean
+          links: Json
+          profile_id: string | null
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_media_id?: string | null
+          bio_md?: string | null
+          created_at?: string
+          credentials?: string | null
+          display_name: string
+          id?: string
+          is_active?: boolean
+          links?: Json
+          profile_id?: string | null
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_media_id?: string | null
+          bio_md?: string | null
+          created_at?: string
+          credentials?: string | null
+          display_name?: string
+          id?: string
+          is_active?: boolean
+          links?: Json
+          profile_id?: string | null
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_authors_avatar_media_id_fkey"
+            columns: ["avatar_media_id"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_authors_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -434,6 +649,156 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      events: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description_md: string | null
+          ends_at: string | null
+          hero_media_id: string | null
+          id: string
+          location_id: string | null
+          location_text: string | null
+          og_image_path: string | null
+          seo_description: string | null
+          seo_title: string | null
+          series_id: string | null
+          slug: string
+          starts_at: string
+          status: Database["public"]["Enums"]["event_status"]
+          timezone: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description_md?: string | null
+          ends_at?: string | null
+          hero_media_id?: string | null
+          id?: string
+          location_id?: string | null
+          location_text?: string | null
+          og_image_path?: string | null
+          seo_description?: string | null
+          seo_title?: string | null
+          series_id?: string | null
+          slug: string
+          starts_at: string
+          status?: Database["public"]["Enums"]["event_status"]
+          timezone?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description_md?: string | null
+          ends_at?: string | null
+          hero_media_id?: string | null
+          id?: string
+          location_id?: string | null
+          location_text?: string | null
+          og_image_path?: string | null
+          seo_description?: string | null
+          seo_title?: string | null
+          series_id?: string | null
+          slug?: string
+          starts_at?: string
+          status?: Database["public"]["Enums"]["event_status"]
+          timezone?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "events_hero_media_id_fkey"
+            columns: ["hero_media_id"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "store_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_series_id_fkey"
+            columns: ["series_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_series_id_fkey"
+            columns: ["series_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      faqs: {
+        Row: {
+          answer_md: string
+          category: string | null
+          created_at: string
+          id: string
+          is_published: boolean
+          question: string
+          related_article_id: string | null
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          answer_md: string
+          category?: string | null
+          created_at?: string
+          id?: string
+          is_published?: boolean
+          question: string
+          related_article_id?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          answer_md?: string
+          category?: string | null
+          created_at?: string
+          id?: string
+          is_published?: boolean
+          question?: string
+          related_article_id?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "faqs_related_article_id_fkey"
+            columns: ["related_article_id"]
+            isOneToOne: false
+            referencedRelation: "articles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "faqs_related_article_id_fkey"
+            columns: ["related_article_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_articles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       inventory_activity_logs: {
         Row: {
@@ -1160,6 +1525,42 @@ export type Database = {
           },
         ]
       }
+      redirects: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          from_path: string
+          id: string
+          is_active: boolean
+          note: string | null
+          status_code: number
+          to_path: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          from_path: string
+          id?: string
+          is_active?: boolean
+          note?: string | null
+          status_code?: number
+          to_path: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          from_path?: string
+          id?: string
+          is_active?: boolean
+          note?: string | null
+          status_code?: number
+          to_path?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       site_settings: {
         Row: {
           announcement: string | null
@@ -1421,6 +1822,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      testimonials: {
+        Row: {
+          author_location: string | null
+          author_name: string
+          body: string
+          collected_at: string | null
+          created_at: string
+          id: string
+          is_published: boolean
+          rating: number | null
+          sort_order: number
+          source: string | null
+          updated_at: string
+        }
+        Insert: {
+          author_location?: string | null
+          author_name: string
+          body: string
+          collected_at?: string | null
+          created_at?: string
+          id?: string
+          is_published?: boolean
+          rating?: number | null
+          sort_order?: number
+          source?: string | null
+          updated_at?: string
+        }
+        Update: {
+          author_location?: string | null
+          author_name?: string
+          body?: string
+          collected_at?: string | null
+          created_at?: string
+          id?: string
+          is_published?: boolean
+          rating?: number | null
+          sort_order?: number
+          source?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       tracked_coral_types: {
         Row: {
@@ -2339,6 +2782,177 @@ export type Database = {
       }
     }
     Views: {
+      v_public_article_products: {
+        Row: {
+          article_id: string | null
+          inventory_item_id: string | null
+          sort_order: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "article_products_article_id_fkey"
+            columns: ["article_id"]
+            isOneToOne: false
+            referencedRelation: "articles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "article_products_article_id_fkey"
+            columns: ["article_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_articles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "article_products_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "article_products_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_inventory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_public_articles: {
+        Row: {
+          author_id: string | null
+          body_md: string | null
+          excerpt: string | null
+          hero_media_id: string | null
+          id: string | null
+          kind: string | null
+          og_image_path: string | null
+          publish_at: string | null
+          reviewed_at: string | null
+          reviewer_id: string | null
+          seo_description: string | null
+          seo_title: string | null
+          slug: string | null
+          subtitle: string | null
+          tags: string[] | null
+          title: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          author_id?: string | null
+          body_md?: string | null
+          excerpt?: string | null
+          hero_media_id?: string | null
+          id?: string | null
+          kind?: never
+          og_image_path?: string | null
+          publish_at?: string | null
+          reviewed_at?: string | null
+          reviewer_id?: string | null
+          seo_description?: string | null
+          seo_title?: string | null
+          slug?: string | null
+          subtitle?: string | null
+          tags?: string[] | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          author_id?: string | null
+          body_md?: string | null
+          excerpt?: string | null
+          hero_media_id?: string | null
+          id?: string | null
+          kind?: never
+          og_image_path?: string | null
+          publish_at?: string | null
+          reviewed_at?: string | null
+          reviewer_id?: string | null
+          seo_description?: string | null
+          seo_title?: string | null
+          slug?: string | null
+          subtitle?: string | null
+          tags?: string[] | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "articles_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "content_authors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "articles_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_authors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "articles_hero_media_id_fkey"
+            columns: ["hero_media_id"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "articles_reviewer_id_fkey"
+            columns: ["reviewer_id"]
+            isOneToOne: false
+            referencedRelation: "content_authors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "articles_reviewer_id_fkey"
+            columns: ["reviewer_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_authors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_public_authors: {
+        Row: {
+          avatar_media_id: string | null
+          bio_md: string | null
+          credentials: string | null
+          display_name: string | null
+          id: string | null
+          links: Json | null
+          slug: string | null
+        }
+        Insert: {
+          avatar_media_id?: string | null
+          bio_md?: string | null
+          credentials?: string | null
+          display_name?: string | null
+          id?: string | null
+          links?: Json | null
+          slug?: string | null
+        }
+        Update: {
+          avatar_media_id?: string | null
+          bio_md?: string | null
+          credentials?: string | null
+          display_name?: string | null
+          id?: string | null
+          links?: Json | null
+          slug?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_authors_avatar_media_id_fkey"
+            columns: ["avatar_media_id"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_public_collections: {
         Row: {
           description: string | null
@@ -2371,6 +2985,141 @@ export type Database = {
             columns: ["hero_media_id"]
             isOneToOne: false
             referencedRelation: "v_public_media"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_public_events: {
+        Row: {
+          description_md: string | null
+          ends_at: string | null
+          hero_media_id: string | null
+          id: string | null
+          location_id: string | null
+          location_text: string | null
+          og_image_path: string | null
+          seo_description: string | null
+          seo_title: string | null
+          series_id: string | null
+          slug: string | null
+          starts_at: string | null
+          timezone: string | null
+          title: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          description_md?: string | null
+          ends_at?: string | null
+          hero_media_id?: string | null
+          id?: string | null
+          location_id?: string | null
+          location_text?: string | null
+          og_image_path?: string | null
+          seo_description?: string | null
+          seo_title?: string | null
+          series_id?: string | null
+          slug?: string | null
+          starts_at?: string | null
+          timezone?: string | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          description_md?: string | null
+          ends_at?: string | null
+          hero_media_id?: string | null
+          id?: string | null
+          location_id?: string | null
+          location_text?: string | null
+          og_image_path?: string | null
+          seo_description?: string | null
+          seo_title?: string | null
+          series_id?: string | null
+          slug?: string | null
+          starts_at?: string | null
+          timezone?: string | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "events_hero_media_id_fkey"
+            columns: ["hero_media_id"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "store_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_series_id_fkey"
+            columns: ["series_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_series_id_fkey"
+            columns: ["series_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_public_faqs: {
+        Row: {
+          answer_md: string | null
+          category: string | null
+          id: string | null
+          question: string | null
+          related_article_id: string | null
+          sort_order: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          answer_md?: string | null
+          category?: string | null
+          id?: string | null
+          question?: string | null
+          related_article_id?: string | null
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          answer_md?: string | null
+          category?: string | null
+          id?: string | null
+          question?: string | null
+          related_article_id?: string | null
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "faqs_related_article_id_fkey"
+            columns: ["related_article_id"]
+            isOneToOne: false
+            referencedRelation: "articles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "faqs_related_article_id_fkey"
+            columns: ["related_article_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_articles"
             referencedColumns: ["id"]
           },
         ]
@@ -2504,6 +3253,24 @@ export type Database = {
           },
         ]
       }
+      v_public_redirects: {
+        Row: {
+          from_path: string | null
+          status_code: number | null
+          to_path: string | null
+        }
+        Insert: {
+          from_path?: string | null
+          status_code?: number | null
+          to_path?: string | null
+        }
+        Update: {
+          from_path?: string | null
+          status_code?: number | null
+          to_path?: string | null
+        }
+        Relationships: []
+      }
       v_public_site_settings: {
         Row: {
           announcement: string | null
@@ -2531,6 +3298,39 @@ export type Database = {
           storage_base?: string | null
           tagline?: string | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      v_public_testimonials: {
+        Row: {
+          author_location: string | null
+          author_name: string | null
+          body: string | null
+          collected_at: string | null
+          id: string | null
+          rating: number | null
+          sort_order: number | null
+          source: string | null
+        }
+        Insert: {
+          author_location?: string | null
+          author_name?: string | null
+          body?: string | null
+          collected_at?: string | null
+          id?: string | null
+          rating?: number | null
+          sort_order?: number | null
+          source?: string | null
+        }
+        Update: {
+          author_location?: string | null
+          author_name?: string | null
+          body?: string | null
+          collected_at?: string | null
+          id?: string | null
+          rating?: number | null
+          sort_order?: number | null
+          source?: string | null
         }
         Relationships: []
       }
@@ -2754,6 +3554,14 @@ export type Database = {
         | "floor_staff"
         | "viewer"
         | "dev"
+      article_kind:
+        | "care_guide"
+        | "event_recap"
+        | "news"
+        | "species_spotlight"
+        | "how_to"
+        | "other"
+      article_status: "draft" | "in_review" | "published" | "archived"
       availability_status:
         | "available"
         | "sold"
@@ -2783,6 +3591,7 @@ export type Database = {
         | "promo"
         | "educational"
         | "other"
+      event_status: "draft" | "published" | "cancelled" | "archived"
       inventory_activity_action:
         | "created"
         | "updated"
@@ -3042,6 +3851,15 @@ export const Constants = {
         "viewer",
         "dev",
       ],
+      article_kind: [
+        "care_guide",
+        "event_recap",
+        "news",
+        "species_spotlight",
+        "how_to",
+        "other",
+      ],
+      article_status: ["draft", "in_review", "published", "archived"],
       availability_status: [
         "available",
         "sold",
@@ -3074,6 +3892,7 @@ export const Constants = {
         "educational",
         "other",
       ],
+      event_status: ["draft", "published", "cancelled", "archived"],
       inventory_activity_action: [
         "created",
         "updated",
