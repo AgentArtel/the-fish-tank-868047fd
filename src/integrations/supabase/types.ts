@@ -149,6 +149,74 @@ export type Database = {
             referencedRelation: "inventory_items"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "clover_item_links_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_inventory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      collections: {
+        Row: {
+          created_at: string
+          description: string | null
+          filter: Json
+          hero_media_id: string | null
+          id: string
+          is_published: boolean
+          slug: string
+          sort_order: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          filter?: Json
+          hero_media_id?: string | null
+          id?: string
+          is_published?: boolean
+          slug: string
+          sort_order?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          filter?: Json
+          hero_media_id?: string | null
+          id?: string
+          is_published?: boolean
+          slug?: string
+          sort_order?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collections_hero_media_id_fkey"
+            columns: ["hero_media_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_media"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collections_hero_media_id_fkey"
+            columns: ["hero_media_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_inventory"
+            referencedColumns: ["primary_media_id"]
+          },
+          {
+            foreignKeyName: "collections_hero_media_id_fkey"
+            columns: ["hero_media_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_media"
+            referencedColumns: ["id"]
+          },
         ]
       }
       content_items: {
@@ -410,6 +478,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "inventory_activity_logs_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_inventory"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "inventory_activity_logs_vendor_batch_id_fkey"
             columns: ["vendor_batch_id"]
             isOneToOne: false
@@ -433,9 +508,13 @@ export type Database = {
           colony_gone: boolean
           colony_gone_at: string | null
           colony_gone_by: string | null
+          compare_at_price: number | null
           created_at: string
           created_by: string | null
           id: string
+          is_house_line: boolean
+          is_website_ready: boolean
+          is_wysiwyg: boolean
           item_name: string
           item_type: Database["public"]["Enums"]["item_type"] | null
           live_sale_status: Database["public"]["Enums"]["inventory_live_sale_status"]
@@ -444,6 +523,7 @@ export type Database = {
           notes: string | null
           origin_region: string | null
           pricing_status: Database["public"]["Enums"]["inventory_pricing_status"]
+          product_id: string | null
           quantity_available: number
           quantity_lost: number
           quantity_on_hold: number
@@ -457,6 +537,7 @@ export type Database = {
           size: string | null
           source_vendor_batch_id: string | null
           source_vendor_line_item_id: string | null
+          specimen_notes: string | null
           subcategory: string | null
           updated_at: string
           vendor_id: string | null
@@ -470,9 +551,13 @@ export type Database = {
           colony_gone?: boolean
           colony_gone_at?: string | null
           colony_gone_by?: string | null
+          compare_at_price?: number | null
           created_at?: string
           created_by?: string | null
           id?: string
+          is_house_line?: boolean
+          is_website_ready?: boolean
+          is_wysiwyg?: boolean
           item_name: string
           item_type?: Database["public"]["Enums"]["item_type"] | null
           live_sale_status?: Database["public"]["Enums"]["inventory_live_sale_status"]
@@ -481,6 +566,7 @@ export type Database = {
           notes?: string | null
           origin_region?: string | null
           pricing_status?: Database["public"]["Enums"]["inventory_pricing_status"]
+          product_id?: string | null
           quantity_available?: number
           quantity_lost?: number
           quantity_on_hold?: number
@@ -494,6 +580,7 @@ export type Database = {
           size?: string | null
           source_vendor_batch_id?: string | null
           source_vendor_line_item_id?: string | null
+          specimen_notes?: string | null
           subcategory?: string | null
           updated_at?: string
           vendor_id?: string | null
@@ -507,9 +594,13 @@ export type Database = {
           colony_gone?: boolean
           colony_gone_at?: string | null
           colony_gone_by?: string | null
+          compare_at_price?: number | null
           created_at?: string
           created_by?: string | null
           id?: string
+          is_house_line?: boolean
+          is_website_ready?: boolean
+          is_wysiwyg?: boolean
           item_name?: string
           item_type?: Database["public"]["Enums"]["item_type"] | null
           live_sale_status?: Database["public"]["Enums"]["inventory_live_sale_status"]
@@ -518,6 +609,7 @@ export type Database = {
           notes?: string | null
           origin_region?: string | null
           pricing_status?: Database["public"]["Enums"]["inventory_pricing_status"]
+          product_id?: string | null
           quantity_available?: number
           quantity_lost?: number
           quantity_on_hold?: number
@@ -531,6 +623,7 @@ export type Database = {
           size?: string | null
           source_vendor_batch_id?: string | null
           source_vendor_line_item_id?: string | null
+          specimen_notes?: string | null
           subcategory?: string | null
           updated_at?: string
           vendor_id?: string | null
@@ -543,6 +636,20 @@ export type Database = {
             columns: ["location_id"]
             isOneToOne: false
             referencedRelation: "store_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_items_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
           {
@@ -576,6 +683,7 @@ export type Database = {
           has_price_tag: boolean
           id: string
           inventory_item_id: string
+          is_primary: boolean
           media_type: string
           notes: string | null
           ocr_extracted_at: string | null
@@ -584,6 +692,7 @@ export type Database = {
           tag: Database["public"]["Enums"]["inventory_media_tag"]
           updated_at: string
           uploader_id: string | null
+          view: Database["public"]["Enums"]["media_view"] | null
         }
         Insert: {
           alt_text?: string | null
@@ -592,6 +701,7 @@ export type Database = {
           has_price_tag?: boolean
           id?: string
           inventory_item_id: string
+          is_primary?: boolean
           media_type?: string
           notes?: string | null
           ocr_extracted_at?: string | null
@@ -600,6 +710,7 @@ export type Database = {
           tag?: Database["public"]["Enums"]["inventory_media_tag"]
           updated_at?: string
           uploader_id?: string | null
+          view?: Database["public"]["Enums"]["media_view"] | null
         }
         Update: {
           alt_text?: string | null
@@ -608,6 +719,7 @@ export type Database = {
           has_price_tag?: boolean
           id?: string
           inventory_item_id?: string
+          is_primary?: boolean
           media_type?: string
           notes?: string | null
           ocr_extracted_at?: string | null
@@ -616,6 +728,7 @@ export type Database = {
           tag?: Database["public"]["Enums"]["inventory_media_tag"]
           updated_at?: string
           uploader_id?: string | null
+          view?: Database["public"]["Enums"]["media_view"] | null
         }
         Relationships: [
           {
@@ -623,6 +736,13 @@ export type Database = {
             columns: ["inventory_item_id"]
             isOneToOne: false
             referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_media_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_inventory"
             referencedColumns: ["id"]
           },
         ]
@@ -698,6 +818,13 @@ export type Database = {
             columns: ["inventory_item_id"]
             isOneToOne: false
             referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_sale_events_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_inventory"
             referencedColumns: ["id"]
           },
         ]
@@ -1033,6 +1160,42 @@ export type Database = {
           },
         ]
       }
+      site_settings: {
+        Row: {
+          announcement: string | null
+          created_at: string
+          default_og_image_path: string | null
+          id: boolean
+          site_title: string | null
+          social: Json
+          storage_base: string | null
+          tagline: string | null
+          updated_at: string
+        }
+        Insert: {
+          announcement?: string | null
+          created_at?: string
+          default_og_image_path?: string | null
+          id?: boolean
+          site_title?: string | null
+          social?: Json
+          storage_base?: string | null
+          tagline?: string | null
+          updated_at?: string
+        }
+        Update: {
+          announcement?: string | null
+          created_at?: string
+          default_og_image_path?: string | null
+          id?: boolean
+          site_title?: string | null
+          social?: Json
+          storage_base?: string | null
+          tagline?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       store_credit_ledger: {
         Row: {
           amount_cents: number
@@ -1122,64 +1285,107 @@ export type Database = {
             referencedRelation: "store_locations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "store_location_media_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_locations"
+            referencedColumns: ["id"]
+          },
         ]
       }
       store_locations: {
         Row: {
+          address_line1: string | null
+          address_line2: string | null
           area_code: string | null
           attrs: Json
           capacity_notes: string | null
+          city: string | null
+          country: string | null
           created_at: string
+          hours: Json | null
           id: string
           is_active: boolean
           is_live_sale: boolean
+          is_public: boolean
           kind: Database["public"]["Enums"]["store_location_kind"]
+          lat: number | null
+          lng: number | null
           location_code: string | null
           name: string
           notes: string | null
           parent_location_id: string | null
+          phone: string | null
           planned: boolean
+          postal_code: string | null
           primary_photo_url: string | null
+          public_email: string | null
+          region: string | null
           slug: string
           sort_order: number
           system_group_id: string | null
           updated_at: string
         }
         Insert: {
+          address_line1?: string | null
+          address_line2?: string | null
           area_code?: string | null
           attrs?: Json
           capacity_notes?: string | null
+          city?: string | null
+          country?: string | null
           created_at?: string
+          hours?: Json | null
           id?: string
           is_active?: boolean
           is_live_sale?: boolean
+          is_public?: boolean
           kind?: Database["public"]["Enums"]["store_location_kind"]
+          lat?: number | null
+          lng?: number | null
           location_code?: string | null
           name: string
           notes?: string | null
           parent_location_id?: string | null
+          phone?: string | null
           planned?: boolean
+          postal_code?: string | null
           primary_photo_url?: string | null
+          public_email?: string | null
+          region?: string | null
           slug: string
           sort_order?: number
           system_group_id?: string | null
           updated_at?: string
         }
         Update: {
+          address_line1?: string | null
+          address_line2?: string | null
           area_code?: string | null
           attrs?: Json
           capacity_notes?: string | null
+          city?: string | null
+          country?: string | null
           created_at?: string
+          hours?: Json | null
           id?: string
           is_active?: boolean
           is_live_sale?: boolean
+          is_public?: boolean
           kind?: Database["public"]["Enums"]["store_location_kind"]
+          lat?: number | null
+          lng?: number | null
           location_code?: string | null
           name?: string
           notes?: string | null
           parent_location_id?: string | null
+          phone?: string | null
           planned?: boolean
+          postal_code?: string | null
           primary_photo_url?: string | null
+          public_email?: string | null
+          region?: string | null
           slug?: string
           sort_order?: number
           system_group_id?: string | null
@@ -1194,10 +1400,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "store_locations_parent_location_id_fkey"
+            columns: ["parent_location_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_locations"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "store_locations_system_group_id_fkey"
             columns: ["system_group_id"]
             isOneToOne: false
             referencedRelation: "store_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "store_locations_system_group_id_fkey"
+            columns: ["system_group_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_locations"
             referencedColumns: ["id"]
           },
         ]
@@ -1630,10 +1850,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "vendor_line_items_assigned_location_id_fkey"
+            columns: ["assigned_location_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_locations"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "vendor_line_items_reconciled_inventory_item_id_fkey"
             columns: ["reconciled_inventory_item_id"]
             isOneToOne: false
             referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_line_items_reconciled_inventory_item_id_fkey"
+            columns: ["reconciled_inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_inventory"
             referencedColumns: ["id"]
           },
           {
@@ -1655,6 +1889,13 @@ export type Database = {
             columns: ["converted_inventory_item_id"]
             isOneToOne: false
             referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vli_converted_fk"
+            columns: ["converted_inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_inventory"
             referencedColumns: ["id"]
           },
         ]
@@ -1720,6 +1961,13 @@ export type Database = {
             columns: ["assigned_location_id"]
             isOneToOne: false
             referencedRelation: "store_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_line_receive_logs_assigned_location_id_fkey"
+            columns: ["assigned_location_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_locations"
             referencedColumns: ["id"]
           },
           {
@@ -2091,7 +2339,201 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      v_public_collections: {
+        Row: {
+          description: string | null
+          filter: Json | null
+          hero_media_id: string | null
+          hero_media_path: string | null
+          id: string | null
+          slug: string | null
+          sort_order: number | null
+          title: string | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collections_hero_media_id_fkey"
+            columns: ["hero_media_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_media"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collections_hero_media_id_fkey"
+            columns: ["hero_media_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_inventory"
+            referencedColumns: ["primary_media_id"]
+          },
+          {
+            foreignKeyName: "collections_hero_media_id_fkey"
+            columns: ["hero_media_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_media"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_public_inventory: {
+        Row: {
+          attrs: Json | null
+          availability_status:
+            | Database["public"]["Enums"]["inventory_availability_status"]
+            | null
+          compare_at_price: number | null
+          id: string | null
+          is_house_line: boolean | null
+          is_wysiwyg: boolean | null
+          item_name: string | null
+          item_type: Database["public"]["Enums"]["item_type"] | null
+          location_id: string | null
+          primary_media_id: string | null
+          primary_media_path: string | null
+          primary_media_view: Database["public"]["Enums"]["media_view"] | null
+          product_id: string | null
+          retail_price: number | null
+          scientific_name: string | null
+          specimen_notes: string | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_items_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "store_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_items_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_public_locations: {
+        Row: {
+          address_line1: string | null
+          address_line2: string | null
+          city: string | null
+          country: string | null
+          hours: Json | null
+          id: string | null
+          kind: Database["public"]["Enums"]["store_location_kind"] | null
+          lat: number | null
+          lng: number | null
+          name: string | null
+          phone: string | null
+          postal_code: string | null
+          primary_photo_url: string | null
+          public_email: string | null
+          region: string | null
+          slug: string | null
+        }
+        Insert: {
+          address_line1?: string | null
+          address_line2?: string | null
+          city?: string | null
+          country?: string | null
+          hours?: Json | null
+          id?: string | null
+          kind?: Database["public"]["Enums"]["store_location_kind"] | null
+          lat?: number | null
+          lng?: number | null
+          name?: string | null
+          phone?: string | null
+          postal_code?: string | null
+          primary_photo_url?: string | null
+          public_email?: string | null
+          region?: string | null
+          slug?: string | null
+        }
+        Update: {
+          address_line1?: string | null
+          address_line2?: string | null
+          city?: string | null
+          country?: string | null
+          hours?: Json | null
+          id?: string | null
+          kind?: Database["public"]["Enums"]["store_location_kind"] | null
+          lat?: number | null
+          lng?: number | null
+          name?: string | null
+          phone?: string | null
+          postal_code?: string | null
+          primary_photo_url?: string | null
+          public_email?: string | null
+          region?: string | null
+          slug?: string | null
+        }
+        Relationships: []
+      }
+      v_public_media: {
+        Row: {
+          created_at: string | null
+          id: string | null
+          inventory_item_id: string | null
+          is_primary: boolean | null
+          storage_path: string | null
+          view: Database["public"]["Enums"]["media_view"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_media_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_media_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_inventory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_public_site_settings: {
+        Row: {
+          announcement: string | null
+          default_og_image_path: string | null
+          site_title: string | null
+          social: Json | null
+          storage_base: string | null
+          tagline: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          announcement?: string | null
+          default_og_image_path?: string | null
+          site_title?: string | null
+          social?: Json | null
+          storage_base?: string | null
+          tagline?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          announcement?: string | null
+          default_og_image_path?: string | null
+          site_title?: string | null
+          social?: Json | null
+          storage_base?: string | null
+          tagline?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       adjust_store_credit: {
@@ -2140,6 +2582,10 @@ export type Database = {
         }[]
       }
       can_edit_content: { Args: { _user_id: string }; Returns: boolean }
+      compute_inventory_website_ready: {
+        Args: { _item: Database["public"]["Tables"]["inventory_items"]["Row"] }
+        Returns: boolean
+      }
       customer_loyalty_summary: {
         Args: { _customer_id: string }
         Returns: {
@@ -2348,6 +2794,8 @@ export type Database = {
         | "note"
         | "loss"
         | "trade_in"
+        | "media_change"
+        | "website_ready_change"
       inventory_availability_status:
         | "incoming"
         | "quarantine"
@@ -2374,6 +2822,7 @@ export type Database = {
         | "equipment"
         | "other"
       media_type: "image" | "video"
+      media_view: "daylight" | "actinic" | "video_still" | "other"
       platform:
         | "facebook"
         | "instagram"
@@ -2636,6 +3085,8 @@ export const Constants = {
         "note",
         "loss",
         "trade_in",
+        "media_change",
+        "website_ready_change",
       ],
       inventory_availability_status: [
         "incoming",
@@ -2666,6 +3117,7 @@ export const Constants = {
         "other",
       ],
       media_type: ["image", "video"],
+      media_view: ["daylight", "actinic", "video_still", "other"],
       platform: [
         "facebook",
         "instagram",
