@@ -27,9 +27,20 @@ import {
   MapPin,
   Camera,
   PartyPopper,
+  Rocket,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_app/inventory/count")({ component: CountPage });
+
+async function uploadCountPhoto(file: File) {
+  const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+  const path = `count/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error } = await supabase.storage
+    .from("inventory-media")
+    .upload(path, file, { contentType: file.type || "image/jpeg", upsert: false });
+  if (error) throw error;
+  return { path, fileName: file.name };
+}
 
 function CountPage() {
   const [category, setCategory] = useState<string | null>(null);
@@ -223,10 +234,27 @@ function CountCard({
   const [price, setPrice] = useState<string>(
     item.retailPrice != null ? String(item.retailPrice) : "",
   );
+  const [photo, setPhoto] = useState<{ file: File; preview: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const save = async () => {
-    const qtyNum = qty.trim() === "" ? NaN : Number(qty);
+  const qtyNum = qty.trim() === "" ? NaN : Number(qty);
+  const priceNum = price.trim() === "" ? NaN : Number(price);
+  const hasPhotoOnFile = !item.needsPhoto || !!photo;
+  // Can publish (go live) when everything the go-live gate needs is in hand.
+  const canPublish =
+    !Number.isNaN(qtyNum) &&
+    qtyNum > 0 &&
+    !!locationId &&
+    !Number.isNaN(priceNum) &&
+    priceNum > 0 &&
+    hasPhotoOnFile;
+
+  const pickPhoto = (f: File | undefined | null) => {
+    if (!f) return;
+    setPhoto({ file: f, preview: URL.createObjectURL(f) });
+  };
+
+  const submit = async (takeLive: boolean) => {
     if (Number.isNaN(qtyNum) || qtyNum < 0) {
       toast.error("Enter a quantity (0 is fine if none on hand)");
       return;
@@ -237,17 +265,26 @@ function CountCard({
     }
     setBusy(true);
     try {
-      const priceNum = price.trim() === "" ? null : Number(price);
+      let photoPath: string | undefined;
+      let photoFileName: string | undefined;
+      if (photo) {
+        const up = await uploadCountPhoto(photo.file);
+        photoPath = up.path;
+        photoFileName = up.fileName;
+      }
       await recordFn({
         data: {
           id: item.id,
           item_type: (type || null) as any,
           quantity: Math.floor(qtyNum),
           location_id: locationId,
-          retail_price: priceNum != null && !Number.isNaN(priceNum) ? priceNum : null,
+          retail_price: !Number.isNaN(priceNum) ? priceNum : null,
+          photo_path: photoPath,
+          photo_file_name: photoFileName,
+          take_live: takeLive,
         },
       });
-      toast.success(`${item.itemName} counted`);
+      toast.success(takeLive ? `${item.itemName} counted & live` : `${item.itemName} counted`);
       onSaved();
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to save");
@@ -346,28 +383,69 @@ function CountCard({
         />
       </div>
 
-      {item.needsPhoto && (
-        <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-          <Camera className="w-3.5 h-3.5" /> No photo yet — add one in go-live before it can sell.
-        </p>
-      )}
+      {/* Photo — add it here to publish (go live) in the same pass */}
+      <div className="space-y-1">
+        <Label className="text-xs flex items-center gap-1">
+          <Camera className="w-3.5 h-3.5" /> Photo {item.needsPhoto ? "" : "(on file)"}
+        </Label>
+        {photo ? (
+          <div className="relative rounded-md border overflow-hidden">
+            <img src={photo.preview} alt="" className="w-full max-h-48 object-contain bg-muted" />
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="absolute top-2 right-2"
+              onClick={() => setPhoto(null)}
+            >
+              Retake
+            </Button>
+          </div>
+        ) : (
+          <label className="block rounded-md border-2 border-dashed border-muted-foreground/30 p-4 text-center cursor-pointer hover:bg-muted/30">
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => pickPhoto(e.target.files?.[0])}
+            />
+            <Camera className="w-6 h-6 mx-auto text-muted-foreground" />
+            <div className="text-xs mt-1 text-muted-foreground">
+              {item.needsPhoto
+                ? "Tap to photograph — needed to take it live"
+                : "Already has a photo; tap to add another"}
+            </div>
+          </label>
+        )}
+      </div>
 
-      <div className="flex gap-2 pt-1">
-        <Button onClick={save} disabled={busy} className="flex-1">
+      <div className="flex flex-wrap gap-2 pt-1">
+        <Button
+          onClick={() => submit(true)}
+          disabled={busy || !canPublish}
+          className="flex-1 min-w-[9rem]"
+        >
           {busy ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-1 animate-spin" /> Saving…
-            </>
+            <Loader2 className="w-4 h-4 mr-1 animate-spin" />
           ) : (
-            <>
-              <Check className="w-4 h-4 mr-1" /> Save &amp; next
-            </>
+            <Rocket className="w-4 h-4 mr-1" />
           )}
+          Count &amp; publish
         </Button>
-        <Button variant="outline" onClick={onSkip} disabled={busy}>
+        <Button variant="outline" onClick={() => submit(false)} disabled={busy}>
+          <Check className="w-4 h-4 mr-1" /> Count only
+        </Button>
+        <Button variant="ghost" onClick={onSkip} disabled={busy}>
           Skip
         </Button>
       </div>
+      {!canPublish && (
+        <p className="text-[11px] text-muted-foreground">
+          Publish needs a photo, a price, a location, and quantity &gt; 0. Otherwise “Count only”
+          records the baseline and you can take it live later.
+        </p>
+      )}
     </div>
   );
 }
