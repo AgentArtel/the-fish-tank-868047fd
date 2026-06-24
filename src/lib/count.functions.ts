@@ -98,8 +98,13 @@ export const getCountDeck = createServerFn({ method: "GET" })
 
 // Record one item's baseline: set type/qty/location/price in a single write.
 // quantity_received is bumped to keep the inventory_qty_balance CHECK satisfied
-// (received >= available + on_hold + sold + lost). Does NOT flip availability —
-// taking an item live still goes through the photo/price/go-live gates.
+// (received >= available + on_hold + sold + lost).
+//
+// Optionally register a primary photo and take the item LIVE in the same pass
+// (count + photo + price → available), so the owner can do all of it per item.
+// Going live is gated: needs a photo on file, an approved price, a location, and
+// qty>0 — enforced here AND by the inv_guard_gates DB trigger as the backstop.
+// Pricing approval + go-live stay editor-tier (admin|dev), per the invariant.
 export const recordItemCount = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
@@ -110,6 +115,9 @@ export const recordItemCount = createServerFn({ method: "POST" })
         quantity: z.number().int().min(0).max(100000),
         location_id: z.string().uuid().nullable().optional(),
         retail_price: z.number().min(0).max(1_000_000).nullable().optional(),
+        photo_path: z.string().max(500).optional(),
+        photo_file_name: z.string().max(200).optional(),
+        take_live: z.boolean().optional(),
       })
       .parse(d),
   )
@@ -119,11 +127,24 @@ export const recordItemCount = createServerFn({ method: "POST" })
 
     const { data: item, error: readErr } = await db
       .from("inventory_items")
-      .select("quantity_on_hold, quantity_sold, quantity_lost")
+      .select("quantity_on_hold, quantity_sold, quantity_lost, retail_price, needs_photo")
       .eq("id", data.id)
       .maybeSingle();
     if (readErr) throw new Error(readErr.message);
     if (!item) throw new Error("Item not found");
+
+    // Register the primary photo FIRST so it's on file before the go-live gate runs.
+    if (data.photo_path) {
+      const { error: mErr } = await db.from("inventory_media").insert({
+        inventory_item_id: data.id,
+        storage_path: data.photo_path,
+        file_name: data.photo_file_name ?? "count.jpg",
+        media_type: "image",
+        tag: "internal",
+        uploader_id: context.userId,
+      });
+      if (mErr) throw new Error(`Photo: ${mErr.message}`);
+    }
 
     const reserved =
       Number(item.quantity_on_hold ?? 0) +
@@ -137,8 +158,22 @@ export const recordItemCount = createServerFn({ method: "POST" })
     if (data.item_type !== undefined) patch.item_type = data.item_type;
     if (data.location_id !== undefined) patch.location_id = data.location_id;
     if (data.retail_price !== undefined) patch.retail_price = data.retail_price;
+    if (data.photo_path) patch.needs_photo = false;
 
+    if (data.take_live) {
+      const effectivePrice = data.retail_price ?? Number(item.retail_price ?? 0);
+      const hasPhoto = !!data.photo_path || !item.needs_photo;
+      if (!effectivePrice || effectivePrice <= 0)
+        throw new Error("A price is required to take an item live");
+      if (data.quantity <= 0) throw new Error("Quantity must be greater than 0 to go live");
+      if (!data.location_id) throw new Error("A location is required to go live");
+      if (!hasPhoto) throw new Error("A photo is required to go live");
+      patch.pricing_status = "approved"; // admin approving the price
+      patch.availability_status = "available";
+    }
+
+    // One atomic UPDATE so the gate trigger evaluates the final row.
     const { error } = await db.from("inventory_items").update(patch).eq("id", data.id);
     if (error) throw new Error(error.message);
-    return { ok: true };
+    return { ok: true, tookLive: !!data.take_live };
   });
