@@ -35,6 +35,15 @@ function fmtRel(iso: string | null | undefined) {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+// Auto-sync health: the cron runs every ~10 min, so a watermark older than ~30 min
+// means the scheduled sync has stalled (or was never wired up).
+function syncHealth(iso: string | null | undefined): { tone: "ok" | "warn"; label: string } {
+  if (!iso) return { tone: "warn", label: "Auto-sync not running" };
+  const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (m > 30) return { tone: "warn", label: "Auto-sync stale" };
+  return { tone: "ok", label: "Auto-syncing" };
+}
+
 function CloverSettings() {
   const qc = useQueryClient();
   const me = useMe();
@@ -234,9 +243,27 @@ function CloverSettings() {
               )}
               Sync sales now
             </Button>
-            <span className="text-xs text-muted-foreground">
-              Last sale sync {fmtRel(data?.lastSaleSyncedAt)}
-            </span>
+            <div className="flex items-center gap-2">
+              {data?.configured &&
+                (() => {
+                  const h = syncHealth(data?.lastSaleSyncedAt);
+                  return (
+                    <Badge
+                      variant="outline"
+                      className={
+                        h.tone === "ok"
+                          ? "border-emerald-400 text-emerald-700 dark:text-emerald-300"
+                          : "border-amber-400 text-amber-700 dark:text-amber-300"
+                      }
+                    >
+                      {h.label}
+                    </Badge>
+                  );
+                })()}
+              <span className="text-xs text-muted-foreground">
+                Last sale sync {fmtRel(data?.lastSaleSyncedAt)}
+              </span>
+            </div>
           </div>
           {syncStatus && <p className="text-xs text-primary mt-2 font-medium">{syncStatus}</p>}
           <p className="text-xs text-muted-foreground mt-2">
@@ -244,7 +271,8 @@ function CloverSettings() {
             <span className="font-medium">linked</span> items decrement workspace stock; refunds,
             voids, and sales of unmatched items are held as{" "}
             <span className="font-medium">need review</span> (no stock change) until you reconcile
-            them. Safe to re-run — already-recorded sales are skipped.
+            them. Safe to re-run — already-recorded sales are skipped. It also runs automatically on
+            a schedule; the badge above shows whether that scheduled sync is healthy.
           </p>
         </div>
       </div>
