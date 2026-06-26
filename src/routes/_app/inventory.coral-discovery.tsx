@@ -141,7 +141,7 @@ function CoralDiscoveryPage() {
   }, [positionsByLocation, effectiveLocationId, session]);
 
   return (
-    <div className="p-6 md:p-8 max-w-5xl">
+    <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto">
       <PageHeader
         title="Coral Discovery"
         description="Catalog the corals already in the building, one system at a time. Entries are saved as drafts — pricing and going-live still happen in review."
@@ -211,38 +211,40 @@ function CoralDiscoveryPage() {
         )}
       </div>
 
-      <div className="grid md:grid-cols-2 gap-5">
-        {/* Capture form */}
-        <CoralCaptureForm
-          locationId={effectiveLocationId}
-          disabled={!effectiveLocationId}
-          usedPositions={usedPositions}
-          onSaved={(entry) => {
-            setSession((s) => [entry, ...s]);
-            qc.invalidateQueries({ queryKey: ["coral-discovery-overview"] });
+      {/* Continuous flow: cut frags from the colony just catalogued. */}
+      {fragTarget && (
+        <CutFragsDialog
+          key={fragTarget.id}
+          open
+          withTrigger={false}
+          colonyId={fragTarget.id}
+          colonyName={fragTarget.name}
+          perHeadCents={fragTarget.perHeadCents}
+          onDone={() => qc.invalidateQueries({ queryKey: ["coral-discovery-overview"] })}
+          onOpenChange={(o) => {
+            if (!o) setFragTarget(null);
           }}
-          onColonySaved={(c) => setFragTarget(c)}
-          catalogFn={catalogFn}
         />
+      )}
 
-        {/* Continuous flow: cut frags from the colony just catalogued. */}
-        {fragTarget && (
-          <CutFragsDialog
-            key={fragTarget.id}
-            open
-            withTrigger={false}
-            colonyId={fragTarget.id}
-            colonyName={fragTarget.name}
-            perHeadCents={fragTarget.perHeadCents}
-            onDone={() => qc.invalidateQueries({ queryKey: ["coral-discovery-overview"] })}
-            onOpenChange={(o) => {
-              if (!o) setFragTarget(null);
+      <div className="grid lg:grid-cols-3 gap-5 lg:gap-6 items-start">
+        {/* Capture form — takes two of three columns on desktop */}
+        <div className="lg:col-span-2">
+          <CoralCaptureForm
+            locationId={effectiveLocationId}
+            disabled={!effectiveLocationId}
+            usedPositions={usedPositions}
+            onSaved={(entry) => {
+              setSession((s) => [entry, ...s]);
+              qc.invalidateQueries({ queryKey: ["coral-discovery-overview"] });
             }}
+            onColonySaved={(c) => setFragTarget(c)}
+            catalogFn={catalogFn}
           />
-        )}
+        </div>
 
-        {/* Session log + already-here */}
-        <div className="space-y-5">
+        {/* Session log + already-here — sidebar on desktop, stacks below on narrow */}
+        <div className="space-y-5 lg:sticky lg:top-6">
           <div className="rounded-lg border bg-card p-4">
             <h2 className="text-sm font-semibold mb-3">Logged this session ({session.length})</h2>
             {session.length === 0 ? (
@@ -484,264 +486,297 @@ function CoralCaptureForm({
   };
 
   return (
-    <div className="rounded-lg border bg-card p-4 space-y-3">
-      <div className="flex items-center gap-2">
+    <div className="rounded-lg border bg-card">
+      <div className="flex items-center gap-2 border-b px-4 py-3 sm:px-5">
         <Plus className="w-4 h-4 text-primary" />
         <h2 className="text-sm font-semibold">Log a coral</h2>
       </div>
 
-      {/* Photo — snap one, or search the downloaded vendor images */}
-      {photo || pickedImage ? (
-        <div className="relative rounded-md border overflow-hidden">
-          <img
-            src={(photo ?? pickedImage)!.preview}
-            alt=""
-            className="w-full max-h-56 object-contain bg-muted"
-          />
-          {pickedImage && (
-            <span className="absolute top-2 left-2 text-[10px] rounded bg-black/60 text-white px-1.5 py-0.5">
-              Vendor image
-            </span>
-          )}
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className="absolute top-2 right-2"
-            onClick={() => {
-              setPhoto(null);
-              setPickedImage(null);
-            }}
-          >
-            Change
-          </Button>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <label className="block rounded-md border-2 border-dashed border-muted-foreground/30 p-5 text-center cursor-pointer hover:bg-muted/30">
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={(e) => pickPhoto(e.target.files?.[0])}
-            />
-            <Camera className="w-7 h-7 mx-auto text-muted-foreground" />
-            <div className="text-sm mt-1.5">Tap to photograph the coral</div>
-            <div className="text-xs text-muted-foreground">
-              WYSIWYG frags — snap your own. Otherwise search a stock image →
+      <div className="p-4 sm:p-5 space-y-6">
+        {/* Two-column working area on tablet/desktop: photo on the left, details on
+            the right; single clean column on mobile. */}
+        <div className="grid gap-6 md:grid-cols-[minmax(0,15rem)_1fr] md:gap-6">
+          {/* Photo — snap one, or search the downloaded vendor images */}
+          <section className="space-y-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Photo
+            </h3>
+            {photo || pickedImage ? (
+              <div className="relative rounded-md border overflow-hidden">
+                <img
+                  src={(photo ?? pickedImage)!.preview}
+                  alt=""
+                  className="w-full aspect-square object-contain bg-muted"
+                />
+                {pickedImage && (
+                  <span className="absolute top-2 left-2 text-[10px] rounded bg-black/60 text-white px-1.5 py-0.5">
+                    Vendor image
+                  </span>
+                )}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="absolute top-2 right-2"
+                  onClick={() => {
+                    setPhoto(null);
+                    setPickedImage(null);
+                  }}
+                >
+                  Change
+                </Button>
+              </div>
+            ) : (
+              <div className="rounded-md border overflow-hidden">
+                <label className="flex aspect-square flex-col items-center justify-center border-b border-dashed border-muted-foreground/30 p-4 text-center cursor-pointer hover:bg-muted/30">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={(e) => pickPhoto(e.target.files?.[0])}
+                  />
+                  <Camera className="w-8 h-8 text-muted-foreground" />
+                  <div className="text-sm mt-2 font-medium">Tap to photograph</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    WYSIWYG frags — snap your own
+                  </div>
+                </label>
+                <div className="p-2">
+                  <VendorImagePicker
+                    initialQuery={name.trim()}
+                    onPick={(path, preview) => setPickedImage({ path, preview })}
+                  />
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* Identity — what it is and where it sits on the rack */}
+          <section className="space-y-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Identity
+            </h3>
+            <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Coral name *</Label>
+                <Input
+                  ref={nameRef}
+                  autoFocus
+                  className="h-10"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Rainbow Hornet Acan"
+                />
+              </div>
+              <div className="space-y-1.5 sm:w-28">
+                <Label className="text-xs">Plug / rack tag *</Label>
+                <Input
+                  value={rackPos}
+                  onChange={(e) => setRackPos(e.target.value)}
+                  placeholder="B3"
+                  className={`h-10 font-mono uppercase ${positionTaken ? "border-amber-500 focus-visible:ring-amber-500" : ""}`}
+                />
+              </div>
             </div>
-          </label>
-          <div className="flex justify-center">
-            <VendorImagePicker
-              initialQuery={name.trim()}
-              onPick={(path, preview) => setPickedImage({ path, preview })}
-            />
-          </div>
+            {positionTaken && (
+              <p className="text-[11px] text-amber-600 dark:text-amber-400 -mt-1">
+                Plug <span className="font-mono font-semibold">{normPos}</span> is already tagged in
+                this system. Double-check you're not logging the same coral twice.
+              </p>
+            )}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Scientific name</Label>
+                <Input
+                  value={sci}
+                  className="h-10"
+                  onChange={(e) => setSci(e.target.value)}
+                  placeholder="e.g. Acanthastrea lordhowensis"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Type</Label>
+                <Select
+                  value={coralType || "__none__"}
+                  onValueChange={(v) => setCoralType(v === "__none__" ? "" : v)}
+                >
+                  <SelectTrigger className="h-10">
+                    <SelectValue placeholder="—" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">—</SelectItem>
+                    {CORAL_TYPES.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </section>
         </div>
-      )}
 
-      <div className="grid grid-cols-[1fr_auto] gap-3">
-        <div className="space-y-1">
-          <Label className="text-xs">Coral name *</Label>
-          <Input
-            ref={nameRef}
-            autoFocus
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Rainbow Hornet Acan"
+        {/* Classification — Kind · Status · Size, the picks that change behavior */}
+        <section className="space-y-3 border-t pt-5">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Classification
+          </h3>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Kind *</Label>
+              <Select value={kind} onValueChange={(v) => setKind(v as CoralKind)}>
+                <SelectTrigger className="h-10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {KIND_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Status</Label>
+              <Select value={status} onValueChange={(v) => setStatus(v as CoralStatus)}>
+                <SelectTrigger className="h-10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {STATUS_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Size</Label>
+              <Select value={size} onValueChange={(v) => setSize(v as CoralSize)}>
+                <SelectTrigger className="h-10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SIZE_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </section>
+
+        {/* Pricing — a frag auto-prices heads × per-head rate; a typed price overrides.
+            A colony sets the per-head rate its frags inherit. */}
+        <section className="space-y-3 border-t pt-5">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Pricing
+          </h3>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {kind === "frag" ? (
+              <>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Heads / polyps</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    className="h-10"
+                    value={heads}
+                    onChange={(e) => setHeads(e.target.value)}
+                    placeholder="e.g. 2"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Price per head ($)</Label>
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    step="any"
+                    min={0}
+                    className="h-10"
+                    value={perHead}
+                    onChange={(e) => setPerHead(e.target.value)}
+                    placeholder="$/head"
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label className="text-xs">Price per head ($) — its frags inherit this</Label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  step="any"
+                  min={0}
+                  className="h-10"
+                  value={perHead}
+                  onChange={(e) => setPerHead(e.target.value)}
+                  placeholder="$/head"
+                />
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label className="text-xs">
+                Price {autoPrice != null && price.trim() === "" ? "(auto)" : "(override)"}
+              </Label>
+              <Input
+                type="number"
+                inputMode="decimal"
+                step="any"
+                min={0}
+                className="h-10"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                placeholder={autoPrice != null ? fmtMoney(autoPrice) : "—"}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Quantity</Label>
+              <Input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                className="h-10"
+                value={qty}
+                onChange={(e) => setQty(e.target.value)}
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* Notes */}
+        <section className="space-y-1.5 border-t pt-5">
+          <Label className="text-xs">Notes</Label>
+          <Textarea
+            rows={2}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Health, lineage, placement…"
           />
-        </div>
-        <div className="space-y-1 w-28">
-          <Label className="text-xs">Plug / rack tag *</Label>
-          <Input
-            value={rackPos}
-            onChange={(e) => setRackPos(e.target.value)}
-            placeholder="B3"
-            className={`font-mono uppercase ${positionTaken ? "border-amber-500 focus-visible:ring-amber-500" : ""}`}
-          />
-        </div>
-      </div>
-      {positionTaken && (
-        <p className="text-[11px] text-amber-600 dark:text-amber-400 -mt-1">
-          Plug <span className="font-mono font-semibold">{normPos}</span> is already tagged in this
-          system. Double-check you're not logging the same coral twice.
+        </section>
+
+        <p className="text-[11px] text-muted-foreground">
+          {kind === "colony"
+            ? "Saved as a Colony — it won't count down; you'll cut frags from it later (each inherits its $/head rate)."
+            : status === "for_sale"
+              ? "Saved as a draft (Incoming), price unapproved — an admin reviews before it goes live."
+              : "Saved as Not for sale — it won't ring up at the register or show to customers."}
         </p>
-      )}
-      <div className="space-y-1">
-        <Label className="text-xs">Scientific name</Label>
-        <Input
-          value={sci}
-          onChange={(e) => setSci(e.target.value)}
-          placeholder="e.g. Acanthastrea lordhowensis"
-        />
       </div>
 
-      {/* Kind · Status — the two picks that change behavior */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label className="text-xs">Kind *</Label>
-          <Select value={kind} onValueChange={(v) => setKind(v as CoralKind)}>
-            <SelectTrigger className="h-9">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {KIND_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Status</Label>
-          <Select value={status} onValueChange={(v) => setStatus(v as CoralStatus)}>
-            <SelectTrigger className="h-9">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {STATUS_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* Size (label) · Type */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label className="text-xs">Size</Label>
-          <Select value={size} onValueChange={(v) => setSize(v as CoralSize)}>
-            <SelectTrigger className="h-9">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {SIZE_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Type</Label>
-          <Select
-            value={coralType || "__none__"}
-            onValueChange={(v) => setCoralType(v === "__none__" ? "" : v)}
-          >
-            <SelectTrigger className="h-9">
-              <SelectValue placeholder="—" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none__">—</SelectItem>
-              {CORAL_TYPES.map((t) => (
-                <SelectItem key={t} value={t}>
-                  {t}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* Pricing — a frag auto-prices heads × per-head rate; a typed price overrides.
-          A colony sets the per-head rate its frags inherit. */}
-      {kind === "frag" ? (
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <Label className="text-xs">Heads / polyps</Label>
-            <Input
-              type="number"
-              inputMode="numeric"
-              min={1}
-              value={heads}
-              onChange={(e) => setHeads(e.target.value)}
-              placeholder="e.g. 2"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Price per head ($)</Label>
-            <Input
-              type="number"
-              inputMode="decimal"
-              step="any"
-              min={0}
-              value={perHead}
-              onChange={(e) => setPerHead(e.target.value)}
-              placeholder="$/head"
-            />
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-1">
-          <Label className="text-xs">Price per head ($) — its frags inherit this</Label>
-          <Input
-            type="number"
-            inputMode="decimal"
-            step="any"
-            min={0}
-            value={perHead}
-            onChange={(e) => setPerHead(e.target.value)}
-            placeholder="$/head"
-          />
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label className="text-xs">
-            Price {autoPrice != null && price.trim() === "" ? "(auto)" : "(override)"}
-          </Label>
-          <Input
-            type="number"
-            inputMode="decimal"
-            step="any"
-            min={0}
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            placeholder={autoPrice != null ? fmtMoney(autoPrice) : "—"}
-          />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Quantity</Label>
-          <Input
-            type="number"
-            inputMode="numeric"
-            min={1}
-            value={qty}
-            onChange={(e) => setQty(e.target.value)}
-          />
-        </div>
-      </div>
-
-      <div className="space-y-1">
-        <Label className="text-xs">Notes</Label>
-        <Textarea
-          rows={2}
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="Health, lineage, placement…"
-        />
-      </div>
-
-      <p className="text-[11px] text-muted-foreground">
-        {kind === "colony"
-          ? "Saved as a Colony — it won't count down; you'll cut frags from it later (each inherits its $/head rate)."
-          : status === "for_sale"
-            ? "Saved as a draft (Incoming), price unapproved — an admin reviews before it goes live."
-            : "Saved as Not for sale — it won't ring up at the register or show to customers."}
-      </p>
-
-      <div className="flex gap-2 pt-1">
+      {/* Sticky action bar — stays reachable on a long iPad/mobile scroll */}
+      <div className="sticky bottom-0 z-10 flex gap-2 border-t bg-card/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/80 sm:px-5">
         <Button
           onClick={save}
           disabled={busy || disabled || !name.trim() || !normPos}
-          className="flex-1"
+          className="h-11 flex-1"
         >
           {busy ? (
             <>
@@ -751,7 +786,7 @@ function CoralCaptureForm({
             "Save & next"
           )}
         </Button>
-        <Button variant="outline" onClick={() => reset(false)} disabled={busy}>
+        <Button variant="outline" className="h-11" onClick={() => reset(false)} disabled={busy}>
           Clear
         </Button>
       </div>
