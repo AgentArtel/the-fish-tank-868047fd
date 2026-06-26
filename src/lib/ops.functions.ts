@@ -2224,20 +2224,31 @@ export const bulkImportInventoryRows = createServerFn({ method: "POST" })
 // never push a coral live on its own — an admin still reviews pricing and
 // availability afterward (standing invariant: review before live).
 
-const CoralRoleEnum = z.enum(["for_sale", "growout", "mother_colony", "frag_source", "hold"]);
 const CoralTypeEnum = z.enum(["SPS", "LPS", "soft", "zoanthid", "mushroom", "anemone"]);
 
-// Inventory role → draft availability_status. Never `available` (admin flips
-// that after pricing approval + photo gate).
-function coralRoleToAvailability(role: z.infer<typeof CoralRoleEnum>) {
-  switch (role) {
-    case "hold":
-      return "on_hold" as const;
-    case "for_sale":
-      return "incoming" as const; // staged draft, pending pricing review
-    default:
-      return "not_for_sale" as const; // growout / mother_colony / frag_source
-  }
+// The three independent coral axes (owner-aligned model — see
+// .lovable/handoff-coral-colony-frag.md): Kind (counting behavior), sale Status
+// (sellability), and Size (a label only).
+const CoralKindEnum = z.enum(["colony", "frag"]); // colony = cut-from source (never decrements)
+const CoralSaleStateEnum = z.enum(["for_sale", "growout", "nfs"]);
+const CoralSizeEnum = z.enum(["mother_colony", "colony", "frag"]);
+
+// Sale status → draft availability_status. Never `available` (admin flips that
+// after pricing approval + photo gate). Grow-out and NFS both block the sale.
+function saleStateToAvailability(s: z.infer<typeof CoralSaleStateEnum>) {
+  return s === "for_sale" ? ("incoming" as const) : ("not_for_sale" as const);
+}
+
+// Backward-compat: derive the legacy attrs.inventory_role so the discovery
+// overview's role counts keep working without a data migration.
+function deriveInventoryRole(
+  kind: z.infer<typeof CoralKindEnum>,
+  saleState: z.infer<typeof CoralSaleStateEnum>,
+) {
+  if (kind === "colony") return "mother_colony";
+  if (saleState === "growout") return "growout";
+  if (saleState === "nfs") return "hold";
+  return "for_sale";
 }
 
 export const catalogCoralItem = createServerFn({ method: "POST" })
@@ -2249,7 +2260,11 @@ export const catalogCoralItem = createServerFn({ method: "POST" })
         item_name: z.string().trim().min(1).max(200),
         scientific_name: z.string().trim().max(200).nullable().optional(),
         rack_position: z.string().trim().min(1).max(40),
-        inventory_role: CoralRoleEnum.default("for_sale"),
+        kind: CoralKindEnum.default("frag"),
+        sale_state: CoralSaleStateEnum.default("for_sale"),
+        coral_size: CoralSizeEnum.nullable().optional(),
+        head_count: z.number().int().positive().max(1000).nullable().optional(),
+        price_per_head_cents: z.number().int().nonnegative().max(100_000_00).nullable().optional(),
         coral_type: CoralTypeEnum.nullable().optional(),
         retail_price: z.number().nonnegative().max(1000000).nullable().optional(),
         quantity: z.number().int().positive().max(10000).default(1),
@@ -2275,15 +2290,32 @@ export const catalogCoralItem = createServerFn({ method: "POST" })
 
     const attrs: Record<string, any> = {
       ...(data.attrs ?? {}),
-      inventory_role: data.inventory_role,
+      stock_mode: data.kind, // colony = never decrements (apply_inventory_sale)
+      sale_state: data.sale_state,
+      inventory_role: deriveInventoryRole(data.kind, data.sale_state), // legacy compat
     };
     if (data.coral_type) attrs.coral_type = data.coral_type;
+    if (data.coral_size) attrs.coral_size = data.coral_size;
+    if (data.head_count != null) attrs.head_count = data.head_count;
+    if (data.price_per_head_cents != null) attrs.price_per_head_cents = data.price_per_head_cents;
     // Rack position (plug tag, e.g. B3 / X3 / H8) — required; normalize to
     // uppercase so it stays consistent across cataloguers. Stored in its own
     // column (passed to the builder below), not attrs.
     const rackPosition = data.rack_position.toUpperCase();
 
-    const availability = coralRoleToAvailability(data.inventory_role);
+    // Price: an explicit retail_price is the override. Otherwise a frag with a
+    // head count + per-head rate auto-prices (heads × rate).
+    let retail = data.retail_price ?? null;
+    if (
+      retail == null &&
+      data.kind === "frag" &&
+      data.head_count &&
+      data.price_per_head_cents != null
+    ) {
+      retail = (data.head_count * data.price_per_head_cents) / 100;
+    }
+
+    const availability = saleStateToAvailability(data.sale_state);
     const nowIso = new Date().toISOString();
 
     const { data: inv, error: insErr } = await supabase
@@ -2295,7 +2327,7 @@ export const catalogCoralItem = createServerFn({ method: "POST" })
           item_type: "coral",
           quantity_received: data.quantity,
           quantity_available: data.quantity,
-          retail_price: data.retail_price ?? null,
+          retail_price: retail,
           pricing_status: "not_priced", // discovery never approves pricing
           location_id: data.location_id,
           availability_status: availability,
