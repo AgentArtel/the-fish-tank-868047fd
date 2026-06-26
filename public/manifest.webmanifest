@@ -1,0 +1,31 @@
+{
+  "name": "The Fish Tank",
+  "short_name": "Fish Tank",
+  "description": "Internal business operations workspace for The Fish Tank.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#e07a3c",
+  "background_color": "#fdfcfa",
+  "icons": [
+    {
+      "src": "/brand/fish-tank-mascot.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/brand/fish-tank-mascot.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/brand/fish-tank-mascot.png",
+      "sizes": "1920x1920",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
