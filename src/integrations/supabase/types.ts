@@ -985,6 +985,7 @@ export type Database = {
           scientific_name: string | null
           size: string | null
           slug: string | null
+          source_colony_id: string | null
           source_vendor_batch_id: string | null
           source_vendor_line_item_id: string | null
           specimen_notes: string | null
@@ -1029,6 +1030,7 @@ export type Database = {
           scientific_name?: string | null
           size?: string | null
           slug?: string | null
+          source_colony_id?: string | null
           source_vendor_batch_id?: string | null
           source_vendor_line_item_id?: string | null
           specimen_notes?: string | null
@@ -1073,6 +1075,7 @@ export type Database = {
           scientific_name?: string | null
           size?: string | null
           slug?: string | null
+          source_colony_id?: string | null
           source_vendor_batch_id?: string | null
           source_vendor_line_item_id?: string | null
           specimen_notes?: string | null
@@ -1102,6 +1105,20 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_items_source_colony_id_fkey"
+            columns: ["source_colony_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_items_source_colony_id_fkey"
+            columns: ["source_colony_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_inventory"
             referencedColumns: ["id"]
           },
           {
