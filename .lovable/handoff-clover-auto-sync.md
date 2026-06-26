@@ -6,6 +6,23 @@
 > Fix: **re-point the cron straight at the `clover-sync-sales` edge function** (it already accepts the
 > service-role caller). Small, safe migration. No edge-fn code change.
 
+## Architecture / where it runs (decoupling requirement — must hold)
+This must stay **fully decoupled from the app** (no Cloudflare Worker / TanStack server fn in the path):
+```
+pg_cron (in Supabase Postgres) → pg_net net.http_post (in Postgres) → /functions/v1/clover-sync-sales (edge fn) → DB tables
+```
+- The schedule + HTTP call live **inside Postgres** (`pg_cron` + `pg_net`), not the app server.
+- The target is the **`clover-sync-sales` edge function** — the same isolated Deno fn the manual button
+  calls. The app is never in the loop; it only reads the resulting tables.
+- The old `clover-poll` job is *less* decoupled: it routes through a **Lovable app route**
+  (`…lovable.app/api/public/hooks/clover-poll`). Re-pointing straight at the edge function **removes that
+  app hop** — strictly better for coupling + security.
+- **Secrets stay out of the app:** the service-role key lives in **Vault** (encrypted, decrypted only at
+  fire-time inside Postgres); the Clover token stays in `clover_credentials`, read only by the edge fn.
+  Neither ever reaches app code or the browser.
+- **Do NOT** reintroduce an app-route relay (e.g. recreating `/api/public/hooks/clover-poll`). DB-cron →
+  edge-fn direct is the required shape.
+
 ## Confirm first
 - Check `SELECT * FROM cron.job_run_details WHERE jobname='clover-poll' ORDER BY start_time DESC LIMIT 20;`
   — expect non-2xx (the target route 404s). That confirms the diagnosis.
