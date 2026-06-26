@@ -278,6 +278,8 @@ export type Database = {
           created_at: string
           id: string
           inventory_item_id: string | null
+          last_pushed_at: string | null
+          last_pushed_hash: string | null
           last_synced_at: string | null
           link_status: string
           updated_at: string
@@ -294,6 +296,8 @@ export type Database = {
           created_at?: string
           id?: string
           inventory_item_id?: string | null
+          last_pushed_at?: string | null
+          last_pushed_hash?: string | null
           last_synced_at?: string | null
           link_status?: string
           updated_at?: string
@@ -310,6 +314,8 @@ export type Database = {
           created_at?: string
           id?: string
           inventory_item_id?: string | null
+          last_pushed_at?: string | null
+          last_pushed_hash?: string | null
           last_synced_at?: string | null
           link_status?: string
           updated_at?: string
@@ -324,6 +330,69 @@ export type Database = {
           },
           {
             foreignKeyName: "clover_item_links_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "v_public_inventory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clover_push_queue: {
+        Row: {
+          attempts: number
+          content_hash: string
+          created_at: string
+          created_by: string | null
+          done_at: string | null
+          id: string
+          inventory_item_id: string
+          last_error: string | null
+          op: string
+          origin: string
+          payload: Json
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          content_hash: string
+          created_at?: string
+          created_by?: string | null
+          done_at?: string | null
+          id?: string
+          inventory_item_id: string
+          last_error?: string | null
+          op: string
+          origin?: string
+          payload: Json
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          content_hash?: string
+          created_at?: string
+          created_by?: string | null
+          done_at?: string | null
+          id?: string
+          inventory_item_id?: string
+          last_error?: string | null
+          op?: string
+          origin?: string
+          payload?: Json
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clover_push_queue_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clover_push_queue_inventory_item_id_fkey"
             columns: ["inventory_item_id"]
             isOneToOne: false
             referencedRelation: "v_public_inventory"
