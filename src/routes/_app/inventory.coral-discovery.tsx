@@ -20,7 +20,10 @@ import {
 import { OpsBadge, availabilityTone } from "@/components/ops-badge";
 import { INVENTORY_AVAILABILITY_LABELS, fmtMoney } from "@/lib/ops";
 import { catalogCoralItem, getCoralDiscoveryOverview } from "@/lib/ops.functions";
+import { CutFragsDialog } from "@/components/colony-frags-card";
 import { Camera, Loader2, Waves, ArrowRight, Plus } from "lucide-react";
+
+type FragTarget = { id: string; name: string; perHeadCents: number };
 
 export const Route = createFileRoute("/_app/inventory/coral-discovery")({
   component: CoralDiscoveryPage,
@@ -100,6 +103,8 @@ function CoralDiscoveryPage() {
   const [locationId, setLocationId] = useState<string>("");
   const [showAll, setShowAll] = useState(false);
   const [session, setSession] = useState<SessionEntry[]>([]);
+  // After a colony is catalogued, its cut-frags step opens right here — one flow.
+  const [fragTarget, setFragTarget] = useState<FragTarget | null>(null);
 
   const locations = (overview?.locations ?? []) as any[];
   const counts = (overview?.countsByLocation ?? {}) as Record<
@@ -215,8 +220,25 @@ function CoralDiscoveryPage() {
             setSession((s) => [entry, ...s]);
             qc.invalidateQueries({ queryKey: ["coral-discovery-overview"] });
           }}
+          onColonySaved={(c) => setFragTarget(c)}
           catalogFn={catalogFn}
         />
+
+        {/* Continuous flow: cut frags from the colony just catalogued. */}
+        {fragTarget && (
+          <CutFragsDialog
+            key={fragTarget.id}
+            open
+            withTrigger={false}
+            colonyId={fragTarget.id}
+            colonyName={fragTarget.name}
+            perHeadCents={fragTarget.perHeadCents}
+            onDone={() => qc.invalidateQueries({ queryKey: ["coral-discovery-overview"] })}
+            onOpenChange={(o) => {
+              if (!o) setFragTarget(null);
+            }}
+          />
+        )}
 
         {/* Session log + already-here */}
         <div className="space-y-5">
@@ -314,12 +336,14 @@ function CoralCaptureForm({
   disabled,
   usedPositions,
   onSaved,
+  onColonySaved,
   catalogFn,
 }: {
   locationId: string;
   disabled: boolean;
   usedPositions: Set<string>;
   onSaved: (entry: SessionEntry) => void;
+  onColonySaved: (c: FragTarget) => void;
   catalogFn: ReturnType<typeof useServerFn<typeof catalogCoralItem>>;
 }) {
   const [name, setName] = useState("");
@@ -429,10 +453,19 @@ function CoralCaptureForm({
         availability: res.availability_status,
         position: res.rack_position,
       });
+      // Colony just catalogued → hand off to the cut-frags step (one flow).
+      if (kind === "colony") {
+        onColonySaved({
+          id: res.inventoryItemId,
+          name: name.trim(),
+          perHeadCents:
+            perHeadNum != null && !Number.isNaN(perHeadNum) ? Math.round(perHeadNum * 100) : 0,
+        });
+      }
       toast.success(
         `Saved "${name.trim()}"${res.rack_position ? ` @ ${res.rack_position}` : ""}${res.needs_photo ? " — add a photo later" : ""}`,
       );
-      reset(true); // keep role + type for fast repeated entry down a rack
+      reset(true); // keep classifiers for fast repeated entry down a rack
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to save");
     } finally {

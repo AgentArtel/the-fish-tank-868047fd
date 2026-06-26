@@ -109,18 +109,28 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function CutFragsDialog({
+export function CutFragsDialog({
   colonyId,
   perHeadCents,
+  colonyName,
   onDone,
+  open: openProp,
+  onOpenChange,
+  withTrigger = true,
 }: {
   colonyId: string;
   perHeadCents: number;
+  colonyName?: string;
   onDone: () => void;
+  open?: boolean;
+  onOpenChange?: (o: boolean) => void;
+  withTrigger?: boolean;
 }) {
   const qc = useQueryClient();
   const cutFn = useServerFn(cutFragsFromColony);
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = openProp ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
   const [rows, setRows] = useState<FragRow[]>([newRow()]);
   const [busy, setBusy] = useState(false);
 
@@ -163,14 +173,18 @@ function CutFragsDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" variant="outline">
-          <Scissors className="w-4 h-4 mr-1" /> Cut frags
-        </Button>
-      </DialogTrigger>
+      {withTrigger && (
+        <DialogTrigger asChild>
+          <Button size="sm" variant="outline">
+            <Scissors className="w-4 h-4 mr-1" /> Cut frags
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Cut frags from this colony</DialogTitle>
+          <DialogTitle>
+            {colonyName ? `Cut frags from ${colonyName}` : "Cut frags from this colony"}
+          </DialogTitle>
         </DialogHeader>
         <p className="text-xs text-muted-foreground">
           Each frag becomes its own listing linked to this colony.{" "}
