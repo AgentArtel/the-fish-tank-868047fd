@@ -46,11 +46,31 @@ const ROLE_LABELS: Record<(typeof ROLES)[number], string> = {
 };
 const CORAL_TYPES = ["SPS", "LPS", "soft", "zoanthid", "mushroom", "anemone"] as const;
 
+// The three independent coral axes (see .lovable/handoff-coral-colony-frag.md).
+const KIND_OPTIONS = [
+  { value: "frag", label: "Frag — sell whole" },
+  { value: "colony", label: "Colony — cut frags from" },
+] as const;
+const STATUS_OPTIONS = [
+  { value: "for_sale", label: "For sale" },
+  { value: "growout", label: "Grow-out" },
+  { value: "nfs", label: "Not for sale" },
+] as const;
+const SIZE_OPTIONS = [
+  { value: "mother_colony", label: "Mother colony (10+ heads)" },
+  { value: "colony", label: "Colony (3–6 heads)" },
+  { value: "frag", label: "Frag (1–2 heads)" },
+] as const;
+type CoralKind = (typeof KIND_OPTIONS)[number]["value"];
+type CoralStatus = (typeof STATUS_OPTIONS)[number]["value"];
+type CoralSize = (typeof SIZE_OPTIONS)[number]["value"];
+
 type SessionEntry = {
   id: string;
   locationId: string;
   name: string;
-  role: string;
+  kind: string;
+  size?: string | null;
   qty: number;
   availability: string;
   position?: string | null;
@@ -226,7 +246,7 @@ function CoralDiscoveryPage() {
                     </Link>
                     <span className="text-xs text-muted-foreground">×{e.qty}</span>
                     <Badge variant="outline" className="font-normal text-[10px]">
-                      {ROLE_LABELS[e.role as (typeof ROLES)[number]] ?? e.role}
+                      {e.kind === "colony" ? "Colony" : "Frag"}
                     </Badge>
                     <OpsBadge
                       label={
@@ -305,9 +325,13 @@ function CoralCaptureForm({
   const [name, setName] = useState("");
   const [sci, setSci] = useState("");
   const [rackPos, setRackPos] = useState("");
-  const [role, setRole] = useState<(typeof ROLES)[number]>("for_sale");
+  const [kind, setKind] = useState<CoralKind>("frag");
+  const [status, setStatus] = useState<CoralStatus>("for_sale");
+  const [size, setSize] = useState<CoralSize>("frag");
   const [coralType, setCoralType] = useState<string>("");
-  const [price, setPrice] = useState("");
+  const [heads, setHeads] = useState(""); // frag: head/polyp count
+  const [perHead, setPerHead] = useState(""); // $/head — colony rate or frag rate
+  const [price, setPrice] = useState(""); // explicit price = override
   const [qty, setQty] = useState("1");
   const [notes, setNotes] = useState("");
   const [photo, setPhoto] = useState<{ file: File; preview: string } | null>(null);
@@ -316,6 +340,14 @@ function CoralCaptureForm({
 
   const normPos = rackPos.trim().toUpperCase();
   const positionTaken = normPos.length > 0 && usedPositions.has(normPos);
+
+  // Frag price auto-fills from heads × per-head rate; a typed price overrides it.
+  const headsNum = parseInt(heads || "0", 10) || 0;
+  const perHeadNum = perHead.trim() === "" ? null : Number(perHead);
+  const autoPrice =
+    kind === "frag" && headsNum > 0 && perHeadNum != null && !Number.isNaN(perHeadNum)
+      ? Math.round(headsNum * perHeadNum * 100) / 100
+      : null;
 
   const pickPhoto = (f: File | undefined | null) => {
     if (!f) return;
@@ -326,13 +358,17 @@ function CoralCaptureForm({
     setName("");
     setSci("");
     setRackPos(""); // each coral gets its own plug — never carry it over
+    setHeads("");
     setPrice("");
     setQty("1");
     setNotes("");
     setPhoto(null);
     if (!keepClassifiers) {
-      setRole("for_sale");
+      setKind("frag");
+      setStatus("for_sale");
+      setSize("frag");
       setCoralType("");
+      setPerHead(""); // per-head rate carries while working one colony's frags
     }
     nameRef.current?.focus();
   };
@@ -359,16 +395,24 @@ function CoralCaptureForm({
         photoPath = up.path;
         photoFileName = up.fileName;
       }
-      const priceNum = price.trim() === "" ? null : Number(price);
+      // Explicit typed price = override; otherwise the server auto-prices a frag
+      // from head_count × per-head rate.
+      const overridePrice = price.trim() === "" ? null : Number(price);
       const res = await catalogFn({
         data: {
           location_id: locationId,
           item_name: name.trim(),
           scientific_name: sci.trim() || null,
           rack_position: normPos,
-          inventory_role: role,
+          kind,
+          sale_state: status,
+          coral_size: size,
+          head_count: kind === "frag" && headsNum > 0 ? headsNum : null,
+          price_per_head_cents:
+            perHeadNum != null && !Number.isNaN(perHeadNum) ? Math.round(perHeadNum * 100) : null,
           coral_type: (coralType || null) as any,
-          retail_price: priceNum != null && !Number.isNaN(priceNum) ? priceNum : null,
+          retail_price:
+            overridePrice != null && !Number.isNaN(overridePrice) ? overridePrice : null,
           quantity: Math.max(1, parseInt(qty || "1", 10) || 1),
           notes: notes.trim() || null,
           photo_path: photoPath ?? null,
@@ -379,7 +423,8 @@ function CoralCaptureForm({
         id: res.inventoryItemId,
         locationId,
         name: name.trim(),
-        role,
+        kind,
+        size,
         qty: Math.max(1, parseInt(qty || "1", 10) || 1),
         availability: res.availability_status,
         position: res.rack_position,
@@ -469,17 +514,52 @@ function CoralCaptureForm({
         />
       </div>
 
+      {/* Kind · Status — the two picks that change behavior */}
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
-          <Label className="text-xs">Inventory role</Label>
-          <Select value={role} onValueChange={(v) => setRole(v as (typeof ROLES)[number])}>
+          <Label className="text-xs">Kind *</Label>
+          <Select value={kind} onValueChange={(v) => setKind(v as CoralKind)}>
             <SelectTrigger className="h-9">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {ROLES.map((r) => (
-                <SelectItem key={r} value={r}>
-                  {ROLE_LABELS[r]}
+              {KIND_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Status</Label>
+          <Select value={status} onValueChange={(v) => setStatus(v as CoralStatus)}>
+            <SelectTrigger className="h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Size (label) · Type */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label className="text-xs">Size</Label>
+          <Select value={size} onValueChange={(v) => setSize(v as CoralSize)}>
+            <SelectTrigger className="h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SIZE_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -506,20 +586,66 @@ function CoralCaptureForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      {/* Pricing — a frag auto-prices heads × per-head rate; a typed price overrides.
+          A colony sets the per-head rate its frags inherit. */}
+      {kind === "frag" ? (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label className="text-xs">Heads / polyps</Label>
+            <Input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              value={heads}
+              onChange={(e) => setHeads(e.target.value)}
+              placeholder="e.g. 2"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Price per head ($)</Label>
+            <Input
+              type="number"
+              inputMode="decimal"
+              step="any"
+              min={0}
+              value={perHead}
+              onChange={(e) => setPerHead(e.target.value)}
+              placeholder="$/head"
+            />
+          </div>
+        </div>
+      ) : (
         <div className="space-y-1">
-          <Label className="text-xs">Price (if known)</Label>
+          <Label className="text-xs">Price per head ($) — its frags inherit this</Label>
           <Input
             type="number"
             inputMode="decimal"
             step="any"
+            min={0}
+            value={perHead}
+            onChange={(e) => setPerHead(e.target.value)}
+            placeholder="$/head"
+          />
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label className="text-xs">
+            Price {autoPrice != null && price.trim() === "" ? "(auto)" : "(override)"}
+          </Label>
+          <Input
+            type="number"
+            inputMode="decimal"
+            step="any"
+            min={0}
             value={price}
             onChange={(e) => setPrice(e.target.value)}
-            placeholder="—"
+            placeholder={autoPrice != null ? fmtMoney(autoPrice) : "—"}
           />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Quantity / frags</Label>
+          <Label className="text-xs">Quantity</Label>
           <Input
             type="number"
             inputMode="numeric"
@@ -541,9 +667,11 @@ function CoralCaptureForm({
       </div>
 
       <p className="text-[11px] text-muted-foreground">
-        {role === "for_sale"
-          ? "Saved as a draft (Incoming) with price unapproved — an admin reviews pricing before it goes live."
-          : "Saved as Not for sale / On hold with its role recorded. Customers won't see it."}
+        {kind === "colony"
+          ? "Saved as a Colony — it won't count down; you'll cut frags from it later (each inherits its $/head rate)."
+          : status === "for_sale"
+            ? "Saved as a draft (Incoming), price unapproved — an admin reviews before it goes live."
+            : "Saved as Not for sale — it won't ring up at the register or show to customers."}
       </p>
 
       <div className="flex gap-2 pt-1">
