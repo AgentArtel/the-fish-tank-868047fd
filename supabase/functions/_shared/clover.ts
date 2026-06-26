@@ -112,6 +112,54 @@ export async function cloverGet(
   throw new Error("Clover rate-limited (429) after retries");
 }
 
+// Write helpers (POST/DELETE). `cloverWrite` throws on non-2xx (use for the
+// real push fn). `cloverWriteRaw` returns { ok, status, body } and does NOT
+// throw on 4xx — the token-capability probe needs to record per-probe denials
+// without aborting the run.
+export async function cloverWriteRaw(
+  creds: CloverCreds,
+  method: "POST" | "DELETE",
+  path: string,
+  body?: unknown,
+): Promise<{ ok: boolean; status: number; body: any }> {
+  const url = `${creds.baseUrl}${path}`;
+  const init: RequestInit = {
+    method,
+    headers: {
+      Authorization: `Bearer ${creds.token}`,
+      Accept: "application/json",
+      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+    },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  };
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const res = await fetch(url, init);
+    if (res.status === 429) {
+      await sleep(600 * (attempt + 1));
+      continue;
+    }
+    const text = await res.text().catch(() => "");
+    let parsed: any = text;
+    try { parsed = text ? JSON.parse(text) : null; } catch { /* keep text */ }
+    return { ok: res.ok, status: res.status, body: parsed };
+  }
+  return { ok: false, status: 429, body: "rate-limited after retries" };
+}
+
+export async function cloverWrite(
+  creds: CloverCreds,
+  method: "POST" | "DELETE",
+  path: string,
+  body?: unknown,
+): Promise<any> {
+  const r = await cloverWriteRaw(creds, method, path, body);
+  if (!r.ok) {
+    const snippet = typeof r.body === "string" ? r.body : JSON.stringify(r.body);
+    throw new Error(`Clover HTTP ${r.status}: ${String(snippet).slice(0, 200)}`);
+  }
+  return r.body;
+}
+
 export type CloverItem = {
   id: string;
   name: string;
