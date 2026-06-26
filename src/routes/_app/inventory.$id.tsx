@@ -54,6 +54,7 @@ import { Sparkles, Loader2 } from "lucide-react";
 import { useGoLiveWithPhoto } from "@/components/photo-on-file-wizard";
 import { AttrsEditor } from "@/components/attrs-editor";
 import { SalesCard } from "@/components/inventory-sales-card";
+import { ColonyFragsCard } from "@/components/colony-frags-card";
 import { ITEM_TYPE_LABELS, type ItemType } from "@/lib/item-type-attrs";
 import { invalidateInventoryViews } from "@/lib/inventory-cache";
 
@@ -154,6 +155,7 @@ function InventoryDetail() {
       <QuantitiesCard item={item} onDone={refresh} />
       <LogLossCard item={item} onDone={refresh} />
       <SalesCard item={item} onDone={refresh} />
+      <ColonyFragsCard item={item} onDone={refresh} />
       <PerTypeCard item={item} onDone={refresh} />
       <NotesCard item={item} onDone={refresh} />
       <MediaSection inventoryItemId={id} />
