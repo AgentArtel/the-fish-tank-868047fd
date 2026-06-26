@@ -6,6 +6,15 @@
 > Fix: **re-point the cron straight at the `clover-sync-sales` edge function** (it already accepts the
 > service-role caller). Small, safe migration. No edge-fn code change.
 
+## ✅ SHIPPED 2026-06-26 — actual auth differs from the plan below
+Done and verified (16:50 UTC scheduled run → HTTP 200, watermark advanced). **One correction to the plan
+below:** seeding the **service-role key** into Vault is **not possible on Lovable Cloud** (that key isn't
+readable to seed). Instead, `requireAdminCaller` in `_shared/clover.ts` was extended to also accept
+`Bearer <SCRAPE_CRON_SECRET>` (the existing Vault + edge-fn secret, same pattern `vendor-watch-refresh`
+uses), and the cron passes that secret. Service-role + user/admin paths still work. Net: a **scoped cron
+secret** instead of the full service-role key — same decoupled DB-cron→edge-fn shape, and a smaller blast
+radius. The "seed SUPABASE_SERVICE_ROLE_KEY in Vault" step in the migration below is superseded by this.
+
 ## Architecture / where it runs (decoupling requirement — must hold)
 This must stay **fully decoupled from the app** (no Cloudflare Worker / TanStack server fn in the path):
 ```

@@ -21,6 +21,8 @@ import {
   Save,
   KeyRound,
   ArrowRight,
+  ShieldCheck,
+  XCircle,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_app/settings/clover")({ component: CloverSettings });
@@ -281,6 +283,125 @@ function CloverSettings() {
         <CloverApiSettingsCard
           onSaved={() => qc.invalidateQueries({ queryKey: ["clover-overview"] })}
         />
+      )}
+
+      {isAdmin && data?.configured && <TokenCapabilityCard />}
+    </div>
+  );
+}
+
+// Write-back readiness: probes what the Clover token can actually do (create/update/
+// stock) via the clover-token-check edge fn. Gates the write-back build — if create/
+// update come back denied, the token needs wider scope before we push anything.
+function CapabilityRow({
+  label,
+  state,
+  info,
+}: {
+  label: string;
+  state: boolean | null | undefined;
+  info?: boolean;
+}) {
+  const skipped = state == null;
+  return (
+    <div className="flex items-center gap-2 text-sm">
+      {skipped ? (
+        <span className="w-4 h-4 rounded-full border border-muted-foreground/40 shrink-0" />
+      ) : state ? (
+        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+      ) : (
+        <XCircle
+          className={`w-4 h-4 shrink-0 ${info ? "text-muted-foreground" : "text-red-600"}`}
+        />
+      )}
+      <span className={skipped ? "text-muted-foreground" : ""}>{label}</span>
+      {skipped && <span className="text-xs text-muted-foreground">— not tested</span>}
+    </div>
+  );
+}
+
+function TokenCapabilityCard() {
+  const [checking, setChecking] = useState(false);
+  const [report, setReport] = useState<any>(null);
+
+  const run = async () => {
+    setChecking(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("clover-token-check", { body: {} });
+      if (error) throw new Error(error.message);
+      setReport(data);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Token check failed — is the edge function deployed yet?");
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const writeReady = report?.canCreateItem && report?.canUpdateItem;
+
+  return (
+    <div className="rounded-lg border bg-card p-4 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold flex items-center gap-1.5">
+            <ShieldCheck className="w-4 h-4" /> Write-back readiness
+          </h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Checks whether your Clover token can create &amp; update items — required before pushing
+            the app's catalog/prices back to Clover.
+          </p>
+        </div>
+        <Button size="sm" variant="outline" onClick={run} disabled={checking}>
+          {checking ? (
+            <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+          ) : (
+            <ShieldCheck className="w-4 h-4 mr-1" />
+          )}
+          {report ? "Re-check" : "Check token"}
+        </Button>
+      </div>
+
+      {report && (
+        <div className="space-y-2 border-t pt-3">
+          <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1.5">
+            <CapabilityRow label="Read catalog" state={report.canRead} />
+            <CapabilityRow label="Create items" state={report.canCreateItem} />
+            <CapabilityRow label="Update price / name" state={report.canUpdateItem} />
+            <CapabilityRow label="Set stock (Scope 3)" state={report.canSetStock} info />
+            <CapabilityRow label="Delete items" state={report.canDelete} info />
+          </div>
+
+          <div
+            className={`text-sm font-medium rounded-md px-3 py-2 ${
+              writeReady
+                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                : "bg-red-500/10 text-red-700 dark:text-red-300"
+            }`}
+          >
+            {writeReady
+              ? "Token can write — safe to build the push queue."
+              : "Token can't create/update items — widen its scope before write-back."}
+          </div>
+
+          {report.leakedItemId && (
+            <div className="flex items-start gap-2 text-xs rounded-md border border-amber-500/40 bg-amber-500/5 p-2.5">
+              <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+              <span>
+                A probe item couldn't be auto-deleted (Clover id{" "}
+                <span className="font-mono">{report.leakedItemId}</span>). It's hidden, but remove
+                it in Clover to be safe.
+              </span>
+            </div>
+          )}
+
+          <p className="text-[11px] text-muted-foreground">
+            {report.mode === "sandbox" ? "Ran against sandbox" : "Ran against the live merchant"} ·{" "}
+            {report.permissionsEndpointUsed
+              ? "read from token scopes"
+              : "verified with a self-cleaning probe item"}
+            .
+          </p>
+        </div>
       )}
     </div>
   );
