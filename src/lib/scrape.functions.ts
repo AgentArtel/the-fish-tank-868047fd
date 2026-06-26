@@ -928,3 +928,50 @@ export const setTrackedCoralType = createServerFn({ method: "POST" })
     }
     return { ok: true };
   });
+
+// ---------- search scraped vendor images (for attaching to inventory) ----------
+// Vendor scrape images are already downloaded into the `inventory-media` bucket
+// (path scraped/<vendor>/<id>.<ext>), titled by the product name — so they make a
+// searchable "stock photo" library. Returns signed thumbnail URLs + the storage
+// path, which can be attached straight to an inventory item's inventory_media.
+export const searchVendorImages = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ q: z.string().trim().max(200) }).parse(d))
+  .handler(async ({ data, context }) => {
+    await requireEditor(context.supabase, context.userId);
+    const db = context.supabase as any;
+    if (!data.q) return { rows: [] };
+
+    const like = `%${data.q}%`;
+    const { data: items, error } = await db
+      .from("vendor_scrape_items")
+      .select("id, title, photo_path, product_url, last_seen_at")
+      .not("photo_path", "is", null)
+      .ilike("title", like)
+      .order("last_seen_at", { ascending: false })
+      .limit(48);
+    if (error) throw new Error(error.message);
+
+    const paths = (items ?? []).map((i: any) => i.photo_path).filter(Boolean);
+    const urlByPath = new Map<string, string>();
+    if (paths.length) {
+      const { data: signed } = await db.storage
+        .from("inventory-media")
+        .createSignedUrls(paths, 3600);
+      for (const s of signed ?? []) {
+        if (s.path && s.signedUrl) urlByPath.set(s.path, s.signedUrl);
+      }
+    }
+
+    return {
+      rows: (items ?? [])
+        .map((i: any) => ({
+          id: i.id,
+          title: i.title,
+          photoPath: i.photo_path as string,
+          productUrl: i.product_url as string | null,
+          url: urlByPath.get(i.photo_path) ?? null,
+        }))
+        .filter((r: any) => r.url),
+    };
+  });

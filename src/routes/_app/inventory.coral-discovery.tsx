@@ -21,6 +21,7 @@ import { OpsBadge, availabilityTone } from "@/components/ops-badge";
 import { INVENTORY_AVAILABILITY_LABELS, fmtMoney } from "@/lib/ops";
 import { catalogCoralItem, getCoralDiscoveryOverview } from "@/lib/ops.functions";
 import { CutFragsDialog } from "@/components/colony-frags-card";
+import { VendorImagePicker } from "@/components/vendor-image-picker";
 import { Camera, Loader2, Waves, ArrowRight, Plus } from "lucide-react";
 
 type FragTarget = { id: string; name: string; perHeadCents: number };
@@ -359,6 +360,9 @@ function CoralCaptureForm({
   const [qty, setQty] = useState("1");
   const [notes, setNotes] = useState("");
   const [photo, setPhoto] = useState<{ file: File; preview: string } | null>(null);
+  // A picked vendor-scrape image (already in the inventory-media bucket) — its
+  // storage path is attached directly, no upload needed.
+  const [pickedImage, setPickedImage] = useState<{ path: string; preview: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
 
@@ -375,6 +379,7 @@ function CoralCaptureForm({
 
   const pickPhoto = (f: File | undefined | null) => {
     if (!f) return;
+    setPickedImage(null); // an upload replaces a picked vendor image
     setPhoto({ file: f, preview: URL.createObjectURL(f) });
   };
 
@@ -387,6 +392,7 @@ function CoralCaptureForm({
     setQty("1");
     setNotes("");
     setPhoto(null);
+    setPickedImage(null);
     if (!keepClassifiers) {
       setKind("frag");
       setStatus("for_sale");
@@ -418,6 +424,10 @@ function CoralCaptureForm({
         const up = await uploadDiscoveryPhoto(photo.file);
         photoPath = up.path;
         photoFileName = up.fileName;
+      } else if (pickedImage) {
+        // Vendor-scrape image already in the inventory-media bucket — attach its path.
+        photoPath = pickedImage.path;
+        photoFileName = pickedImage.path.split("/").pop() || "vendor.jpg";
       }
       // Explicit typed price = override; otherwise the server auto-prices a frag
       // from head_count × per-head rate.
@@ -480,35 +490,55 @@ function CoralCaptureForm({
         <h2 className="text-sm font-semibold">Log a coral</h2>
       </div>
 
-      {/* Photo */}
-      {photo ? (
+      {/* Photo — snap one, or search the downloaded vendor images */}
+      {photo || pickedImage ? (
         <div className="relative rounded-md border overflow-hidden">
-          <img src={photo.preview} alt="" className="w-full max-h-56 object-contain bg-muted" />
+          <img
+            src={(photo ?? pickedImage)!.preview}
+            alt=""
+            className="w-full max-h-56 object-contain bg-muted"
+          />
+          {pickedImage && (
+            <span className="absolute top-2 left-2 text-[10px] rounded bg-black/60 text-white px-1.5 py-0.5">
+              Vendor image
+            </span>
+          )}
           <Button
             type="button"
             variant="secondary"
             size="sm"
             className="absolute top-2 right-2"
-            onClick={() => setPhoto(null)}
+            onClick={() => {
+              setPhoto(null);
+              setPickedImage(null);
+            }}
           >
-            Retake
+            Change
           </Button>
         </div>
       ) : (
-        <label className="block rounded-md border-2 border-dashed border-muted-foreground/30 p-5 text-center cursor-pointer hover:bg-muted/30">
-          <input
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={(e) => pickPhoto(e.target.files?.[0])}
-          />
-          <Camera className="w-7 h-7 mx-auto text-muted-foreground" />
-          <div className="text-sm mt-1.5">Tap to photograph the coral</div>
-          <div className="text-xs text-muted-foreground">
-            Optional — you can add it later, but corals can't go live without one
+        <div className="space-y-2">
+          <label className="block rounded-md border-2 border-dashed border-muted-foreground/30 p-5 text-center cursor-pointer hover:bg-muted/30">
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => pickPhoto(e.target.files?.[0])}
+            />
+            <Camera className="w-7 h-7 mx-auto text-muted-foreground" />
+            <div className="text-sm mt-1.5">Tap to photograph the coral</div>
+            <div className="text-xs text-muted-foreground">
+              WYSIWYG frags — snap your own. Otherwise search a stock image →
+            </div>
+          </label>
+          <div className="flex justify-center">
+            <VendorImagePicker
+              initialQuery={name.trim()}
+              onPick={(path, preview) => setPickedImage({ path, preview })}
+            />
           </div>
-        </label>
+        </div>
       )}
 
       <div className="grid grid-cols-[1fr_auto] gap-3">
