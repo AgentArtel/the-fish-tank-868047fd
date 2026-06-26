@@ -5,6 +5,36 @@
 > sales logged directly on the colony AND sales of its linked frag listings. Builds on the existing
 > colony/frag model — preserves the non-decrementing-colony invariant. Lanes: `[DB=Lovable]` · `[App=Claude]`.
 
+## ✅ Confirmed model (owner-aligned 2026-06-26) — three independent axes + per-head pricing
+The old single "inventory_role" field tangled three concepts. Split into three independent picks per coral
+(no overlap), plus per-polyp pricing. **All ride on attrs except `retail_price` (column) and the one new
+`source_colony_id` column — no other DB change.**
+
+| Axis | Values | Field | Drives |
+|---|---|---|---|
+| **Kind** | Colony · Frag | `attrs.stock_mode` (`colony`/`frag`) | counting: colony = cut-from source (never decrements); frag = unit (decrements) |
+| **Status** | For sale · Grow-out · Not-for-sale | `attrs.sale_state` (`for_sale`/`growout`/`nfs`) → `availability_status` | sellability: `for_sale`→`incoming` (go-live later); `growout`/`nfs`→`not_for_sale` (can't ring up). Grow-out & NFS are distinct labels but both block the sale. |
+| **Size** | Mother colony (10+) · Colony (3-6) · Frag (1-2) | `attrs.coral_size` (`mother_colony`/`colony`/`frag`) | **label only** — filter/report, zero behavior |
+
+**Per-head (per-polyp) pricing:**
+- A **Colony** carries `attrs.price_per_head_cents` (the rate frags inherit).
+- A **Frag** carries `attrs.head_count` (int). Frag `retail_price` **auto** = `head_count × per_head_rate`,
+  unless overridden (manual `retail_price` + `attrs.price_overridden=true`).
+- The **Cut-frags** dialog auto-prices each frag from the parent colony's per-head rate by its head count;
+  every frag is overridable. Standalone frags can take a per-head rate or a flat price directly.
+
+**Retire a colony** (`setColonyGone`) → `sold_out` **and** surfaces on a new **"to restock"** list
+(sold-out colonies). Don't cascade to unsold frags.
+
+**Catalog UX (Coral Discovery / Quick Add):** replace the 5-value role dropdown with the three clean
+controls above (Kind toggle · Status · Size) + per-head rate (colony) / head count (frag). "Ready to sell"
+is the normal go-live gate, not a coral field. The old `inventory_role` is superseded by Kind+Status+Size;
+keep reads backward-compatible during migration.
+
+**Build order:** (1) Lovable ships `source_colony_id`; (2) simplified Coral Discovery (Kind/Status/Size +
+per-head pricing) — app-only, usable immediately for the frag-tank teardown; (3) Cut-frags w/ auto-pricing;
+(4) Colony sell-down rollup; (5) "To restock" list.
+
 ## What already exists (build on, don't duplicate)
 - `inventory_items.attrs.stock_mode` ∈ `colony`|`frag`. `apply_inventory_sale` (`20260621184328:54-76`)
   skips the decrement when `item_type='coral' AND stock_mode='colony'`. Frags decrement; colonies don't.
