@@ -43,6 +43,10 @@ export async function requireAdminCaller(req: Request): Promise<{
   // If the caller used the service-role key directly (cron), allow.
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   if (jwt === serviceKey) return { admin, userId: null };
+  // Allow pg_cron callers presenting the shared cron secret (stored in Vault +
+  // edge-fn env). Same pattern the vendor-watch cron uses.
+  const cronSecret = Deno.env.get("SCRAPE_CRON_SECRET");
+  if (cronSecret && jwt === cronSecret) return { admin, userId: null };
 
   const { data: userRes, error: userErr } = await admin.auth.getUser(jwt);
   if (userErr || !userRes?.user) {
