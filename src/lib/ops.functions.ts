@@ -40,6 +40,7 @@ function buildInventoryInsert(input: {
   vendor_id?: string | null;
   source_vendor_batch_id?: string | null;
   source_vendor_line_item_id?: string | null;
+  source_colony_id?: string | null;
   received_at?: string | null;
   received_by?: string | null;
   created_by: string;
@@ -77,6 +78,7 @@ function buildInventoryInsert(input: {
     // rack_position lives in its own column (the attrs key is retired). Callers
     // pass it explicitly; coral intake always does.
     rack_position: input.rack_position ?? null,
+    source_colony_id: input.source_colony_id ?? null,
     received_at: input.received_at ?? null,
     received_by: input.received_by ?? null,
     created_by: input.created_by,
@@ -2414,6 +2416,165 @@ export const getCoralDiscoveryOverview = createServerFn({ method: "POST" })
       positionsByLocation,
       totalCoral: (corals ?? []).length,
       recent,
+    };
+  });
+
+// ============================================================================
+// Colony → frag (per-colony sell-down). Cut individual frag listings from a
+// colony; each is linked back via source_colony_id and auto-prices from the
+// colony's per-head rate. The colony itself never decrements (it's a source).
+// See .lovable/handoff-coral-colony-frag.md.
+// ============================================================================
+export const cutFragsFromColony = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        colonyId: z.string().uuid(),
+        frags: z
+          .array(
+            z.object({
+              item_name: z.string().trim().min(1).max(200),
+              rack_position: z.string().trim().min(1).max(40),
+              head_count: z.number().int().positive().max(1000).nullable().optional(),
+              retail_price: z.number().nonnegative().max(1000000).nullable().optional(),
+              photo_path: z.string().max(500).nullable().optional(),
+              photo_file_name: z.string().max(200).nullable().optional(),
+            }),
+          )
+          .min(1)
+          .max(50),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await requireEditor(supabase, userId);
+
+    const { data: colony, error: colErr } = await supabase
+      .from("inventory_items")
+      .select("id, item_type, attrs, location_id, scientific_name")
+      .eq("id", data.colonyId)
+      .maybeSingle();
+    if (colErr) throw new Error(colErr.message);
+    if (!colony) throw new Error("Colony not found");
+    if (colony.item_type !== "coral" || (colony.attrs as any)?.stock_mode !== "colony")
+      throw new Error("That item isn't a coral colony — only colonies can be fragged.");
+
+    const perHeadCents = Number((colony.attrs as any)?.price_per_head_cents ?? 0);
+    const coralType = (colony.attrs as any)?.coral_type ?? null;
+    const nowIso = new Date().toISOString();
+    const created: string[] = [];
+
+    for (const f of data.frags) {
+      // Auto-price from the colony's per-head rate unless an explicit price is given.
+      let retail = f.retail_price ?? null;
+      if (retail == null && f.head_count && perHeadCents > 0) {
+        retail = (f.head_count * perHeadCents) / 100;
+      }
+      const attrs: Record<string, any> = {
+        stock_mode: "frag",
+        sale_state: "for_sale",
+        inventory_role: "for_sale", // legacy compat
+        coral_size: "frag",
+      };
+      if (coralType) attrs.coral_type = coralType;
+      if (f.head_count != null) attrs.head_count = f.head_count;
+      if (perHeadCents > 0) attrs.price_per_head_cents = perHeadCents;
+
+      const { data: inv, error: insErr } = await supabase
+        .from("inventory_items")
+        .insert(
+          buildInventoryInsert({
+            item_name: f.item_name,
+            scientific_name: colony.scientific_name ?? null,
+            item_type: "coral",
+            quantity_received: 1,
+            quantity_available: 1,
+            retail_price: retail,
+            pricing_status: "not_priced",
+            availability_status: "incoming",
+            needs_photo: !f.photo_path,
+            location_id: colony.location_id, // inherit the colony's location
+            attrs,
+            rack_position: f.rack_position.toUpperCase(),
+            source_colony_id: data.colonyId,
+            received_at: nowIso,
+            received_by: userId,
+            created_by: userId,
+          }),
+        )
+        .select("id")
+        .single();
+      if (insErr) throw new Error(insErr.message);
+      created.push(inv.id);
+
+      if (f.photo_path) {
+        const { error: mErr } = await supabase.from("inventory_media").insert({
+          inventory_item_id: inv.id,
+          storage_path: f.photo_path,
+          file_name: f.photo_file_name ?? "frag.jpg",
+          media_type: "image",
+          tag: "internal",
+          uploader_id: userId,
+          has_price_tag: false,
+          notes: "Frag cut from colony",
+        });
+        if (mErr) throw new Error(`Frag photo: ${mErr.message}`);
+      }
+    }
+    return { fragIds: created, count: created.length };
+  });
+
+// Per-colony sell-down: counts BOTH quick sales logged on the colony AND sales
+// of its linked frags. One union over inventory_sale_events (colony id + frag ids).
+export const getColonyRollup = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ colonyId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    await requireActive(supabase, userId);
+    const db = supabase as any;
+
+    const { data: frags } = await db
+      .from("inventory_items")
+      .select("id, item_name, availability_status, quantity_available, retail_price, rack_position")
+      .eq("source_colony_id", data.colonyId)
+      .order("created_at", { ascending: false });
+    const fr = (frags ?? []) as any[];
+    const ids = [data.colonyId, ...fr.map((f) => f.id)];
+
+    const { data: events } = await db
+      .from("inventory_sale_events")
+      .select("inventory_item_id, qty, total_cents")
+      .in("inventory_item_id", ids)
+      .eq("kind", "sale");
+    const ev = (events ?? []) as any[];
+
+    const remaining = (f: any) =>
+      Number(f.quantity_available ?? 0) > 0 && f.availability_status !== "sold_out";
+
+    return {
+      fragsListed: fr.length,
+      fragsSold: ev.reduce((n, e) => n + Number(e.qty ?? 0), 0),
+      revenueCents: ev.reduce((n, e) => n + Number(e.total_cents ?? 0), 0),
+      fragsRemaining: fr.filter(remaining).length,
+      fragsSoldOut: fr.filter((f) => !remaining(f)).length,
+      estRemainingCents: fr
+        .filter(remaining)
+        .reduce(
+          (n, f) =>
+            n + Number(f.quantity_available) * Math.round(Number(f.retail_price ?? 0) * 100),
+          0,
+        ),
+      frags: fr.map((f) => ({
+        id: f.id,
+        itemName: f.item_name,
+        availabilityStatus: f.availability_status,
+        quantityAvailable: Number(f.quantity_available ?? 0),
+        retailPrice: f.retail_price,
+        rackPosition: f.rack_position,
+      })),
     };
   });
 
