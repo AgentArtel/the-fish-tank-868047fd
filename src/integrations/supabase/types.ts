@@ -3237,7 +3237,9 @@ export type Database = {
           availability_status:
             | Database["public"]["Enums"]["inventory_availability_status"]
             | null
+          care_notes: string | null
           compare_at_price: number | null
+          description: string | null
           id: string | null
           is_house_line: boolean | null
           is_wysiwyg: boolean | null
@@ -3382,7 +3384,9 @@ export type Database = {
       v_public_site_settings: {
         Row: {
           announcement: string | null
+          data: Json | null
           default_og_image_path: string | null
+          service_areas: Json | null
           site_title: string | null
           social: Json | null
           storage_base: string | null
@@ -3391,7 +3395,9 @@ export type Database = {
         }
         Insert: {
           announcement?: string | null
+          data?: never
           default_og_image_path?: string | null
+          service_areas?: never
           site_title?: string | null
           social?: Json | null
           storage_base?: string | null
@@ -3400,7 +3406,9 @@ export type Database = {
         }
         Update: {
           announcement?: string | null
+          data?: never
           default_og_image_path?: string | null
+          service_areas?: never
           site_title?: string | null
           social?: Json | null
           storage_base?: string | null
