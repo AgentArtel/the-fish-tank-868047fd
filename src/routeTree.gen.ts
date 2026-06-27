@@ -29,6 +29,7 @@ import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppCampaignsRouteImport } from './routes/_app/campaigns'
 import { Route as AppCalendarRouteImport } from './routes/_app/calendar'
 import { Route as AppBatchesRouteImport } from './routes/_app/batches'
+import { Route as publicShopRouteImport } from './routes/(public)/shop'
 import { Route as AppVendorWatchIndexRouteImport } from './routes/_app/vendor-watch.index'
 import { Route as AppInventoryIndexRouteImport } from './routes/_app/inventory.index'
 import { Route as AppCustomersIndexRouteImport } from './routes/_app/customers.index'
@@ -52,6 +53,7 @@ import { Route as AppContentNewRouteImport } from './routes/_app/content.new'
 import { Route as AppContentIdRouteImport } from './routes/_app/content.$id'
 import { Route as AppBatchesIdRouteImport } from './routes/_app/batches.$id'
 import { Route as publicProductsSlugRouteImport } from './routes/(public)/products.$slug'
+import { Route as publicCollectionsSlugRouteImport } from './routes/(public)/collections.$slug'
 import { Route as ApiPublicHooksRefreshScrapeSourcesRouteImport } from './routes/api/public/hooks/refresh-scrape-sources'
 
 const SignupRoute = SignupRouteImport.update({
@@ -151,6 +153,11 @@ const AppBatchesRoute = AppBatchesRouteImport.update({
   id: '/batches',
   path: '/batches',
   getParentRoute: () => AppRoute,
+} as any)
+const publicShopRoute = publicShopRouteImport.update({
+  id: '/shop',
+  path: '/shop',
+  getParentRoute: () => publicRouteRoute,
 } as any)
 const AppVendorWatchIndexRoute = AppVendorWatchIndexRouteImport.update({
   id: '/vendor-watch/',
@@ -269,6 +276,11 @@ const publicProductsSlugRoute = publicProductsSlugRouteImport.update({
   path: '/products/$slug',
   getParentRoute: () => publicRouteRoute,
 } as any)
+const publicCollectionsSlugRoute = publicCollectionsSlugRouteImport.update({
+  id: '/collections/$slug',
+  path: '/collections/$slug',
+  getParentRoute: () => publicRouteRoute,
+} as any)
 const ApiPublicHooksRefreshScrapeSourcesRoute =
   ApiPublicHooksRefreshScrapeSourcesRouteImport.update({
     id: '/api/public/hooks/refresh-scrape-sources',
@@ -282,6 +294,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/pending-approval': typeof PendingApprovalRoute
   '/signup': typeof SignupRoute
+  '/shop': typeof publicShopRoute
   '/batches': typeof AppBatchesRouteWithChildren
   '/calendar': typeof AppCalendarRoute
   '/campaigns': typeof AppCampaignsRoute
@@ -295,6 +308,7 @@ export interface FileRoutesByFullPath {
   '/store-locations': typeof AppStoreLocationsRoute
   '/tasks': typeof AppTasksRoute
   '/vendors': typeof AppVendorsRoute
+  '/collections/$slug': typeof publicCollectionsSlugRoute
   '/products/$slug': typeof publicProductsSlugRoute
   '/batches/$id': typeof AppBatchesIdRoute
   '/content/$id': typeof AppContentIdRoute
@@ -326,6 +340,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/pending-approval': typeof PendingApprovalRoute
   '/signup': typeof SignupRoute
+  '/shop': typeof publicShopRoute
   '/calendar': typeof AppCalendarRoute
   '/campaigns': typeof AppCampaignsRoute
   '/dashboard': typeof AppDashboardRoute
@@ -337,6 +352,7 @@ export interface FileRoutesByTo {
   '/store-locations': typeof AppStoreLocationsRoute
   '/tasks': typeof AppTasksRoute
   '/vendors': typeof AppVendorsRoute
+  '/collections/$slug': typeof publicCollectionsSlugRoute
   '/products/$slug': typeof publicProductsSlugRoute
   '/batches/$id': typeof AppBatchesIdRoute
   '/content/$id': typeof AppContentIdRoute
@@ -371,6 +387,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/pending-approval': typeof PendingApprovalRoute
   '/signup': typeof SignupRoute
+  '/(public)/shop': typeof publicShopRoute
   '/_app/batches': typeof AppBatchesRouteWithChildren
   '/_app/calendar': typeof AppCalendarRoute
   '/_app/campaigns': typeof AppCampaignsRoute
@@ -384,6 +401,7 @@ export interface FileRoutesById {
   '/_app/store-locations': typeof AppStoreLocationsRoute
   '/_app/tasks': typeof AppTasksRoute
   '/_app/vendors': typeof AppVendorsRoute
+  '/(public)/collections/$slug': typeof publicCollectionsSlugRoute
   '/(public)/products/$slug': typeof publicProductsSlugRoute
   '/_app/batches/$id': typeof AppBatchesIdRoute
   '/_app/content/$id': typeof AppContentIdRoute
@@ -417,6 +435,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/pending-approval'
     | '/signup'
+    | '/shop'
     | '/batches'
     | '/calendar'
     | '/campaigns'
@@ -430,6 +449,7 @@ export interface FileRouteTypes {
     | '/store-locations'
     | '/tasks'
     | '/vendors'
+    | '/collections/$slug'
     | '/products/$slug'
     | '/batches/$id'
     | '/content/$id'
@@ -461,6 +481,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/pending-approval'
     | '/signup'
+    | '/shop'
     | '/calendar'
     | '/campaigns'
     | '/dashboard'
@@ -472,6 +493,7 @@ export interface FileRouteTypes {
     | '/store-locations'
     | '/tasks'
     | '/vendors'
+    | '/collections/$slug'
     | '/products/$slug'
     | '/batches/$id'
     | '/content/$id'
@@ -505,6 +527,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/pending-approval'
     | '/signup'
+    | '/(public)/shop'
     | '/_app/batches'
     | '/_app/calendar'
     | '/_app/campaigns'
@@ -518,6 +541,7 @@ export interface FileRouteTypes {
     | '/_app/store-locations'
     | '/_app/tasks'
     | '/_app/vendors'
+    | '/(public)/collections/$slug'
     | '/(public)/products/$slug'
     | '/_app/batches/$id'
     | '/_app/content/$id'
@@ -697,6 +721,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppBatchesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/(public)/shop': {
+      id: '/(public)/shop'
+      path: '/shop'
+      fullPath: '/shop'
+      preLoaderRoute: typeof publicShopRouteImport
+      parentRoute: typeof publicRouteRoute
+    }
     '/_app/vendor-watch/': {
       id: '/_app/vendor-watch/'
       path: '/vendor-watch'
@@ -858,6 +889,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof publicProductsSlugRouteImport
       parentRoute: typeof publicRouteRoute
     }
+    '/(public)/collections/$slug': {
+      id: '/(public)/collections/$slug'
+      path: '/collections/$slug'
+      fullPath: '/collections/$slug'
+      preLoaderRoute: typeof publicCollectionsSlugRouteImport
+      parentRoute: typeof publicRouteRoute
+    }
     '/api/public/hooks/refresh-scrape-sources': {
       id: '/api/public/hooks/refresh-scrape-sources'
       path: '/api/public/hooks/refresh-scrape-sources'
@@ -869,10 +907,14 @@ declare module '@tanstack/react-router' {
 }
 
 interface publicRouteRouteChildren {
+  publicShopRoute: typeof publicShopRoute
+  publicCollectionsSlugRoute: typeof publicCollectionsSlugRoute
   publicProductsSlugRoute: typeof publicProductsSlugRoute
 }
 
 const publicRouteRouteChildren: publicRouteRouteChildren = {
+  publicShopRoute: publicShopRoute,
+  publicCollectionsSlugRoute: publicCollectionsSlugRoute,
   publicProductsSlugRoute: publicProductsSlugRoute,
 }
 

@@ -57,6 +57,38 @@ export type ProductImage = {
   view: string;
 };
 
+export type ProductSort = "featured" | "price-asc" | "price-desc" | "newest";
+
+export type CollectionQuery = {
+  type?: Product["type"];
+  category?: string;
+  subcategory?: string;
+  hasCompareAt?: boolean;
+  isWysiwyg?: boolean;
+  careLevel?: string;
+  sort?: ProductSort;
+};
+
+export type Collection = {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  heroImage: string | null;
+  sortOrder: number;
+  /** dynamic query applied server-side over v_public_inventory */
+  query: CollectionQuery;
+};
+
+export type ProductListResult = {
+  products: Product[];
+  total: number;
+};
+
+export type CollectionProductsResult = ProductListResult & {
+  collection: Collection | null;
+};
+
 export type Product = {
   id: string;
   slug: string;
@@ -160,8 +192,8 @@ function mapProduct(r: any, cfg: Cfg): Product {
     reefSafe: a.reef_safe ?? null,
     originRegion,
     size: a.size ?? null,
-    description: r.specimen_notes ?? null,
-    careNotes: null, // products.care_notes not projected onto the view yet
+    description: r.description ?? r.specimen_notes ?? null,
+    careNotes: r.care_notes ?? null,
     tankLocation: cfg.locations[r.location_id]?.name ?? null,
     images: primaryUrl
       ? [
@@ -228,6 +260,76 @@ function mapLocation(r: any, storageBase: string): StoreLocation {
       : null,
   };
 }
+
+function mapCollection(r: any, storageBase: string): Collection {
+  const f = (r.filter && typeof r.filter === "object" ? r.filter : {}) as Record<string, any>;
+  const type =
+    typeof f.type === "string" && TYPE_MAP[f.type]
+      ? (TYPE_MAP[f.type] as Product["type"])
+      : undefined;
+  return {
+    id: r.id,
+    slug: r.slug,
+    title: r.title,
+    description: r.description ?? null,
+    heroImage: mediaUrl(storageBase, r.hero_media_path),
+    sortOrder: r.sort_order ?? 0,
+    query: {
+      type,
+      category: typeof f.category === "string" ? f.category : undefined,
+      subcategory: typeof f.subcategory === "string" ? f.subcategory : undefined,
+      hasCompareAt: typeof f.hasCompareAt === "boolean" ? f.hasCompareAt : undefined,
+      isWysiwyg: typeof f.isWysiwyg === "boolean" ? f.isWysiwyg : undefined,
+      careLevel: typeof f.careLevel === "string" ? f.careLevel : undefined,
+      sort: SORTS.includes(f.sort) ? (f.sort as ProductSort) : undefined,
+    },
+  };
+}
+
+// item_type values stored on inventory_items are the snake-case DB enum; map a
+// public type filter ("coral"/"fish"/"invert"/"supply") back to the column value.
+const PUBLIC_TYPE_TO_ITEM_TYPE: Record<string, string> = {
+  fish: "fish",
+  coral: "coral",
+  invert: "invert",
+  supply: "supply",
+};
+const SORTS: ProductSort[] = ["featured", "price-asc", "price-desc", "newest"];
+
+/**
+ * Apply a CollectionQuery / shop filter to a v_public_inventory select.
+ * Only `type`, `hasCompareAt` and `isWysiwyg` map to real columns; category /
+ * subcategory / careLevel live in `attrs` (JSONB) and are filtered with `->>`.
+ * Sort: featured/newest → updated_at desc; price-asc/price-desc → retail_price.
+ */
+function applyProductFilter(q: any, f: CollectionQuery) {
+  if (f.type && PUBLIC_TYPE_TO_ITEM_TYPE[f.type]) {
+    q = q.eq("item_type", PUBLIC_TYPE_TO_ITEM_TYPE[f.type]);
+  }
+  if (f.isWysiwyg) q = q.eq("is_wysiwyg", true);
+  if (f.hasCompareAt) q = q.not("compare_at_price", "is", null);
+  // attrs-backed refinements (see HANDOFF_Catalog.md §8 — keys must be populated)
+  if (f.category) q = q.eq("attrs->>category", f.category);
+  if (f.subcategory) q = q.eq("attrs->>subcategory", f.subcategory);
+  if (f.careLevel) q = q.eq("attrs->>care_level", f.careLevel);
+
+  switch (f.sort) {
+    case "price-asc":
+      q = q.order("retail_price", { ascending: true, nullsFirst: false });
+      break;
+    case "price-desc":
+      q = q.order("retail_price", { ascending: false, nullsFirst: false });
+      break;
+    case "newest":
+    case "featured":
+    default:
+      q = q.order("updated_at", { ascending: false });
+      break;
+  }
+  return q;
+}
+
+const PAGE_SIZE = 24;
 
 // ============================================================
 // Server functions (anon-safe — mirror catalog.functions.ts)
@@ -307,4 +409,111 @@ export const getProductBySlug = createServerFn({ method: "GET" })
     }
 
     return product;
+  });
+
+// ---------- catalog input schema ----------
+const productFilterSchema = z.object({
+  type: z.enum(["fish", "coral", "invert", "supply"]).optional(),
+  category: z.string().max(120).optional(),
+  subcategory: z.string().max(120).optional(),
+  careLevel: z.string().max(120).optional(),
+  hasCompareAt: z.boolean().optional(),
+  isWysiwyg: z.boolean().optional(),
+  sort: z.enum(["featured", "price-asc", "price-desc", "newest"]).optional(),
+  page: z.number().int().min(0).max(1000).optional(),
+});
+
+/**
+ * List website-ready products → v_public_inventory (gated). Optional filter +
+ * sort + page (24/page). Mirrors getProductBySlug's mappers/image-URL logic.
+ * Returns `{ products, total }`; `total` is the filtered row count for pagination.
+ */
+export const listProducts = createServerFn({ method: "GET" })
+  .inputValidator((d: unknown) => productFilterSchema.parse(d ?? {}))
+  .handler(async ({ data }): Promise<ProductListResult> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const cfg = await loadCfg(supabaseAdmin);
+
+    const page = data.page ?? 0;
+    const from = page * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+
+    let q = supabaseAdmin.from("v_public_inventory").select("*", { count: "exact" });
+    q = applyProductFilter(q, data);
+    const { data: rows, error, count } = await q.range(from, to);
+    if (error) throw new Error(error.message);
+
+    return {
+      products: (rows ?? []).map((r: any) => mapProduct(r, cfg)),
+      total: count ?? (rows ?? []).length,
+    };
+  });
+
+/** A published collection by slug → v_public_collections. */
+export const getCollection = createServerFn({ method: "GET" })
+  .inputValidator((d: unknown) => z.object({ slug: z.string().min(1).max(200) }).parse(d))
+  .handler(async ({ data }): Promise<Collection | null> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: s } = await supabaseAdmin
+      .from("v_public_site_settings")
+      .select("storage_base")
+      .maybeSingle();
+    const storageBase = stripTrailingSlash(String(s?.storage_base || ""));
+
+    const { data: row, error } = await supabaseAdmin
+      .from("v_public_collections")
+      .select("*")
+      .eq("slug", data.slug)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!row) return null;
+    return mapCollection(row, storageBase);
+  });
+
+/**
+ * Products for a published collection → its `filter` (from v_public_collections)
+ * applied over v_public_inventory. Returns `{ collection, products, total }`.
+ * Unknown/unpublished slug → `{ collection: null, products: [], total: 0 }`.
+ *
+ * TODO[DB=Lovable]: manual collections (`mode: "manual"` / pinned productIds in
+ * the design-system schema) aren't projected onto v_public_collections yet — only
+ * the dynamic `filter` jsonb is. When a manual product-pin source lands, branch here.
+ */
+export const getCollectionProducts = createServerFn({ method: "GET" })
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        slug: z.string().min(1).max(200),
+        page: z.number().int().min(0).max(1000).optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data }): Promise<CollectionProductsResult> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const cfg = await loadCfg(supabaseAdmin);
+
+    const { data: cRow, error: cErr } = await supabaseAdmin
+      .from("v_public_collections")
+      .select("*")
+      .eq("slug", data.slug)
+      .maybeSingle();
+    if (cErr) throw new Error(cErr.message);
+    if (!cRow) return { collection: null, products: [], total: 0 };
+
+    const collection = mapCollection(cRow, cfg.storageBase);
+
+    const page = data.page ?? 0;
+    const from = page * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+
+    let q = supabaseAdmin.from("v_public_inventory").select("*", { count: "exact" });
+    q = applyProductFilter(q, collection.query);
+    const { data: rows, error, count } = await q.range(from, to);
+    if (error) throw new Error(error.message);
+
+    return {
+      collection,
+      products: (rows ?? []).map((r: any) => mapProduct(r, cfg)),
+      total: count ?? (rows ?? []).length,
+    };
   });
