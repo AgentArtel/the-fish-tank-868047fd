@@ -14,6 +14,7 @@ import { Route as PendingApprovalRouteImport } from './routes/pending-approval'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as CatalogRouteImport } from './routes/catalog'
 import { Route as AppRouteImport } from './routes/_app'
+import { Route as publicRouteRouteImport } from './routes/(public)/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppVendorsRouteImport } from './routes/_app/vendors'
 import { Route as AppTasksRouteImport } from './routes/_app/tasks'
@@ -50,6 +51,7 @@ import { Route as AppCustomersIdRouteImport } from './routes/_app/customers.$id'
 import { Route as AppContentNewRouteImport } from './routes/_app/content.new'
 import { Route as AppContentIdRouteImport } from './routes/_app/content.$id'
 import { Route as AppBatchesIdRouteImport } from './routes/_app/batches.$id'
+import { Route as publicProductsSlugRouteImport } from './routes/(public)/products.$slug'
 import { Route as ApiPublicHooksRefreshScrapeSourcesRouteImport } from './routes/api/public/hooks/refresh-scrape-sources'
 
 const SignupRoute = SignupRouteImport.update({
@@ -74,6 +76,10 @@ const CatalogRoute = CatalogRouteImport.update({
 } as any)
 const AppRoute = AppRouteImport.update({
   id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const publicRouteRoute = publicRouteRouteImport.update({
+  id: '/(public)',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -258,6 +264,11 @@ const AppBatchesIdRoute = AppBatchesIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AppBatchesRoute,
 } as any)
+const publicProductsSlugRoute = publicProductsSlugRouteImport.update({
+  id: '/products/$slug',
+  path: '/products/$slug',
+  getParentRoute: () => publicRouteRoute,
+} as any)
 const ApiPublicHooksRefreshScrapeSourcesRoute =
   ApiPublicHooksRefreshScrapeSourcesRouteImport.update({
     id: '/api/public/hooks/refresh-scrape-sources',
@@ -284,6 +295,7 @@ export interface FileRoutesByFullPath {
   '/store-locations': typeof AppStoreLocationsRoute
   '/tasks': typeof AppTasksRoute
   '/vendors': typeof AppVendorsRoute
+  '/products/$slug': typeof publicProductsSlugRoute
   '/batches/$id': typeof AppBatchesIdRoute
   '/content/$id': typeof AppContentIdRoute
   '/content/new': typeof AppContentNewRoute
@@ -325,6 +337,7 @@ export interface FileRoutesByTo {
   '/store-locations': typeof AppStoreLocationsRoute
   '/tasks': typeof AppTasksRoute
   '/vendors': typeof AppVendorsRoute
+  '/products/$slug': typeof publicProductsSlugRoute
   '/batches/$id': typeof AppBatchesIdRoute
   '/content/$id': typeof AppContentIdRoute
   '/content/new': typeof AppContentNewRoute
@@ -352,6 +365,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/(public)': typeof publicRouteRouteWithChildren
   '/_app': typeof AppRouteWithChildren
   '/catalog': typeof CatalogRoute
   '/login': typeof LoginRoute
@@ -370,6 +384,7 @@ export interface FileRoutesById {
   '/_app/store-locations': typeof AppStoreLocationsRoute
   '/_app/tasks': typeof AppTasksRoute
   '/_app/vendors': typeof AppVendorsRoute
+  '/(public)/products/$slug': typeof publicProductsSlugRoute
   '/_app/batches/$id': typeof AppBatchesIdRoute
   '/_app/content/$id': typeof AppContentIdRoute
   '/_app/content/new': typeof AppContentNewRoute
@@ -415,6 +430,7 @@ export interface FileRouteTypes {
     | '/store-locations'
     | '/tasks'
     | '/vendors'
+    | '/products/$slug'
     | '/batches/$id'
     | '/content/$id'
     | '/content/new'
@@ -456,6 +472,7 @@ export interface FileRouteTypes {
     | '/store-locations'
     | '/tasks'
     | '/vendors'
+    | '/products/$slug'
     | '/batches/$id'
     | '/content/$id'
     | '/content/new'
@@ -482,6 +499,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/(public)'
     | '/_app'
     | '/catalog'
     | '/login'
@@ -500,6 +518,7 @@ export interface FileRouteTypes {
     | '/_app/store-locations'
     | '/_app/tasks'
     | '/_app/vendors'
+    | '/(public)/products/$slug'
     | '/_app/batches/$id'
     | '/_app/content/$id'
     | '/_app/content/new'
@@ -527,6 +546,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  publicRouteRoute: typeof publicRouteRouteWithChildren
   AppRoute: typeof AppRouteWithChildren
   CatalogRoute: typeof CatalogRoute
   LoginRoute: typeof LoginRoute
@@ -570,6 +590,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/(public)': {
+      id: '/(public)'
+      path: ''
+      fullPath: ''
+      preLoaderRoute: typeof publicRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -824,6 +851,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppBatchesIdRouteImport
       parentRoute: typeof AppBatchesRoute
     }
+    '/(public)/products/$slug': {
+      id: '/(public)/products/$slug'
+      path: '/products/$slug'
+      fullPath: '/products/$slug'
+      preLoaderRoute: typeof publicProductsSlugRouteImport
+      parentRoute: typeof publicRouteRoute
+    }
     '/api/public/hooks/refresh-scrape-sources': {
       id: '/api/public/hooks/refresh-scrape-sources'
       path: '/api/public/hooks/refresh-scrape-sources'
@@ -833,6 +867,18 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface publicRouteRouteChildren {
+  publicProductsSlugRoute: typeof publicProductsSlugRoute
+}
+
+const publicRouteRouteChildren: publicRouteRouteChildren = {
+  publicProductsSlugRoute: publicProductsSlugRoute,
+}
+
+const publicRouteRouteWithChildren = publicRouteRoute._addFileChildren(
+  publicRouteRouteChildren,
+)
 
 interface AppBatchesRouteChildren {
   AppBatchesIdRoute: typeof AppBatchesIdRoute
@@ -934,6 +980,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  publicRouteRoute: publicRouteRouteWithChildren,
   AppRoute: AppRouteWithChildren,
   CatalogRoute: CatalogRoute,
   LoginRoute: LoginRoute,
