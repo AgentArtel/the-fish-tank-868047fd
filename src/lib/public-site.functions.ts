@@ -47,6 +47,8 @@ export type SiteSettings = {
   social: Json;
   announcement: Json;
   announcements: string[];
+  /** Service areas for local SEO (v_public_site_settings.service_areas → site_settings.data.serviceAreas). */
+  serviceAreas: string[];
   updatedAt: string | null;
 };
 
@@ -222,6 +224,12 @@ function mapSiteSettings(s: any, storageBase: string): SiteSettings {
       (x: unknown): x is string => typeof x === "string",
     );
 
+  // service_areas comes off the view as a jsonb array of strings.
+  const rawAreas = s?.service_areas;
+  const serviceAreas: string[] = Array.isArray(rawAreas)
+    ? rawAreas.filter((x: unknown): x is string => typeof x === "string")
+    : [];
+
   return {
     siteTitle: s?.site_title ?? null,
     tagline: s?.tagline ?? null,
@@ -230,6 +238,7 @@ function mapSiteSettings(s: any, storageBase: string): SiteSettings {
     social: s?.social ?? null,
     announcement: ann ?? null,
     announcements,
+    serviceAreas,
     updatedAt: s?.updated_at ?? null,
   };
 }
