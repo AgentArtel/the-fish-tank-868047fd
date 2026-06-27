@@ -1,0 +1,171 @@
+/* ============================================================
+   THE FISH TANK — STOREFRONT TOKENS
+   Brand glows + gradients (from design-system/tokens/effects.css)
+   plus the named design-system variables that the ported,
+   inline-styled storefront components reference directly
+   (SiteChrome, ProductCard, ProductDetail). The blue-tang palette
+   itself lives app-wide in styles.css; this file only adds the
+   storefront-specific tokens that styles.css does not define.
+
+   Scoped under .tft-storefront so it never affects the internal app.
+   ============================================================ */
+
+.tft-storefront {
+  /* ---------- BRAND CORE · ELECTRIC BLUE ---------- */
+  --blue-50: #e9f3ff;
+  --blue-100: #cfe6ff;
+  --blue-500: #0078ff;
+  --blue-600: #0063e0;
+  --blue-700: #0c4fc4;
+
+  /* ---------- CYAN / AQUA highlight ---------- */
+  --cyan-400: #00c6ff;
+
+  /* ---------- YELLOW accent ---------- */
+  --yellow-500: #fee800;
+  --yellow-600: #d9b400;
+
+  /* ---------- ABYSS · deep ocean ---------- */
+  --abyss-800: #0b1830;
+  --abyss-900: #070f22;
+  --abyss-950: #03070f;
+
+  /* ---------- COOL NEUTRALS ---------- */
+  --sand-0: #ffffff;
+  --sand-50: #f6f9fe;
+  --sand-100: #eef3fb;
+  --sand-200: #dde7f3;
+  --sand-300: #c4d3e6;
+  --ink-400: #6c7d99;
+  --ink-500: #5b6b85;
+  --ink-600: #3f4d66;
+  --ink-900: #16223c;
+  --ink-950: #0d1729;
+
+  /* ---------- SEMANTIC: SURFACES ---------- */
+  --surface-page: var(--sand-50);
+  --surface-card: var(--sand-0);
+  --surface-sunken: var(--sand-100);
+
+  /* ---------- SEMANTIC: TEXT ---------- */
+  --text-heading: var(--ink-950);
+  --text-body: var(--ink-900);
+  --text-secondary: var(--ink-600);
+  --text-muted: var(--ink-500);
+  --text-on-brand: #ffffff;
+  --text-on-ocean: #eaf2ff;
+  --text-on-ocean-muted: #8ea3c4;
+
+  /* ---------- SEMANTIC: BRAND ROLES ---------- */
+  --brand-primary: var(--blue-500);
+  --brand-primary-hover: var(--blue-600);
+  --brand-accent: var(--yellow-500);
+  --brand-cyan: var(--cyan-400);
+
+  /* ---------- SEMANTIC: LINES ---------- */
+  --border-default: var(--sand-200);
+  --border-strong: var(--sand-300);
+  --border-ocean: #1f3055;
+
+  /* ---------- SEMANTIC: STATUS ---------- */
+  --status-success: #11a36b;
+  --status-warning: #e08a00;
+  --status-danger: #e23b26;
+
+  /* ---------- TYPE FACES (mirror styles.css) ---------- */
+  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Bricolage Grotesque", "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  /* ---------- TYPE SCALE ---------- */
+  --text-2xs: 0.6875rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.25rem;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-extra: 800;
+  --tracking-wide: 0.02em;
+  --tracking-caps: 0.08em;
+
+  /* ---------- SPACING ---------- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-24: 6rem;
+  --gutter: 1.5rem;
+  --container-xl: 1200px;
+
+  /* ---------- RADIUS ---------- */
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-full: 9999px;
+
+  /* ---------- CONTROLS ---------- */
+  --control-md: 40px;
+  --control-lg: 48px;
+
+  /* ---------- ELEVATION (cool navy-tinted) ---------- */
+  --shadow-xs: 0 1px 2px rgba(31, 39, 53, 0.07);
+  --shadow-sm: 0 1px 2px rgba(31, 39, 53, 0.07), 0 1px 3px rgba(31, 39, 53, 0.09);
+  --shadow-md: 0 2px 4px rgba(31, 39, 53, 0.07), 0 4px 12px rgba(31, 39, 53, 0.11);
+  --shadow-lg: 0 8px 24px rgba(31, 39, 53, 0.13), 0 2px 6px rgba(31, 39, 53, 0.09);
+  --shadow-xl: 0 18px 48px rgba(22, 29, 43, 0.18), 0 6px 16px rgba(22, 29, 43, 0.11);
+  --ring-hairline: inset 0 0 0 1px var(--border-default);
+
+  /* ---------- BRAND GLOWS ---------- */
+  --glow-blue: 0 8px 30px rgba(0, 120, 255, 0.45);
+  --glow-ocean: 0 8px 30px rgba(0, 120, 255, 0.45);
+  --glow-cyan: 0 6px 26px rgba(0, 198, 255, 0.45);
+  --glow-aqua: 0 6px 26px rgba(0, 198, 255, 0.45);
+  --glow-royal: 0 8px 30px rgba(10, 55, 207, 0.42);
+  --glow-yellow: 0 4px 20px rgba(254, 232, 0, 0.4);
+
+  /* ---------- GRADIENTS ---------- */
+  --grad-ocean: radial-gradient(120% 100% at 50% 0%, #14306e 0%, #0a1730 48%, #060e1d 100%);
+  --grad-brand: linear-gradient(135deg, #0046e8 0%, #0078ff 55%, #00a8ff 100%);
+  --grad-aqua: linear-gradient(135deg, #00c6ff 0%, #0078ff 100%);
+  --grad-yellow: linear-gradient(135deg, #ffef5c 0%, #fee800 100%);
+  --scrim-bottom: linear-gradient(
+    to top,
+    rgba(3, 7, 15, 0.9) 0%,
+    rgba(3, 7, 15, 0.45) 45%,
+    transparent 100%
+  );
+
+  /* ---------- MOTION ---------- */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-swim: cubic-bezier(0.34, 1.4, 0.5, 1);
+  --dur-fast: 140ms;
+  --dur-base: 220ms;
+  --dur-slow: 420ms;
+  --transition-base: all var(--dur-base) var(--ease-out);
+
+  background: var(--surface-page);
+  color: var(--text-body);
+  font-family: var(--font-sans);
+}
+
+.tft-storefront h1,
+.tft-storefront h2,
+.tft-storefront h3,
+.tft-storefront h4 {
+  font-family: var(--font-display);
+}
