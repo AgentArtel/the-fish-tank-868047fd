@@ -40,6 +40,7 @@ import { Route as AppSettingsLoyaltyRouteImport } from './routes/_app/settings.l
 import { Route as AppSettingsCloverRouteImport } from './routes/_app/settings.clover'
 import { Route as AppSettingsAiRouteImport } from './routes/_app/settings.ai'
 import { Route as AppInventoryTradeInRouteImport } from './routes/_app/inventory.trade-in'
+import { Route as AppInventoryRestockRouteImport } from './routes/_app/inventory.restock'
 import { Route as AppInventoryMissingTagsRouteImport } from './routes/_app/inventory.missing-tags'
 import { Route as AppInventoryCountRouteImport } from './routes/_app/inventory.count'
 import { Route as AppInventoryCoralDiscoveryRouteImport } from './routes/_app/inventory.coral-discovery'
@@ -205,6 +206,11 @@ const AppInventoryTradeInRoute = AppInventoryTradeInRouteImport.update({
   path: '/trade-in',
   getParentRoute: () => AppInventoryRoute,
 } as any)
+const AppInventoryRestockRoute = AppInventoryRestockRouteImport.update({
+  id: '/restock',
+  path: '/restock',
+  getParentRoute: () => AppInventoryRoute,
+} as any)
 const AppInventoryMissingTagsRoute = AppInventoryMissingTagsRouteImport.update({
   id: '/missing-tags',
   path: '/missing-tags',
@@ -287,6 +293,7 @@ export interface FileRoutesByFullPath {
   '/inventory/coral-discovery': typeof AppInventoryCoralDiscoveryRoute
   '/inventory/count': typeof AppInventoryCountRoute
   '/inventory/missing-tags': typeof AppInventoryMissingTagsRoute
+  '/inventory/restock': typeof AppInventoryRestockRoute
   '/inventory/trade-in': typeof AppInventoryTradeInRoute
   '/settings/ai': typeof AppSettingsAiRoute
   '/settings/clover': typeof AppSettingsCloverRoute
@@ -327,6 +334,7 @@ export interface FileRoutesByTo {
   '/inventory/coral-discovery': typeof AppInventoryCoralDiscoveryRoute
   '/inventory/count': typeof AppInventoryCountRoute
   '/inventory/missing-tags': typeof AppInventoryMissingTagsRoute
+  '/inventory/restock': typeof AppInventoryRestockRoute
   '/inventory/trade-in': typeof AppInventoryTradeInRoute
   '/settings/ai': typeof AppSettingsAiRoute
   '/settings/clover': typeof AppSettingsCloverRoute
@@ -371,6 +379,7 @@ export interface FileRoutesById {
   '/_app/inventory/coral-discovery': typeof AppInventoryCoralDiscoveryRoute
   '/_app/inventory/count': typeof AppInventoryCountRoute
   '/_app/inventory/missing-tags': typeof AppInventoryMissingTagsRoute
+  '/_app/inventory/restock': typeof AppInventoryRestockRoute
   '/_app/inventory/trade-in': typeof AppInventoryTradeInRoute
   '/_app/settings/ai': typeof AppSettingsAiRoute
   '/_app/settings/clover': typeof AppSettingsCloverRoute
@@ -415,6 +424,7 @@ export interface FileRouteTypes {
     | '/inventory/coral-discovery'
     | '/inventory/count'
     | '/inventory/missing-tags'
+    | '/inventory/restock'
     | '/inventory/trade-in'
     | '/settings/ai'
     | '/settings/clover'
@@ -455,6 +465,7 @@ export interface FileRouteTypes {
     | '/inventory/coral-discovery'
     | '/inventory/count'
     | '/inventory/missing-tags'
+    | '/inventory/restock'
     | '/inventory/trade-in'
     | '/settings/ai'
     | '/settings/clover'
@@ -498,6 +509,7 @@ export interface FileRouteTypes {
     | '/_app/inventory/coral-discovery'
     | '/_app/inventory/count'
     | '/_app/inventory/missing-tags'
+    | '/_app/inventory/restock'
     | '/_app/inventory/trade-in'
     | '/_app/settings/ai'
     | '/_app/settings/clover'
@@ -742,6 +754,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppInventoryTradeInRouteImport
       parentRoute: typeof AppInventoryRoute
     }
+    '/_app/inventory/restock': {
+      id: '/_app/inventory/restock'
+      path: '/restock'
+      fullPath: '/inventory/restock'
+      preLoaderRoute: typeof AppInventoryRestockRouteImport
+      parentRoute: typeof AppInventoryRoute
+    }
     '/_app/inventory/missing-tags': {
       id: '/_app/inventory/missing-tags'
       path: '/missing-tags'
@@ -835,6 +854,7 @@ interface AppInventoryRouteChildren {
   AppInventoryCoralDiscoveryRoute: typeof AppInventoryCoralDiscoveryRoute
   AppInventoryCountRoute: typeof AppInventoryCountRoute
   AppInventoryMissingTagsRoute: typeof AppInventoryMissingTagsRoute
+  AppInventoryRestockRoute: typeof AppInventoryRestockRoute
   AppInventoryTradeInRoute: typeof AppInventoryTradeInRoute
   AppInventoryIndexRoute: typeof AppInventoryIndexRoute
 }
@@ -845,6 +865,7 @@ const AppInventoryRouteChildren: AppInventoryRouteChildren = {
   AppInventoryCoralDiscoveryRoute: AppInventoryCoralDiscoveryRoute,
   AppInventoryCountRoute: AppInventoryCountRoute,
   AppInventoryMissingTagsRoute: AppInventoryMissingTagsRoute,
+  AppInventoryRestockRoute: AppInventoryRestockRoute,
   AppInventoryTradeInRoute: AppInventoryTradeInRoute,
   AppInventoryIndexRoute: AppInventoryIndexRoute,
 }
