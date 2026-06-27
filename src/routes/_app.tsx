@@ -184,7 +184,7 @@ function SidebarBody({
   return (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
       <div className={`border-b flex items-center ${rail ? "flex-col gap-2 p-2" : "gap-2.5 p-4"}`}>
-        <img src="/brand/fish-tank-mascot.png" alt="" className="w-9 h-9 rounded-md object-cover" />
+        <img src="/brand/logo-fish.png" alt="" className="w-9 h-9 rounded-md object-cover" />
         {!rail && (
           <div className="leading-tight">
             <div className="font-semibold text-sm">The Fish Tank</div>
