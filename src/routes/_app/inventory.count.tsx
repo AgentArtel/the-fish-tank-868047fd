@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { ITEM_TYPES, ITEM_TYPE_LABELS, fmtMoney, type ItemType } from "@/lib/ops";
 import { getCountCategories, getCountDeck, recordItemCount } from "@/lib/count.functions";
+import { VendorImagePicker } from "@/components/vendor-image-picker";
 import {
   ArrowRight,
   ArrowLeft,
@@ -235,11 +236,13 @@ function CountCard({
     item.retailPrice != null ? String(item.retailPrice) : "",
   );
   const [photo, setPhoto] = useState<{ file: File; preview: string } | null>(null);
+  // A picked vendor-scrape image (already in inventory-media) — attached by path.
+  const [pickedImage, setPickedImage] = useState<{ path: string; preview: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const qtyNum = qty.trim() === "" ? NaN : Number(qty);
   const priceNum = price.trim() === "" ? NaN : Number(price);
-  const hasPhotoOnFile = !item.needsPhoto || !!photo;
+  const hasPhotoOnFile = !item.needsPhoto || !!photo || !!pickedImage;
   // Can publish (go live) when everything the go-live gate needs is in hand.
   const canPublish =
     !Number.isNaN(qtyNum) &&
@@ -251,6 +254,7 @@ function CountCard({
 
   const pickPhoto = (f: File | undefined | null) => {
     if (!f) return;
+    setPickedImage(null);
     setPhoto({ file: f, preview: URL.createObjectURL(f) });
   };
 
@@ -271,6 +275,9 @@ function CountCard({
         const up = await uploadCountPhoto(photo.file);
         photoPath = up.path;
         photoFileName = up.fileName;
+      } else if (pickedImage) {
+        photoPath = pickedImage.path;
+        photoFileName = pickedImage.path.split("/").pop() || "vendor.jpg";
       }
       await recordFn({
         data: {
@@ -388,35 +395,55 @@ function CountCard({
         <Label className="text-xs flex items-center gap-1">
           <Camera className="w-3.5 h-3.5" /> Photo {item.needsPhoto ? "" : "(on file)"}
         </Label>
-        {photo ? (
+        {photo || pickedImage ? (
           <div className="relative rounded-md border overflow-hidden">
-            <img src={photo.preview} alt="" className="w-full max-h-48 object-contain bg-muted" />
+            <img
+              src={(photo ?? pickedImage)!.preview}
+              alt=""
+              className="w-full max-h-48 object-contain bg-muted"
+            />
+            {pickedImage && (
+              <span className="absolute top-2 left-2 text-[10px] rounded bg-black/60 text-white px-1.5 py-0.5">
+                Vendor image
+              </span>
+            )}
             <Button
               type="button"
               variant="secondary"
               size="sm"
               className="absolute top-2 right-2"
-              onClick={() => setPhoto(null)}
+              onClick={() => {
+                setPhoto(null);
+                setPickedImage(null);
+              }}
             >
-              Retake
+              Change
             </Button>
           </div>
         ) : (
-          <label className="block rounded-md border-2 border-dashed border-muted-foreground/30 p-4 text-center cursor-pointer hover:bg-muted/30">
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={(e) => pickPhoto(e.target.files?.[0])}
-            />
-            <Camera className="w-6 h-6 mx-auto text-muted-foreground" />
-            <div className="text-xs mt-1 text-muted-foreground">
-              {item.needsPhoto
-                ? "Tap to photograph — needed to take it live"
-                : "Already has a photo; tap to add another"}
+          <div className="space-y-2">
+            <label className="block rounded-md border-2 border-dashed border-muted-foreground/30 p-4 text-center cursor-pointer hover:bg-muted/30">
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => pickPhoto(e.target.files?.[0])}
+              />
+              <Camera className="w-6 h-6 mx-auto text-muted-foreground" />
+              <div className="text-xs mt-1 text-muted-foreground">
+                {item.needsPhoto
+                  ? "Tap to photograph — needed to take it live"
+                  : "Already has a photo; tap to add another"}
+              </div>
+            </label>
+            <div className="flex justify-center">
+              <VendorImagePicker
+                initialQuery={item.itemName ?? ""}
+                onPick={(path, preview) => setPickedImage({ path, preview })}
+              />
             </div>
-          </label>
+          </div>
         )}
       </div>
 

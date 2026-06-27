@@ -17,11 +17,20 @@ import {
 } from "@/components/ui/dialog";
 import { fmtMoney } from "@/lib/ops";
 import { cutFragsFromColony, getColonyRollup } from "@/lib/ops.functions";
+import { VendorImagePicker } from "@/components/vendor-image-picker";
 import { Scissors, Plus, Trash2, Loader2 } from "lucide-react";
 
 const money = (cents: number) => fmtMoney(Number(cents ?? 0) / 100);
 
-type FragRow = { uid: string; name: string; rack: string; heads: string; price: string };
+type FragRow = {
+  uid: string;
+  name: string;
+  rack: string;
+  heads: string;
+  price: string;
+  imagePath?: string;
+  imageUrl?: string;
+};
 const newRow = (): FragRow => ({
   uid: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
   name: "",
@@ -150,6 +159,8 @@ export function CutFragsDialog({
           rack_position: r.rack.trim(),
           head_count: heads > 0 ? heads : null,
           retail_price: override != null && !Number.isNaN(override) ? override : null,
+          photo_path: r.imagePath,
+          photo_file_name: r.imagePath ? r.imagePath.split("/").pop() || "frag.jpg" : undefined,
         };
       });
     if (frags.length === 0) {
@@ -194,73 +205,104 @@ export function CutFragsDialog({
         </p>
 
         <div className="space-y-2">
-          <div className="hidden sm:grid grid-cols-[1fr_5rem_4rem_6rem_2rem] gap-2 text-[10px] uppercase tracking-wide text-muted-foreground px-1">
-            <span>Frag name</span>
-            <span>Rack tag</span>
-            <span>Heads</span>
-            <span>Price</span>
-            <span />
-          </div>
           {rows.map((r) => {
             const auto = autoPrice(r);
             return (
-              <div
-                key={r.uid}
-                className="grid grid-cols-2 sm:grid-cols-[1fr_5rem_4rem_6rem_2rem] gap-2 items-center"
-              >
-                <Input
-                  placeholder="e.g. Rainbow Hornet"
-                  value={r.name}
-                  onChange={(e) =>
-                    setRows((s) =>
-                      s.map((x) => (x.uid === r.uid ? { ...x, name: e.target.value } : x)),
-                    )
-                  }
-                />
-                <Input
-                  placeholder="B3"
-                  className="font-mono uppercase"
-                  value={r.rack}
-                  onChange={(e) =>
-                    setRows((s) =>
-                      s.map((x) => (x.uid === r.uid ? { ...x, rack: e.target.value } : x)),
-                    )
-                  }
-                />
-                <Input
-                  type="number"
-                  inputMode="numeric"
-                  min={1}
-                  placeholder="heads"
-                  value={r.heads}
-                  onChange={(e) =>
-                    setRows((s) =>
-                      s.map((x) => (x.uid === r.uid ? { ...x, heads: e.target.value } : x)),
-                    )
-                  }
-                />
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  step="any"
-                  min={0}
-                  placeholder={auto != null ? fmtMoney(auto) : "$"}
-                  value={r.price}
-                  onChange={(e) =>
-                    setRows((s) =>
-                      s.map((x) => (x.uid === r.uid ? { ...x, price: e.target.value } : x)),
-                    )
-                  }
-                />
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 w-8 p-0"
-                  disabled={rows.length === 1}
-                  onClick={() => setRows((s) => s.filter((x) => x.uid !== r.uid))}
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </Button>
+              <div key={r.uid} className="rounded-md border p-2 space-y-2">
+                <div className="grid grid-cols-2 sm:grid-cols-[1fr_5rem_4rem_6rem] gap-2 items-center">
+                  <Input
+                    placeholder="e.g. Rainbow Hornet"
+                    value={r.name}
+                    onChange={(e) =>
+                      setRows((s) =>
+                        s.map((x) => (x.uid === r.uid ? { ...x, name: e.target.value } : x)),
+                      )
+                    }
+                  />
+                  <Input
+                    placeholder="B3"
+                    className="font-mono uppercase"
+                    value={r.rack}
+                    onChange={(e) =>
+                      setRows((s) =>
+                        s.map((x) => (x.uid === r.uid ? { ...x, rack: e.target.value } : x)),
+                      )
+                    }
+                  />
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    placeholder="heads"
+                    value={r.heads}
+                    onChange={(e) =>
+                      setRows((s) =>
+                        s.map((x) => (x.uid === r.uid ? { ...x, heads: e.target.value } : x)),
+                      )
+                    }
+                  />
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    step="any"
+                    min={0}
+                    placeholder={auto != null ? fmtMoney(auto) : "$"}
+                    value={r.price}
+                    onChange={(e) =>
+                      setRows((s) =>
+                        s.map((x) => (x.uid === r.uid ? { ...x, price: e.target.value } : x)),
+                      )
+                    }
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  {r.imageUrl ? (
+                    <>
+                      <img
+                        src={r.imageUrl}
+                        alt=""
+                        className="w-10 h-10 rounded object-cover border"
+                      />
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-xs"
+                        onClick={() =>
+                          setRows((s) =>
+                            s.map((x) =>
+                              x.uid === r.uid
+                                ? { ...x, imagePath: undefined, imageUrl: undefined }
+                                : x,
+                            ),
+                          )
+                        }
+                      >
+                        Remove image
+                      </Button>
+                    </>
+                  ) : (
+                    <VendorImagePicker
+                      initialQuery={r.name}
+                      triggerLabel="Add image"
+                      onPick={(path, url) =>
+                        setRows((s) =>
+                          s.map((x) =>
+                            x.uid === r.uid ? { ...x, imagePath: path, imageUrl: url } : x,
+                          ),
+                        )
+                      }
+                    />
+                  )}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 w-8 p-0 ml-auto"
+                    disabled={rows.length === 1}
+                    onClick={() => setRows((s) => s.filter((x) => x.uid !== r.uid))}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
               </div>
             );
           })}
