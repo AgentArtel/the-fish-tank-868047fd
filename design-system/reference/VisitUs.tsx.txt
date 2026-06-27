@@ -1,0 +1,126 @@
+// VisitUs.tsx — REFERENCE for the Lovable build (Vite + React + TS) — route: /visit
+// The local-SEO cornerstone page. Wired to getStoreLocation() + openStatus().
+// Rename .txt→.tsx, adjust imports, swap data-lucide for lucide-react.
+
+import { useQuery } from "@tanstack/react-query";
+import { Helmet } from "react-helmet-async";
+import { getStoreLocation, openStatus } from "@/data/client/tft-data";
+import { Button } from "@/components/ds";
+
+const SITE = "https://thefishtank.com";
+const DAYS: Record<string, string> = { Sun: "Sunday", Mon: "Monday", Tue: "Tuesday", Wed: "Wednesday", Thu: "Thursday", Fri: "Friday", Sat: "Saturday" };
+const todayKey = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date().getDay()];
+const fmt = (t: string) => { let [h, m] = t.split(":").map(Number); const ap = h >= 12 ? "pm" : "am"; h = h % 12 || 12; return m ? `${h}:${String(m).padStart(2, "0")}${ap}` : `${h}${ap}`; };
+
+export default function VisitUs() {
+  const { data: loc, isLoading } = useQuery({ queryKey: ["location", "sandy"], queryFn: () => getStoreLocation("sandy") });
+  if (isLoading || !loc) return <div style={{ padding: "var(--space-24)", textAlign: "center", color: "var(--text-muted)" }}>Loading…</div>;
+
+  const a = loc.address;
+  const oneLine = `${a.street}, ${a.city}, ${a.region} ${a.postal}`;
+  const mapsQ = encodeURIComponent(`The Fish Tank, ${oneLine}`);
+
+  return (
+    <div>
+      <VisitSeo loc={loc} oneLine={oneLine} />
+
+      {/* hero */}
+      <section style={{ background: "var(--grad-ocean)", color: "var(--text-on-ocean)" }}>
+        <div style={{ maxWidth: "var(--container-xl)", margin: "0 auto", padding: "var(--space-16) var(--gutter)" }}>
+          <div className="tft-eyebrow" style={{ color: "var(--brand-cyan)", marginBottom: 10 }}>Visit the showroom</div>
+          <h1 style={{ font: "var(--fw-extra) var(--text-5xl)/1 var(--font-display)", color: "#fff", margin: 0 }}>Utah's saltwater fish &amp; coral store</h1>
+          <p style={{ font: "var(--type-lead)", color: "var(--text-on-ocean-muted)", marginTop: "var(--space-3)", maxWidth: 560 }}>
+            Five minutes off I-15 in {a.city}, our reef showroom holds 60+ display systems of hand-selected
+            corals, fish, and inverts — serving reef-keepers across the Salt Lake Valley and the Wasatch Front.
+          </p>
+        </div>
+      </section>
+
+      <section style={{ maxWidth: "var(--container-xl)", margin: "0 auto", padding: "var(--space-16) var(--gutter)", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-10)", alignItems: "start" }}>
+        {/* left: contact + map */}
+        <div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+            <Row icon="map-pin" label="Address">{oneLine}</Row>
+            <Row icon="phone" label="Phone"><a href={loc.phoneHref}>{loc.phone}</a></Row>
+            {loc.email && <Row icon="mail" label="Email"><a href={`mailto:${loc.email}`}>{loc.email}</a></Row>}
+          </div>
+          <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "var(--space-6)" }}>
+            <Button as="a" href={`https://maps.google.com/?q=${mapsQ}`} variant="primary" leftIcon={<i data-lucide="navigation" />}>Get directions</Button>
+            <Button as="a" href={loc.phoneHref} variant="outline" leftIcon={<i data-lucide="phone" />}>Call the shop</Button>
+          </div>
+          {/* map embed */}
+          <div style={{ marginTop: "var(--space-6)", borderRadius: "var(--radius-xl)", overflow: "hidden", boxShadow: "var(--ring-hairline), var(--shadow-sm)", aspectRatio: "16/10" }}>
+            <iframe title="Map to The Fish Tank" width="100%" height="100%" style={{ border: 0 }} loading="lazy"
+              src={`https://www.google.com/maps?q=${mapsQ}&output=embed`} />
+          </div>
+          {!!loc.serviceAreas?.length && (
+            <p style={{ font: "var(--type-caption)", color: "var(--text-muted)", marginTop: "var(--space-5)" }}>
+              Serving {loc.serviceAreas.slice(0, 6).join(" · ")} &amp; the greater Salt Lake Valley.
+            </p>
+          )}
+        </div>
+
+        {/* right: hours */}
+        <div style={{ background: "var(--surface-card)", borderRadius: "var(--radius-xl)", boxShadow: "var(--ring-hairline), var(--shadow-sm)", padding: "var(--space-6) var(--space-8)" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--space-4)" }}>
+            <div style={{ font: "var(--type-h4)", color: "var(--text-heading)" }}>Store Hours</div>
+            <span style={{ font: "var(--type-caption)", color: "var(--status-success)", display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--status-success)" }} />
+              {openStatus(loc.hours)}
+            </span>
+          </div>
+          {loc.hours.map((h: any) => (
+            <div key={h.day} style={{ display: "flex", justifyContent: "space-between", padding: "var(--space-3) 0", borderBottom: "1px solid var(--border-default)",
+              font: h.day === todayKey ? "var(--fw-bold) var(--text-base)/1 var(--font-sans)" : "var(--type-body)",
+              color: h.day === todayKey ? "var(--text-heading)" : "var(--text-secondary)" }}>
+              <span>{DAYS[h.day]}</span>
+              <span style={{ fontVariantNumeric: "tabular-nums" }}>{h.open ? `${fmt(h.open)} – ${fmt(h.close)}` : "Closed"}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function Row({ icon, label, children }: any) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+      <div style={{ width: 40, height: 40, borderRadius: "var(--radius-full)", background: "var(--blue-50)", color: "var(--brand-primary)", display: "grid", placeItems: "center", flex: "none" }}>
+        <i data-lucide={icon} style={{ width: 18, height: 18 }} />
+      </div>
+      <div>
+        <div style={{ font: "var(--type-caption)", color: "var(--text-muted)" }}>{label}</div>
+        <div style={{ font: "var(--type-body)", color: "var(--text-body)" }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function VisitSeo({ loc, oneLine }: any) {
+  const a = loc.address;
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "PetStore",
+    name: "The Fish Tank",
+    image: `${SITE}/assets/logo-fish.png`,
+    url: `${SITE}/visit`,
+    telephone: loc.phone,
+    priceRange: "$$",
+    address: { "@type": "PostalAddress", streetAddress: a.street, addressLocality: a.city, addressRegion: a.region, postalCode: a.postal, addressCountry: a.country },
+    geo: loc.geo?.lat ? { "@type": "GeoCoordinates", latitude: loc.geo.lat, longitude: loc.geo.lng } : undefined,
+    areaServed: loc.serviceAreas,
+    openingHoursSpecification: loc.hours.filter((h: any) => h.open).map((h: any) => ({
+      "@type": "OpeningHoursSpecification",
+      dayOfWeek: DAYS[h.day], opens: h.open, closes: h.close,
+    })),
+  };
+  return (
+    <Helmet>
+      <title>Visit Us — The Fish Tank | Saltwater Fish &amp; Coral, {loc.address.city} UT</title>
+      <meta name="description" content={`Visit The Fish Tank at ${oneLine}. ${openStatus(loc.hours)}. Utah's saltwater fish & coral store, serving the Salt Lake Valley.`} />
+      <link rel="canonical" href={`${SITE}/visit`} />
+      <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
+    </Helmet>
+  );
+}

@@ -1,0 +1,22 @@
+<!-- @dsCard group="Brand" viewport="700x170" name="Gradients & Scrim" subtitle="Ocean, brand, aqua, yellow + image scrim" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; padding: 24px 32px; background: var(--surface-page); display: flex; gap: 14px; }
+  .g { flex: 1; height: 96px; border-radius: var(--radius-lg); display: flex; align-items: flex-end;
+       padding: 10px; box-shadow: var(--ring-hairline); }
+  .g span { font: var(--type-caption); }
+  .light span { color: var(--ink-950); }
+  .dark span { color: var(--text-on-ocean); }
+</style>
+</head>
+<body>
+  <div class="g dark" style="background:var(--grad-ocean)"><span>--grad-ocean</span></div>
+  <div class="g dark" style="background:var(--grad-brand)"><span>--grad-brand</span></div>
+  <div class="g dark" style="background:var(--grad-aqua)"><span>--grad-aqua</span></div>
+  <div class="g light" style="background:var(--grad-yellow)"><span>--grad-yellow</span></div>
+</body>
+</html>

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thefishtank.com/schemas/event.schema.json",
+  "title": "Event",
+  "description": "In-store or community event (frag swaps, live sales, beginner nights). Powers an events page and schema.org Event markup — a strong local-relevance signal.",
+  "type": "object",
+  "required": ["id", "slug", "title", "startsAt"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string" },
+    "slug": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "title": { "type": "string" },
+    "description": { "type": ["string", "null"] },
+    "heroImage": { "type": ["string", "null"] },
+    "startsAt": { "type": "string", "format": "date-time" },
+    "endsAt": { "type": ["string", "null"], "format": "date-time" },
+    "isAllDay": { "type": "boolean", "default": false },
+    "locationName": { "type": ["string", "null"], "description": "Defaults to the Sandy showroom" },
+    "url": { "type": ["string", "null"], "description": "Signup / details link" }
+  }
+}

@@ -1,0 +1,86 @@
+// Events.tsx — REFERENCE (Vite + React + TS) — route: /events
+// Frag swaps, live sales, classes. Wired to listEvents(). Event JSON-LD per item (local signal).
+// Rename .txt→.tsx, fix imports, swap data-lucide for lucide-react.
+
+import { useQuery } from "@tanstack/react-query";
+import { Helmet } from "react-helmet-async";
+import { listEvents } from "@/data/client/tft-data";
+import { Button, Badge } from "@/components/ds";
+
+const SITE = "https://thefishtank.com";
+
+export default function Events() {
+  const { data: events = [], isLoading } = useQuery({ queryKey: ["events"], queryFn: () => listEvents({ upcomingOnly: true }) });
+
+  return (
+    <div>
+      <Helmet>
+        <title>Events — The Fish Tank | Frag Swaps &amp; Reef Nights, Sandy UT</title>
+        <meta name="description" content="Upcoming events at The Fish Tank in Sandy, UT — frag swaps, live sales, and beginner reef nights. Join the Salt Lake Valley reef community." />
+        <link rel="canonical" href={`${SITE}/events`} />
+        {events.map((e: any) => (
+          <script key={e.id} type="application/ld+json">{JSON.stringify(eventLd(e))}</script>
+        ))}
+      </Helmet>
+
+      <section style={{ background: "var(--grad-ocean)", color: "var(--text-on-ocean)" }}>
+        <div style={{ maxWidth: "var(--container-xl)", margin: "0 auto", padding: "var(--space-14) var(--gutter)" }}>
+          <h1 style={{ font: "var(--fw-extra) var(--text-5xl)/1 var(--font-display)", color: "#fff", margin: 0 }}>Events</h1>
+          <p style={{ font: "var(--type-lead)", color: "var(--text-on-ocean-muted)", marginTop: "var(--space-3)", maxWidth: 560 }}>
+            Frag swaps, live sales, and reef nights at our Sandy showroom. Come talk tanks with the Salt Lake Valley reef community.
+          </p>
+        </div>
+      </section>
+
+      <section style={{ maxWidth: 820, margin: "0 auto", padding: "var(--space-12) var(--gutter)" }}>
+        {isLoading ? (
+          [0, 1, 2].map((i) => <div key={i} style={{ height: 120, borderRadius: "var(--radius-lg)", background: "var(--surface-sunken)", marginBottom: "var(--space-4)" }} />)
+        ) : events.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "var(--space-20)", color: "var(--text-muted)" }}>
+            <i data-lucide="calendar" style={{ width: 40, height: 40 }} />
+            <div style={{ font: "var(--type-h4)", color: "var(--text-heading)", marginTop: 12 }}>No events scheduled right now</div>
+            <p style={{ font: "var(--type-small)", marginTop: 6 }}>Follow us for the next frag swap announcement.</p>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+            {events.map((e: any) => <EventRow key={e.id} e={e} />)}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function EventRow({ e }: any) {
+  const start = new Date(e.startsAt);
+  return (
+    <div style={{ display: "flex", gap: "var(--space-5)", background: "var(--surface-card)", borderRadius: "var(--radius-lg)", boxShadow: "var(--ring-hairline), var(--shadow-sm)", padding: "var(--space-5)", alignItems: "center" }}>
+      {/* date chip */}
+      <div style={{ flex: "none", width: 72, textAlign: "center", background: "var(--blue-50)", borderRadius: "var(--radius-md)", padding: "var(--space-3) 0" }}>
+        <div style={{ font: "var(--fw-bold) var(--text-2xs)/1 var(--font-sans)", letterSpacing: "var(--tracking-wide)", textTransform: "uppercase", color: "var(--brand-primary)" }}>{start.toLocaleDateString("en-US", { month: "short" })}</div>
+        <div style={{ font: "var(--fw-extra) var(--text-3xl)/1 var(--font-display)", color: "var(--text-heading)" }}>{start.getDate()}</div>
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ font: "var(--fw-bold) var(--text-xl)/1.2 var(--font-display)", color: "var(--text-heading)" }}>{e.title}</div>
+        <div style={{ display: "flex", gap: "var(--space-4)", font: "var(--type-caption)", color: "var(--text-muted)", marginTop: 4 }}>
+          <span><i data-lucide="clock" style={{ width: 13, height: 13, verticalAlign: "-2px" }} /> {e.isAllDay ? "All day" : start.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>
+          <span><i data-lucide="map-pin" style={{ width: 13, height: 13, verticalAlign: "-2px" }} /> {e.locationName || "Sandy showroom"}</span>
+        </div>
+        {e.description && <p style={{ font: "var(--type-small)", color: "var(--text-secondary)", marginTop: "var(--space-2)" }}>{e.description}</p>}
+      </div>
+      {e.url && <Button as="a" href={e.url} variant="primary" size="sm">Details</Button>}
+    </div>
+  );
+}
+
+function eventLd(e: any) {
+  return {
+    "@context": "https://schema.org", "@type": "Event",
+    name: e.title, description: e.description || undefined,
+    startDate: e.startsAt, endDate: e.endsAt || undefined,
+    eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
+    location: { "@type": "Place", name: e.locationName || "The Fish Tank", address: "8371 700 W, Sandy, UT 84070" },
+    image: e.heroImage || undefined,
+    organizer: { "@type": "Organization", name: "The Fish Tank", url: SITE },
+  };
+}

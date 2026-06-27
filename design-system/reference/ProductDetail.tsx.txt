@@ -1,0 +1,258 @@
+// ProductDetail.tsx — REFERENCE implementation for the Lovable build (Vite + React + TS)
+// Wired to the live data layer (data/client/tft-data.js). Drop into src/pages/ and adjust
+// import paths. Demonstrates: data fetch via TanStack Query, the camelCase contract from
+// tft-data, SEO meta + Product JSON-LD, design-system components, loading/error/sold states.
+//
+// Deps: @tanstack/react-query, react-router-dom, react-helmet-async, @supabase/supabase-js
+// Assumes initTftData(supabase) ran once at startup (see data/INTEGRATION.md §0).
+
+import { useQuery } from "@tanstack/react-query";
+import { useParams, Link } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
+import { useState } from "react";
+import {
+  getProductBySlug,
+  listProducts,
+  formatPrice,
+} from "@/data/client/tft-data";
+// Design-system components (this system's bundle). In Lovable, import from wherever the
+// compiled bundle is exposed, e.g. a thin wrapper around window.TheFishTankDesignSystem_*.
+import { Button, Badge, ProductCard } from "@/components/ds";
+
+const SITE = "https://thefishtank.com";
+
+export default function ProductDetail() {
+  const { slug = "" } = useParams();
+
+  const { data: product, isLoading, isError } = useQuery({
+    queryKey: ["product", slug],
+    queryFn: () => getProductBySlug(slug),
+    enabled: !!slug,
+  });
+
+  // related: same category, exclude self (fires once we know the product's category)
+  const { data: related } = useQuery({
+    queryKey: ["related", product?.category, product?.id],
+    queryFn: async () => {
+      const { products } = await listProducts(
+        { category: product!.category ?? undefined, sort: "featured" },
+        { limit: 5 }
+      );
+      return products.filter((p) => p.id !== product!.id).slice(0, 4);
+    },
+    enabled: !!product?.category,
+  });
+
+  if (isLoading) return <PdpSkeleton />;
+  if (isError || !product) return <PdpNotFound />;
+
+  return (
+    <article style={{ maxWidth: "var(--container-xl)", margin: "0 auto", padding: "var(--space-8) var(--gutter) 0" }}>
+      <SeoHead product={product} />
+      <Breadcrumb name={product.name} />
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-10)" }}>
+        <Gallery product={product} />
+        <Details product={product} />
+      </div>
+
+      {!!related?.length && (
+        <section style={{ marginTop: "var(--space-16)" }}>
+          <h2 style={{ font: "var(--type-h3)", marginBottom: "var(--space-6)" }}>You may also like</h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "var(--space-5)" }}>
+            {related.map((p) => (
+              <Link key={p.id} to={`/products/${p.slug}`} style={{ textDecoration: "none" }}>
+                <ProductCard
+                  image={p.images[0]?.url}
+                  vendor={p.originRegion}
+                  name={p.name}
+                  scientificName={p.scientificName}
+                  price={p.price}
+                  compareAt={p.compareAtPrice}
+                  stock={p.availability === "sold" ? "sold" : "live"}
+                />
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+    </article>
+  );
+}
+
+/* ---------------- gallery (with daylight/actinic toggle) ---------------- */
+function Gallery({ product }: { product: any }) {
+  const [view, setView] = useState<"daylight" | "actinic">("daylight");
+  const hero = product.images.find((i: any) => i.isPrimary) ?? product.images[0];
+  const actinicFilter = "saturate(1.5) hue-rotate(200deg) brightness(0.85) contrast(1.15)";
+
+  return (
+    <div>
+      <div style={{ position: "relative", borderRadius: "var(--radius-xl)", overflow: "hidden", aspectRatio: "1/1", boxShadow: "var(--shadow-md)", background: view === "actinic" ? "var(--abyss-950)" : "var(--surface-sunken)" }}>
+        {hero && (
+          <img src={hero.url} alt={hero.alt ?? product.name}
+            style={{ width: "100%", height: "100%", objectFit: "cover", filter: view === "actinic" ? actinicFilter : "none", transition: "filter var(--dur-base) var(--ease-out)" }} />
+        )}
+        <div style={{ position: "absolute", top: "var(--space-4)", left: "var(--space-4)", display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>
+          {product.compareAtPrice > product.price && <Badge tone="danger" variant="solid">{pctOff(product)}% OFF</Badge>}
+          {product.isWysiwyg && <Badge tone="ocean" variant="solid">WYSIWYG</Badge>}
+        </div>
+        {/* daylight/actinic toggle — only if an actinic photo exists, else CSS approximation */}
+        <div style={{ position: "absolute", bottom: "var(--space-4)", left: "50%", transform: "translateX(-50%)", display: "flex", gap: 4, padding: 4, borderRadius: "var(--radius-full)", background: "rgba(13,23,41,0.65)", backdropFilter: "blur(8px)" }}>
+          {(["daylight", "actinic"] as const).map((k) => (
+            <button key={k} onClick={() => setView(k)}
+              style={{ border: "none", cursor: "pointer", padding: "6px 14px", borderRadius: "var(--radius-full)", font: "var(--fw-semibold) var(--text-xs)/1 var(--font-sans)", background: view === k ? "#fff" : "transparent", color: view === k ? "var(--ink-950)" : "#fff" }}>
+              {k[0].toUpperCase() + k.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+      {product.images.length > 1 && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "var(--space-3)", marginTop: "var(--space-3)" }}>
+          {product.images.slice(0, 4).map((im: any, i: number) => (
+            <div key={i} style={{ borderRadius: "var(--radius-md)", overflow: "hidden", aspectRatio: "1/1", boxShadow: i === 0 ? "0 0 0 2px var(--brand-primary)" : "var(--ring-hairline)" }}>
+              <img src={im.url} alt={im.alt ?? ""} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------- details / buy box ---------------- */
+function Details({ product }: { product: any }) {
+  const sold = product.availability === "sold";
+  const onSale = product.compareAtPrice > product.price;
+  const specs = [
+    ["heart-pulse", "Care level", product.careLevel],
+    ["shield-check", "Reef compatibility", product.reefSafe],
+    ["ruler", "Size", product.size],
+    ["map-pin", "Location", product.tankLocation],
+  ].filter(([, , v]) => v);
+
+  return (
+    <div>
+      {product.originRegion && (
+        <div style={{ font: "var(--fw-bold) var(--text-2xs)/1 var(--font-sans)", letterSpacing: "var(--tracking-wide)", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>{product.originRegion}</div>
+      )}
+      <h1 style={{ font: "var(--fw-extra) var(--text-4xl)/1.04 var(--font-display)" }}>{product.name}</h1>
+      {product.scientificName && <div style={{ font: "italic var(--text-lg)/1.2 var(--font-sans)", color: "var(--text-muted)", marginTop: 4 }}>{product.scientificName}</div>}
+
+      <div style={{ display: "flex", alignItems: "baseline", gap: "var(--space-3)", marginTop: "var(--space-5)" }}>
+        <span style={{ font: "var(--fw-extra) var(--text-4xl)/1 var(--font-display)", color: onSale ? "var(--status-danger)" : "var(--text-heading)" }}>{formatPrice(product.price)}</span>
+        {onSale && <span style={{ font: "var(--fw-medium) var(--text-lg)/1 var(--font-sans)", color: "var(--text-muted)", textDecoration: "line-through" }}>{formatPrice(product.compareAtPrice)}</span>}
+        {onSale && <Badge tone="danger" variant="soft">Save {pctOff(product)}%</Badge>}
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: "var(--space-3)", font: "var(--fw-semibold) var(--text-sm)/1 var(--font-sans)", color: sold ? "var(--text-muted)" : "var(--status-success)" }}>
+        <span style={{ width: 8, height: 8, borderRadius: "50%", background: sold ? "var(--text-muted)" : "var(--status-success)" }} />
+        {sold ? "Sold out — check back soon" : "In stock · ready to ship overnight"}
+      </div>
+
+      {product.description && <p style={{ font: "var(--type-lead)", color: "var(--text-secondary)", marginTop: "var(--space-5)" }}>{product.description}</p>}
+
+      {!!specs.length && (
+        <div style={{ margin: "var(--space-6) 0" }}>
+          {specs.map(([icon, label, value]) => (
+            <div key={label as string} style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", padding: "var(--space-3) 0", borderBottom: "1px solid var(--border-default)" }}>
+              <div style={{ width: 34, height: 34, borderRadius: "var(--radius-md)", background: "var(--blue-50)", display: "grid", placeItems: "center", color: "var(--brand-primary)", flex: "none" }}>
+                <i data-lucide={icon as string} style={{ width: 17, height: 17 }} />
+              </div>
+              <span style={{ font: "var(--type-small)", color: "var(--text-muted)" }}>{label}</span>
+              <span style={{ marginLeft: "auto", font: "var(--fw-semibold) var(--text-sm)/1 var(--font-sans)", color: "var(--text-heading)" }}>{value}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: "var(--space-3)" }}>
+        <Button variant="primary" size="lg" fullWidth disabled={sold} leftIcon={<i data-lucide="shopping-cart" />}>
+          {sold ? "Sold out" : `Add to cart · ${formatPrice(product.price)}`}
+        </Button>
+        <Button variant="outline" size="lg" leftIcon={<i data-lucide="heart" />}>Save</Button>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginTop: "var(--space-4)", font: "var(--type-caption)", color: "var(--text-muted)" }}>
+        <i data-lucide="shield-check" style={{ width: 15, height: 15 }} />
+        Covered by our 5-day reef-safe arrival guarantee · Free FedEx overnight over $250
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- SEO: meta + Product JSON-LD ---------------- */
+function SeoHead({ product }: { product: any }) {
+  const url = `${SITE}/products/${product.slug}`;
+  const img = product.images[0]?.url;
+  const desc = (product.description ?? `${product.name} — available at The Fish Tank, Sandy UT.`).slice(0, 155);
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: product.name,
+    image: product.images.map((i: any) => i.url),
+    description: product.description ?? undefined,
+    sku: product.id,
+    category: product.category ?? undefined,
+    offers: {
+      "@type": "Offer",
+      priceCurrency: product.currency || "USD",
+      price: product.price,
+      availability: product.availability === "sold" ? "https://schema.org/SoldOut" : "https://schema.org/InStock",
+      url,
+      seller: { "@type": "Store", name: "The Fish Tank" },
+    },
+  };
+  return (
+    <Helmet>
+      <title>{`${product.name} | The Fish Tank — Sandy, UT`}</title>
+      <meta name="description" content={desc} />
+      <link rel="canonical" href={url} />
+      <meta property="og:type" content="product" />
+      <meta property="og:title" content={product.name} />
+      <meta property="og:description" content={desc} />
+      {img && <meta property="og:image" content={img} />}
+      <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
+    </Helmet>
+  );
+}
+
+/* ---------------- small bits ---------------- */
+const pctOff = (p: any) => Math.round((1 - p.price / p.compareAtPrice) * 100);
+
+function Breadcrumb({ name }: { name: string }) {
+  return (
+    <nav style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", font: "var(--type-small)", color: "var(--text-muted)", marginBottom: "var(--space-6)" }}>
+      <Link to="/">Home</Link>
+      <i data-lucide="chevron-right" style={{ width: 14, height: 14 }} />
+      <Link to="/shop">Live Stock</Link>
+      <i data-lucide="chevron-right" style={{ width: 14, height: 14 }} />
+      <span style={{ color: "var(--text-secondary)" }}>{name}</span>
+    </nav>
+  );
+}
+
+function PdpSkeleton() {
+  return (
+    <div style={{ maxWidth: "var(--container-xl)", margin: "0 auto", padding: "var(--space-10) var(--gutter)", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-10)" }}>
+      <div style={{ aspectRatio: "1/1", borderRadius: "var(--radius-xl)", background: "var(--surface-sunken)" }} />
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+        {[40, 70, 30, 90, 90, 60].map((w, i) => (
+          <div key={i} style={{ height: 18, width: `${w}%`, borderRadius: 6, background: "var(--surface-sunken)" }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PdpNotFound() {
+  return (
+    <div style={{ maxWidth: 560, margin: "0 auto", padding: "var(--space-24) var(--gutter)", textAlign: "center" }}>
+      <i data-lucide="search-x" style={{ width: 40, height: 40, color: "var(--text-muted)" }} />
+      <h1 style={{ font: "var(--type-h2)", marginTop: "var(--space-4)" }}>We couldn't find that one</h1>
+      <p style={{ font: "var(--type-lead)", color: "var(--text-secondary)", marginTop: "var(--space-3)" }}>
+        It may have sold — livestock moves fast. Browse what's swimming right now.
+      </p>
+      <Link to="/shop"><Button variant="primary" size="lg" style={{ marginTop: "var(--space-6)" }}>Browse live stock</Button></Link>
+    </div>
+  );
+}

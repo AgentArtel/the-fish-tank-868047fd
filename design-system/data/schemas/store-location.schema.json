@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thefishtank.com/schemas/store-location.schema.json",
+  "title": "StoreLocation",
+  "description": "Public projection of store_locations (kind=retail). Powers Visit Us, footer, and LocalBusiness JSON-LD.",
+  "type": "object",
+  "required": ["id", "slug", "name", "address", "phone", "hours"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string" },
+    "slug": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "name": { "type": "string" },
+    "address": {
+      "type": "object",
+      "required": ["street", "city", "region", "postal", "country"],
+      "additionalProperties": false,
+      "properties": {
+        "street": { "type": "string" },
+        "city": { "type": "string" },
+        "region": { "type": "string" },
+        "postal": { "type": "string" },
+        "country": { "type": "string", "default": "US" }
+      }
+    },
+    "geo": {
+      "type": "object",
+      "properties": { "lat": { "type": "number" }, "lng": { "type": "number" } }
+    },
+    "phone": { "type": "string" },
+    "phoneHref": { "type": "string" },
+    "email": { "type": ["string", "null"], "format": "email" },
+    "hours": {
+      "type": "array",
+      "description": "One entry per day; null open/close = closed that day",
+      "items": {
+        "type": "object",
+        "required": ["day"],
+        "properties": {
+          "day": { "type": "string", "enum": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] },
+          "open": { "type": ["string", "null"], "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$" },
+          "close": { "type": ["string", "null"], "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$" }
+        }
+      }
+    },
+    "serviceAreas": { "type": "array", "items": { "type": "string" } },
+    "photos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["url"],
+        "properties": {
+          "url": { "type": "string", "format": "uri-reference" },
+          "caption": { "type": ["string", "null"] },
+          "isPrimary": { "type": "boolean", "default": false }
+        }
+      }
+    }
+  }
+}

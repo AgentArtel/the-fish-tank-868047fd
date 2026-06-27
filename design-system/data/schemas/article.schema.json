@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thefishtank.com/schemas/article.schema.json",
+  "title": "Article",
+  "description": "Blog post, care/help guide, or landing page. The unified content type behind /blog, /guides, and topic/landing pages. Only published rows are returned by the public read model.",
+  "type": "object",
+  "required": ["id", "slug", "kind", "title", "bodyMarkdown", "publishedAt"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string" },
+    "slug": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "kind": { "type": "string", "enum": ["post", "guide", "page"], "description": "post = blog/news; guide = evergreen care/help; page = landing/topic (e.g. service-area)" },
+    "title": { "type": "string" },
+    "excerpt": { "type": ["string", "null"], "description": "Card + meta-description fallback" },
+    "bodyMarkdown": { "type": "string", "description": "Long-form body (Markdown or sanitized HTML)" },
+    "heroImage": {
+      "type": ["object", "null"],
+      "properties": { "url": { "type": "string" }, "alt": { "type": ["string", "null"] } }
+    },
+    "author": {
+      "type": ["object", "null"],
+      "description": "Denormalized author for byline + E-E-A-T (see author.schema.json)",
+      "properties": {
+        "slug": { "type": "string" }, "name": { "type": "string" },
+        "title": { "type": ["string", "null"] }, "avatarUrl": { "type": ["string", "null"] }
+      }
+    },
+    "topics": { "type": "array", "items": { "type": "string" }, "description": "Taxonomy, e.g. [\"Corals\",\"Beginner\"]" },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "readingMinutes": { "type": ["integer", "null"], "minimum": 0 },
+    "relatedProductSlugs": { "type": "array", "items": { "type": "string" }, "description": "Cross-link guides ↔ catalog" },
+    "faqs": {
+      "type": "array",
+      "description": "Optional inline FAQ block; also emit FAQPage JSON-LD from these",
+      "items": { "$ref": "https://thefishtank.com/schemas/faq.schema.json" }
+    },
+    "seo": {
+      "type": "object",
+      "description": "Per-page SEO overrides; fall back to title/excerpt/heroImage when absent",
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": ["string", "null"] },
+        "description": { "type": ["string", "null"] },
+        "ogImage": { "type": ["string", "null"] },
+        "canonical": { "type": ["string", "null"] },
+        "noindex": { "type": "boolean", "default": false }
+      }
+    },
+    "publishedAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": ["string", "null"], "format": "date-time" }
+  }
+}

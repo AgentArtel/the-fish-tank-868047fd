@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thefishtank.com/schemas/author.schema.json",
+  "title": "Author",
+  "description": "Content author / contributor. Powers bylines and schema.org Person markup — the credibility (E-E-A-T) signal Google weighs for a local expert business.",
+  "type": "object",
+  "required": ["id", "slug", "name"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string" },
+    "slug": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "name": { "type": "string" },
+    "title": { "type": ["string", "null"], "description": "Role / credentials, e.g. \"Head Aquarist, 12 yrs reefkeeping\"" },
+    "bio": { "type": ["string", "null"] },
+    "avatarUrl": { "type": ["string", "null"] },
+    "social": {
+      "type": ["object", "null"],
+      "properties": {
+        "instagram": { "type": "string" },
+        "youtube": { "type": "string" },
+        "website": { "type": "string" }
+      }
+    }
+  }
+}

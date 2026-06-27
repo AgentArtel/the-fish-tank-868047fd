@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thefishtank.com/schemas/site-settings.schema.json",
+  "title": "SiteSettings",
+  "description": "Single-row site configuration. Drives every NAP instance, the announcement bar, nav, and commerce thresholds. Editable by staff.",
+  "type": "object",
+  "required": ["name", "tagline", "announcements", "freeShippingThreshold"],
+  "additionalProperties": false,
+  "properties": {
+    "name": { "type": "string" },
+    "tagline": { "type": "string", "description": "Local-authority positioning line" },
+    "primaryLocationSlug": { "type": "string", "description": "FK to the StoreLocation used for NAP/JSON-LD" },
+    "announcements": {
+      "type": "array",
+      "description": "Rotating utility-bar value props",
+      "items": { "type": "string" }
+    },
+    "freeShippingThreshold": { "type": "number", "minimum": 0, "description": "USD; powers cart free-shipping meter" },
+    "rewardsPercent": { "type": "number", "minimum": 0, "maximum": 100, "description": "Reef Rewards earn rate (mirrors loyalty_config.earn_percent)" },
+    "arrivalGuaranteeDays": { "type": "integer", "minimum": 0 },
+    "nav": {
+      "type": "array",
+      "description": "Mega-menu structure; columns reference collection slugs",
+      "items": {
+        "type": "object",
+        "required": ["key", "label"],
+        "properties": {
+          "key": { "type": "string" },
+          "label": { "type": "string" },
+          "columns": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "head": { "type": "string" },
+                "items": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          },
+          "featured": {
+            "type": "object",
+            "properties": {
+              "img": { "type": "string", "format": "uri-reference" },
+              "title": { "type": "string" },
+              "sub": { "type": "string" },
+              "collectionSlug": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "social": {
+      "type": "object",
+      "properties": {
+        "instagram": { "type": "string" },
+        "facebook": { "type": "string" },
+        "youtube": { "type": "string" }
+      }
+    }
+  }
+}

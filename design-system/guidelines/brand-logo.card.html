@@ -1,0 +1,39 @@
+<!-- @dsCard group="Brand" viewport="700x280" name="Primary Logo" subtitle="The Fish Tank — blue tang mark" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; display: flex; gap: 28px; align-items: center; padding: 28px 32px;
+         background: var(--surface-page); }
+  .logo-wrap { flex: none; display: grid; gap: 12px; }
+  .on-light, .on-dark { border-radius: var(--radius-lg); padding: 14px 18px; display: grid; place-items: center; }
+  .on-light { background: var(--surface-card); box-shadow: var(--ring-hairline); }
+  .on-dark { background: var(--abyss-900); }
+  .logo-wrap img { width: 190px; height: 80px; object-fit: contain; display: block; }
+  .meta { display: flex; flex-direction: column; gap: 10px; }
+  .meta .name { font: var(--type-h3); color: var(--text-heading); }
+  .meta .desc { font: var(--type-small); color: var(--text-secondary); max-width: 320px; }
+  .swatch-row { display: flex; gap: 8px; margin-top: 4px; }
+  .sw { width: 28px; height: 28px; border-radius: var(--radius-full); box-shadow: var(--ring-hairline); }
+</style>
+</head>
+<body>
+  <div class="logo-wrap">
+    <div class="on-light"><img src="../assets/logo-fish.png" alt="The Fish Tank logo on light" /></div>
+    <div class="on-dark"><img src="../assets/logo-fish.png" alt="The Fish Tank logo on dark" /></div>
+  </div>
+  <div class="meta">
+    <div class="name">The Fish Tank</div>
+    <div class="desc">The primary mark: a stylized blue tang with electric-blue body, black markings, and a yellow tail. Its black-and-blue markings keep it legible on both light and dark fields — give it clear space and never recolor it.</div>
+    <div class="swatch-row">
+      <div class="sw" style="background: var(--blue-500)"></div>
+      <div class="sw" style="background: var(--cyan-400)"></div>
+      <div class="sw" style="background: var(--royal-700)"></div>
+      <div class="sw" style="background: var(--yellow-500)"></div>
+      <div class="sw" style="background: var(--ink-950)"></div>
+    </div>
+  </div>
+</body>
+</html>

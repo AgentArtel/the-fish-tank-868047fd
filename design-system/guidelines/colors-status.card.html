@@ -1,0 +1,30 @@
+<!-- @dsCard group="Colors" viewport="700x180" name="Status & Stock" subtitle="Semantic status + live-catalog stock dots" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; padding: 22px; background: var(--surface-page); display: flex; flex-direction: column; gap: 16px; }
+  .row { display: flex; gap: 12px; }
+  .pill { flex: 1; display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+          border-radius: var(--radius-md); font: var(--type-caption); }
+  .dot { width: 10px; height: 10px; border-radius: var(--radius-full); flex: none; }
+  .stock { display: flex; gap: 18px; align-items: center; }
+  .stock span { display: inline-flex; align-items: center; gap: 7px; font: var(--type-small); color: var(--text-secondary); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="pill" style="background:var(--status-success-bg); color:var(--status-success)"><span class="dot" style="background:var(--status-success)"></span>Success</div>
+    <div class="pill" style="background:var(--status-warning-bg); color:var(--status-warning)"><span class="dot" style="background:var(--status-warning)"></span>Warning</div>
+    <div class="pill" style="background:var(--status-danger-bg); color:var(--status-danger)"><span class="dot" style="background:var(--status-danger)"></span>Danger / Reef red</div>
+    <div class="pill" style="background:var(--status-info-bg); color:var(--status-info)"><span class="dot" style="background:var(--status-info)"></span>Info</div>
+  </div>
+  <div class="stock">
+    <span><span class="dot" style="background:var(--dot-live)"></span>In stock&nbsp;<code style="font:var(--text-2xs)/1 var(--font-mono);color:var(--text-muted)">--dot-live</code></span>
+    <span><span class="dot" style="background:var(--dot-hold)"></span>On hold&nbsp;<code style="font:var(--text-2xs)/1 var(--font-mono);color:var(--text-muted)">--dot-hold</code></span>
+    <span><span class="dot" style="background:var(--dot-sold)"></span>Sold&nbsp;<code style="font:var(--text-2xs)/1 var(--font-mono);color:var(--text-muted)">--dot-sold</code></span>
+  </div>
+</body>
+</html>

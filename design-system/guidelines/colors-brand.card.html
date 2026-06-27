@@ -1,0 +1,27 @@
+<!-- @dsCard group="Colors" viewport="700x190" name="Brand — Electric Blue & Yellow" subtitle="Primary blue + cyan highlight + yellow tail accent" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; padding: 22px; background: var(--surface-page); }
+  .row { display: flex; gap: 12px; }
+  .sw { flex: 1; border-radius: var(--radius-md); overflow: hidden; box-shadow: var(--ring-hairline); }
+  .chip { height: 64px; }
+  .lab { padding: 8px 10px; background: var(--surface-card); }
+  .lab .n { font: var(--type-caption); color: var(--text-heading); }
+  .lab .v { font: var(--fw-medium) var(--text-2xs)/1.3 var(--font-mono); color: var(--text-muted); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="sw"><div class="chip" style="background:var(--blue-400)"></div><div class="lab"><div class="n">Blue 400</div><div class="v">--blue-400</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--blue-500)"></div><div class="lab"><div class="n">Blue 500 ◆</div><div class="v">--brand-primary</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--blue-700)"></div><div class="lab"><div class="n">Blue 700</div><div class="v">--blue-700</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--royal-700)"></div><div class="lab"><div class="n">Royal 700 ◆</div><div class="v">--brand-deep</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--cyan-400)"></div><div class="lab"><div class="n">Cyan 400 ◆</div><div class="v">--brand-cyan</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--yellow-500)"></div><div class="lab"><div class="n">Yellow 500 ◆</div><div class="v">--brand-accent</div></div></div>
+  </div>
+</body>
+</html>

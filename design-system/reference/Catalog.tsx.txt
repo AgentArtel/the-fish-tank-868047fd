@@ -1,0 +1,272 @@
+// Catalog.tsx — REFERENCE implementation for the Lovable build (Vite + React + TS)
+// Covers BOTH /shop (all live stock) and /collections/:slug (a curated/dynamic collection).
+// Wired to data/client/tft-data.js. Drop into src/pages/, rename .txt→.tsx, adjust imports.
+//
+// Deps: @tanstack/react-query, react-router-dom, react-helmet-async, lucide-react
+// Assumes initTftData(supabase) ran once at startup (see data/INTEGRATION.md §0).
+
+import { useState, useMemo } from "react";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { useParams, Link } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
+import {
+  listProducts,
+  getCollectionProducts,
+  listCollections,
+} from "@/data/client/tft-data";
+import { ProductCard, Select } from "@/components/ds";
+
+const SITE = "https://thefishtank.com";
+const PAGE = 24;
+
+type Sort = "featured" | "price-asc" | "price-desc" | "newest";
+
+export default function Catalog() {
+  // /collections/:slug uses the slug; /shop leaves it undefined (all stock).
+  const { slug } = useParams();
+  const isCollection = !!slug;
+
+  const [type, setType] = useState<string>("all");      // all | coral | fish | invert | supply
+  const [care, setCare] = useState<string[]>([]);        // Beginner | Intermediate | Expert
+  const [onSale, setOnSale] = useState(false);
+  const [sort, setSort] = useState<Sort>("featured");
+  const [page, setPage] = useState(0);
+
+  // Build the filter the data layer understands (collection.query is merged server-side
+  // when a slug is present; here we pass the UI filters for the /shop case).
+  const filter = useMemo(() => ({
+    type: type === "all" ? undefined : type,
+    careLevel: care.length === 1 ? care[0] : undefined, // single-select maps to query; multi handled client-side below
+    hasCompareAt: onSale || undefined,
+    sort,
+  }), [type, care, onSale, sort]);
+
+  const { data, isLoading, isError, isFetching } = useQuery({
+    queryKey: ["catalog", slug ?? "all", filter, page],
+    queryFn: () =>
+      isCollection
+        ? getCollectionProducts(slug!, { limit: PAGE, offset: page * PAGE })
+        : listProducts(filter, { limit: PAGE, offset: page * PAGE }),
+    placeholderData: keepPreviousData,
+  });
+
+  const { data: collections } = useQuery({ queryKey: ["collections"], queryFn: () => listCollections() });
+
+  const collection = (data as any)?.collection;
+  let products = data?.products ?? [];
+  // client-side refinement for multi-select care (data layer query is single-value)
+  if (care.length > 1) products = products.filter((p: any) => care.includes(p.careLevel));
+
+  const title = collection?.title ?? "Live Stock Catalog";
+  const blurb = collection?.description ??
+    "Everything swimming and growing at the shop right now — photographed under reef lighting. What you see is what ships.";
+
+  return (
+    <div>
+      <CatalogSeo title={title} blurb={blurb} slug={slug} products={products} />
+
+      {/* collection header */}
+      <section style={{ background: "var(--grad-ocean)", color: "var(--text-on-ocean)" }}>
+        <div style={{ maxWidth: "var(--container-xl)", margin: "0 auto", padding: "var(--space-12) var(--gutter)" }}>
+          <nav style={{ display: "flex", alignItems: "center", gap: 8, font: "var(--type-small)", color: "var(--text-on-ocean-muted)", marginBottom: "var(--space-3)" }}>
+            <Link to="/">Home</Link>
+            <i data-lucide="chevron-right" style={{ width: 14, height: 14 }} />
+            <span style={{ color: "var(--brand-cyan)" }}>{isCollection ? title : "Live Stock"}</span>
+          </nav>
+          <h1 style={{ font: "var(--fw-extra) var(--text-5xl)/1 var(--font-display)", color: "#fff", margin: 0 }}>{title}</h1>
+          <p style={{ font: "var(--type-lead)", color: "var(--text-on-ocean-muted)", marginTop: "var(--space-3)", maxWidth: 560 }}>{blurb}</p>
+        </div>
+      </section>
+
+      <section style={{ maxWidth: "var(--container-xl)", margin: "0 auto", padding: "var(--space-10) var(--gutter) 0", display: "grid", gridTemplateColumns: "248px 1fr", gap: "var(--space-10)", alignItems: "start" }}>
+        {/* filters */}
+        <aside style={{ position: "sticky", top: 130 }}>
+          <FilterGroup
+            title="Category"
+            value={type}
+            onChange={(v) => { setType(v); setPage(0); }}
+            options={[
+              { key: "all", label: "All Livestock" },
+              { key: "coral", label: "Corals" },
+              { key: "fish", label: "Saltwater Fish" },
+              { key: "invert", label: "Inverts & CUC" },
+            ]}
+          />
+          <MultiGroup
+            title="Care Level"
+            values={care}
+            onToggle={(k) => { setCare((c) => c.includes(k) ? c.filter((x) => x !== k) : [...c, k]); setPage(0); }}
+            options={[{ key: "Beginner", label: "Beginner" }, { key: "Intermediate", label: "Intermediate" }, { key: "Expert", label: "Expert" }]}
+          />
+          <Toggle label="On sale only" on={onSale} onChange={() => { setOnSale((v) => !v); setPage(0); }} />
+        </aside>
+
+        {/* grid */}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--space-5)" }}>
+            <span style={{ font: "var(--type-small)", color: "var(--text-secondary)" }}>
+              <strong style={{ color: "var(--text-heading)" }}>{data?.total ?? products.length}</strong> products
+              {isFetching && <span style={{ marginLeft: 8, color: "var(--text-muted)" }}>updating…</span>}
+            </span>
+            <div style={{ width: 200 }}>
+              <Select value={sort} onChange={(e: any) => { setSort(e.target.value); setPage(0); }}>
+                <option value="featured">Sort: Featured</option>
+                <option value="price-asc">Price: Low to High</option>
+                <option value="price-desc">Price: High to Low</option>
+                <option value="newest">Newest</option>
+              </Select>
+            </div>
+          </div>
+
+          {isLoading ? (
+            <Grid>{Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} />)}</Grid>
+          ) : isError ? (
+            <EmptyState icon="alert-triangle" title="Couldn't load products" body="Please refresh and try again." />
+          ) : products.length === 0 ? (
+            <EmptyState icon="search-x" title="No products match these filters" body="Try clearing a filter — new arrivals land weekly." />
+          ) : (
+            <>
+              <Grid>
+                {products.map((p: any) => (
+                  <Link key={p.id} to={`/products/${p.slug}`} style={{ textDecoration: "none" }}>
+                    <ProductCard
+                      image={p.images[0]?.url}
+                      vendor={p.originRegion}
+                      name={p.name}
+                      scientificName={p.scientificName}
+                      price={p.price}
+                      compareAt={p.compareAtPrice}
+                      stock={p.availability === "sold" ? "sold" : "live"}
+                    />
+                  </Link>
+                ))}
+              </Grid>
+              {(data?.total ?? 0) > PAGE && (
+                <Pagination page={page} total={data!.total} onPage={setPage} />
+              )}
+            </>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/* ---------------- SEO ---------------- */
+function CatalogSeo({ title, blurb, slug, products }: any) {
+  const url = `${SITE}${slug ? `/collections/${slug}` : "/shop"}`;
+  const itemList = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: title,
+    itemListElement: products.slice(0, 24).map((p: any, i: number) => ({
+      "@type": "ListItem", position: i + 1, url: `${SITE}/products/${p.slug}`, name: p.name,
+    })),
+  };
+  const breadcrumb = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: SITE },
+      { "@type": "ListItem", position: 2, name: title, item: url },
+    ],
+  };
+  return (
+    <Helmet>
+      <title>{`${title} | The Fish Tank — Sandy, UT`}</title>
+      <meta name="description" content={blurb.slice(0, 155)} />
+      <link rel="canonical" href={url} />
+      <meta property="og:title" content={title} />
+      <meta property="og:description" content={blurb.slice(0, 155)} />
+      <script type="application/ld+json">{JSON.stringify(itemList)}</script>
+      <script type="application/ld+json">{JSON.stringify(breadcrumb)}</script>
+    </Helmet>
+  );
+}
+
+/* ---------------- filter UI ---------------- */
+function FilterGroup({ title, options, value, onChange }: any) {
+  return (
+    <div style={{ paddingBottom: "var(--space-5)", marginBottom: "var(--space-5)", borderBottom: "1px solid var(--border-default)" }}>
+      <div style={{ font: "var(--fw-bold) var(--text-sm)/1 var(--font-sans)", color: "var(--text-heading)", marginBottom: "var(--space-3)" }}>{title}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+        {options.map((o: any) => {
+          const active = value === o.key;
+          return (
+            <label key={o.key} style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", cursor: "pointer", font: "var(--type-small)", color: active ? "var(--text-heading)" : "var(--text-secondary)" }}>
+              <span style={{ width: 16, height: 16, borderRadius: "var(--radius-full)", border: active ? "none" : "1.5px solid var(--border-strong)", background: active ? "var(--brand-primary)" : "transparent", display: "grid", placeItems: "center", flex: "none" }}>
+                {active && <i data-lucide="check" style={{ width: 11, height: 11, color: "#fff" }} />}
+              </span>
+              {o.label}
+              <input type="radio" checked={active} onChange={() => onChange(o.key)} style={{ display: "none" }} />
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function MultiGroup({ title, options, values, onToggle }: any) {
+  return (
+    <div style={{ paddingBottom: "var(--space-5)", marginBottom: "var(--space-5)", borderBottom: "1px solid var(--border-default)" }}>
+      <div style={{ font: "var(--fw-bold) var(--text-sm)/1 var(--font-sans)", color: "var(--text-heading)", marginBottom: "var(--space-3)" }}>{title}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+        {options.map((o: any) => {
+          const active = values.includes(o.key);
+          return (
+            <label key={o.key} style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", cursor: "pointer", font: "var(--type-small)", color: active ? "var(--text-heading)" : "var(--text-secondary)" }}>
+              <span style={{ width: 16, height: 16, borderRadius: "var(--radius-xs)", border: active ? "none" : "1.5px solid var(--border-strong)", background: active ? "var(--brand-primary)" : "transparent", display: "grid", placeItems: "center", flex: "none" }}>
+                {active && <i data-lucide="check" style={{ width: 11, height: 11, color: "#fff" }} />}
+              </span>
+              {o.label}
+              <input type="checkbox" checked={active} onChange={() => onToggle(o.key)} style={{ display: "none" }} />
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function Toggle({ label, on, onChange }: any) {
+  return (
+    <label style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", cursor: "pointer" }}>
+      <span style={{ width: 38, height: 22, borderRadius: "var(--radius-full)", background: on ? "var(--brand-primary)" : "var(--sand-300)", position: "relative", transition: "background var(--dur-fast) var(--ease-out)", flex: "none" }}>
+        <span style={{ position: "absolute", top: 2, left: on ? 18 : 2, width: 18, height: 18, borderRadius: "50%", background: "#fff", boxShadow: "var(--shadow-sm)", transition: "left var(--dur-fast) var(--ease-out)" }} />
+      </span>
+      <span style={{ font: "var(--type-small)", color: "var(--text-heading)" }}>{label}</span>
+      <input type="checkbox" checked={on} onChange={onChange} style={{ display: "none" }} />
+    </label>
+  );
+}
+
+/* ---------------- layout bits ---------------- */
+function Grid({ children }: any) {
+  return <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "var(--space-5)", paddingBottom: "var(--space-8)" }}>{children}</div>;
+}
+function CardSkeleton() {
+  return <div style={{ borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: "var(--ring-hairline)" }}>
+    <div style={{ aspectRatio: "1/1", background: "var(--surface-sunken)" }} />
+    <div style={{ padding: "var(--space-4)", display: "flex", flexDirection: "column", gap: 8 }}>
+      {[60, 90, 40].map((w, i) => <div key={i} style={{ height: 12, width: `${w}%`, borderRadius: 4, background: "var(--surface-sunken)" }} />)}
+    </div>
+  </div>;
+}
+function EmptyState({ icon, title, body }: any) {
+  return <div style={{ textAlign: "center", padding: "var(--space-20)", background: "var(--surface-card)", borderRadius: "var(--radius-lg)", boxShadow: "var(--ring-hairline)" }}>
+    <i data-lucide={icon} style={{ width: 40, height: 40, color: "var(--text-muted)" }} />
+    <div style={{ font: "var(--type-h4)", marginTop: 12 }}>{title}</div>
+    <p style={{ font: "var(--type-small)", color: "var(--text-muted)", marginTop: 6 }}>{body}</p>
+  </div>;
+}
+function Pagination({ page, total, onPage }: any) {
+  const pages = Math.ceil(total / PAGE);
+  return (
+    <div style={{ display: "flex", justifyContent: "center", gap: "var(--space-2)", paddingBottom: "var(--space-12)" }}>
+      {Array.from({ length: pages }).map((_, i) => (
+        <button key={i} onClick={() => onPage(i)} style={{ width: 38, height: 38, borderRadius: "var(--radius-md)", border: "1px solid var(--border-default)", cursor: "pointer", background: i === page ? "var(--brand-primary)" : "var(--surface-card)", color: i === page ? "var(--text-on-brand)" : "var(--text-heading)", font: "var(--fw-semibold) var(--text-sm)/1 var(--font-sans)" }}>{i + 1}</button>
+      ))}
+    </div>
+  );
+}

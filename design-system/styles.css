@@ -1,0 +1,30 @@
+/* ============================================================
+   THE FISH TANK — DESIGN SYSTEM
+   Global stylesheet entry point. Consumers link THIS file only.
+   Keep this file as @import lines (+ base resets) only.
+   ============================================================ */
+
+@import url('./tokens/fonts.css');
+@import url('./tokens/colors.css');
+@import url('./tokens/typography.css');
+@import url('./tokens/spacing.css');
+@import url('./tokens/effects.css');
+
+/* ---------- MINIMAL BASE RESET ---------- */
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font: var(--type-body);
+  color: var(--text-body);
+  background-color: var(--surface-page);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, h5, h6 { margin: 0; color: var(--text-heading); }
+p { margin: 0; text-wrap: pretty; }
+a { color: inherit; text-decoration: none; }
+img { display: block; max-width: 100%; }
+
+::selection { background: var(--blue-100); color: var(--ink-950); }

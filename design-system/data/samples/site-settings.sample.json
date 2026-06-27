@@ -1,0 +1,31 @@
+{
+  "name": "The Fish Tank",
+  "tagline": "Utah's Saltwater Fish & Coral Store",
+  "primaryLocationSlug": "sandy",
+  "announcements": [
+    "🛡️  5-Day Reef-Safe Arrival Guarantee",
+    "📦  Free FedEx Overnight on livestock orders over $250",
+    "🌟  Earn 5% back in Reef Rewards on every order",
+    "🏬  Visit our Sandy, Utah showroom — 8371 700 W"
+  ],
+  "freeShippingThreshold": 250,
+  "rewardsPercent": 5,
+  "arrivalGuaranteeDays": 5,
+  "nav": [
+    {
+      "key": "corals",
+      "label": "Live Corals",
+      "columns": [
+        { "head": "Shop by Type", "items": ["SPS Corals", "LPS Corals", "Soft Corals", "Zoanthids", "Mushrooms", "Acropora"] },
+        { "head": "Top Picks", "items": ["New Arrivals", "Tank's Picks", "Coral Frag Packs", "Coral Colonies", "Aquacultured"] },
+        { "head": "By Care Level", "items": ["Beginner Corals", "Intermediate", "Expert Only", "Coming Soon"] }
+      ],
+      "featured": { "img": "/assets/placeholders/reef-5.jpg", "title": "Fresh Arrivals", "sub": "New corals every week", "collectionSlug": "new-arrivals" }
+    }
+  ],
+  "social": {
+    "instagram": "https://instagram.com/thefishtankutah",
+    "facebook": "https://facebook.com/thefishtankutah",
+    "youtube": "https://youtube.com/@thefishtankutah"
+  }
+}
