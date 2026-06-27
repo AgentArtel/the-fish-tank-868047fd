@@ -1,0 +1,53 @@
+/* ============================================================
+   THE FISH TANK — EFFECTS: SHADOWS, GLOWS, GRADIENTS, MOTION
+   Shadows are cool navy-tinted to sit on the cool neutrals.
+   Dark sections use ocean-blue glows. Values in rgba/hex for
+   maximum rendering compatibility.
+   ============================================================ */
+
+:root {
+  /* ---------- ELEVATION (cool navy-tinted) ---------- */
+  --shadow-xs:  0 1px 2px rgba(31,39,53,0.07);
+  --shadow-sm:  0 1px 2px rgba(31,39,53,0.07),
+                0 1px 3px rgba(31,39,53,0.09);
+  --shadow-md:  0 2px 4px rgba(31,39,53,0.07),
+                0 4px 12px rgba(31,39,53,0.11);
+  --shadow-lg:  0 8px 24px rgba(31,39,53,0.13),
+                0 2px 6px rgba(31,39,53,0.09);
+  --shadow-xl:  0 18px 48px rgba(22,29,43,0.18),
+                0 6px 16px rgba(22,29,43,0.11);
+
+  /* ---------- BRAND GLOWS ---------- */
+  --glow-blue:  0 8px 30px rgba(0,120,255,0.45);
+  --glow-ocean: 0 8px 30px rgba(0,120,255,0.45);  /* alias */
+  --glow-cyan:  0 6px 26px rgba(0,198,255,0.45);
+  --glow-aqua:  0 6px 26px rgba(0,198,255,0.45);  /* alias */
+  --glow-royal: 0 8px 30px rgba(10,55,207,0.42);
+  --glow-yellow: 0 4px 20px rgba(254,232,0,0.40);
+
+  /* hairline ring used on cards/inputs for crisp edges */
+  --ring-hairline: inset 0 0 0 1px var(--border-default); /* @kind shadow */
+
+  /* ---------- GRADIENTS ---------- */
+  /* Deep ocean — for dark hero/section backgrounds */
+  --grad-ocean: radial-gradient(120% 100% at 50% 0%,
+                  #14306e 0%, #0a1730 48%, #060e1d 100%); /* @kind other */
+  /* Royal → electric blue — vivid brand band (CTAs, feature bands) */
+  --grad-brand: linear-gradient(135deg, #0046e8 0%, #0078ff 55%, #00a8ff 100%); /* @kind other */
+  /* Aqua water shimmer (tang highlight) */
+  --grad-aqua: linear-gradient(135deg, #00c6ff 0%, #0078ff 100%); /* @kind other */
+  /* Yellow tail sheen — use sparingly */
+  --grad-yellow: linear-gradient(135deg, #ffef5c 0%, #fee800 100%); /* @kind other */
+  /* Bottom protection scrim for text over imagery */
+  --scrim-bottom: linear-gradient(to top,
+                  rgba(3,7,15,0.90) 0%, rgba(3,7,15,0.45) 45%, transparent 100%); /* @kind other */
+
+  /* ---------- MOTION ---------- */
+  --ease-out:   cubic-bezier(0.22, 1, 0.36, 1);   /* @kind other */
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);  /* @kind other */
+  --ease-swim:  cubic-bezier(0.34, 1.4, 0.5, 1);  /* @kind other */
+  --dur-fast:   140ms; /* @kind other */
+  --dur-base:   220ms; /* @kind other */
+  --dur-slow:   420ms; /* @kind other */
+  --transition-base: all var(--dur-base) var(--ease-out); /* @kind other */
+}

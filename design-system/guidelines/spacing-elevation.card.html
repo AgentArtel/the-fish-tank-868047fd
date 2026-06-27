@@ -1,0 +1,23 @@
+<!-- @dsCard group="Spacing" viewport="700x210" name="Elevation & Glows" subtitle="Cool navy-tinted shadows + brand glows" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; padding: 30px 32px; background: var(--surface-page); display: flex; gap: 22px; align-items: center; flex-wrap: wrap; }
+  .item { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+  .box { width: 92px; height: 60px; background: var(--surface-card); border-radius: var(--radius-lg); }
+  .n { font: var(--type-caption); color: var(--text-heading); }
+</style>
+</head>
+<body>
+  <div class="item"><div class="box" style="box-shadow:var(--shadow-sm)"></div><div class="n">sm</div></div>
+  <div class="item"><div class="box" style="box-shadow:var(--shadow-md)"></div><div class="n">md</div></div>
+  <div class="item"><div class="box" style="box-shadow:var(--shadow-lg)"></div><div class="n">lg</div></div>
+  <div class="item"><div class="box" style="box-shadow:var(--shadow-xl)"></div><div class="n">xl</div></div>
+  <div class="item"><div class="box" style="box-shadow:var(--glow-blue)"></div><div class="n">glow blue</div></div>
+  <div class="item"><div class="box" style="box-shadow:var(--glow-cyan)"></div><div class="n">glow cyan</div></div>
+  <div class="item"><div class="box" style="box-shadow:var(--glow-yellow)"></div><div class="n">glow yellow</div></div>
+</body>
+</html>

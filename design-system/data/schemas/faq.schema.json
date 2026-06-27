@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thefishtank.com/schemas/faq.schema.json",
+  "title": "FAQ",
+  "description": "A question/answer pair. Rendered as an accordion AND emitted as FAQPage JSON-LD (eligible for rich results). May stand alone (site FAQ) or attach to an article or product.",
+  "type": "object",
+  "required": ["id", "question", "answerMarkdown"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string" },
+    "question": { "type": "string" },
+    "answerMarkdown": { "type": "string" },
+    "category": { "type": ["string", "null"], "description": "e.g. \"Shipping\", \"Livestock\", \"Reef Rewards\"" },
+    "sortOrder": { "type": "integer", "default": 0 }
+  }
+}

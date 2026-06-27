@@ -1,0 +1,102 @@
+/* ============================================================
+   THE FISH TANK — COLOR TOKENS  ·  "Blue Tang" palette
+   Built directly from the blue-tang logo. Colors sampled from
+   the mark: electric blue body, bright cyan highlights, deep
+   royal-blue shadows, a single yellow tail accent, near-black
+   markings, white. Cool, vivid, aquatic — no warm tones.
+   Hex anchors come straight from the logo; tints/shades around them.
+   ============================================================ */
+
+:root {
+  /* ---------- BRAND CORE · ELECTRIC BLUE (the tang body) ---------- */
+  --blue-50:  #e9f3ff;
+  --blue-100: #cfe6ff;
+  --blue-200: #9bccff;
+  --blue-300: #5aa9ff;
+  --blue-400: #2089ff;
+  --blue-500: #0078ff;   /* ← PRIMARY · sampled from logo */
+  --blue-600: #0063e0;   /* hover */
+  --blue-700: #0c4fc4;   /* press / deep */
+
+  /* ---------- ROYAL · deep saturated blue (logo shadows) ---------- */
+  --royal-500: #0046e8;
+  --royal-600: #0a37cf;  /* sampled */
+  --royal-700: #0c2aa6;
+  --royal-900: #0a1d6e;  /* deep brand navy-blue */
+
+  /* ---------- CYAN / AQUA · bright highlight (fish edge glow) ---------- */
+  --cyan-200: #b6ecff;
+  --cyan-300: #7ddcff;
+  --cyan-400: #00c6ff;   /* ← bright highlight · sampled */
+  --cyan-500: #00a8ff;
+
+  /* ---------- YELLOW · the single warm accent (tail) ---------- */
+  --yellow-300: #ffef5c;
+  --yellow-400: #ffe600;
+  --yellow-500: #fee800;  /* ← accent · sampled from tail */
+  --yellow-600: #d9b400;  /* legible yellow-gold on light */
+
+  /* ---------- ABYSS · deep ocean / near-black (logo backgrounds) ---------- */
+  --abyss-700: #11213d;
+  --abyss-800: #0b1830;   /* raised dark surface */
+  --abyss-900: #070f22;   /* dark section bg (matches logo navy) */
+  --abyss-950: #03070f;   /* near-black */
+
+  /* ---------- COOL NEUTRALS (white → navy ink) ---------- */
+  --sand-0:   #ffffff;            /* pure card */
+  --sand-50:  #f6f9fe;            /* page — crisp cool white */
+  --sand-100: #eef3fb;            /* sunken */
+  --sand-200: #dde7f3;            /* border */
+  --sand-300: #c4d3e6;            /* strong border */
+  --ink-400:  #6c7d99;            /* light muted / disabled */
+  --ink-500:  #5b6b85;            /* muted text */
+  --ink-600:  #3f4d66;            /* secondary text */
+  --ink-900:  #16223c;            /* body text */
+  --ink-950:  #0d1729;            /* headings / brand ink */
+
+  /* ---------- SEMANTIC: SURFACES ---------- */
+  --surface-page:    var(--sand-50);
+  --surface-card:    var(--sand-0);
+  --surface-sunken:  var(--sand-100);
+  --surface-ocean:   var(--abyss-900);  /* dark dramatic sections */
+  --surface-ocean-raised: var(--abyss-800);
+
+  /* ---------- SEMANTIC: TEXT ---------- */
+  --text-heading:    var(--ink-950);
+  --text-body:       var(--ink-900);
+  --text-secondary:  var(--ink-600);
+  --text-muted:      var(--ink-500);
+  --text-on-brand:   #ffffff;            /* on electric blue */
+  --text-on-accent:  var(--ink-950);     /* on yellow */
+  --text-on-ocean:   #eaf2ff;            /* near-white on dark */
+  --text-on-ocean-muted: #8ea3c4;
+
+  /* ---------- SEMANTIC: BRAND ROLES ---------- */
+  --brand-primary:        var(--blue-500);
+  --brand-primary-hover:  var(--blue-600);
+  --brand-primary-press:  var(--blue-700);
+  --brand-accent:         var(--yellow-500);  /* tail yellow */
+  --brand-deep:           var(--royal-700);   /* deep royal blue */
+  --brand-cyan:           var(--cyan-400);     /* bright highlight */
+
+  /* ---------- SEMANTIC: LINES & FOCUS ---------- */
+  --border-default: var(--sand-200);
+  --border-strong:  var(--sand-300);
+  --border-ocean:   #1f3055;   /* hairline on dark */
+  --ring:           var(--blue-500);
+
+  /* ---------- SEMANTIC: STATUS ---------- */
+  --status-success:  #11a36b;          /* healthy reef green */
+  --status-success-bg: #e2f6ee;
+  --status-warning:  #e08a00;          /* amber — distinct from brand yellow */
+  --status-warning-bg: #fdf0d9;
+  --status-danger:   #e23b26;          /* alert red */
+  --status-danger-bg: #fce9e6;
+  --status-info:     var(--blue-500);
+  --status-info-bg:  var(--blue-50);
+
+  /* in-stock / sold dots for the live catalog */
+  --dot-live:  #11a36b;
+  --dot-hold:  var(--yellow-600);
+  --dot-sold:  var(--ink-400);
+}

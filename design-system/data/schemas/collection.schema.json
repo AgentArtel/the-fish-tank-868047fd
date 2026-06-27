@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thefishtank.com/schemas/collection.schema.json",
+  "title": "Collection",
+  "description": "A curated or dynamic grouping of products (mega-menu entries, merch rows, category pages).",
+  "type": "object",
+  "required": ["id", "slug", "title", "mode"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string" },
+    "slug": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "title": { "type": "string" },
+    "subtitle": { "type": ["string", "null"] },
+    "description": { "type": ["string", "null"], "description": "Intro/SEO copy rendered atop the collection page" },
+    "heroImage": { "type": ["string", "null"], "format": "uri-reference" },
+    "mode": { "type": "string", "enum": ["dynamic", "manual"] },
+    "query": {
+      "type": ["object", "null"],
+      "description": "For mode=dynamic: filter applied to public_products",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "enum": ["coral", "fish", "invert", "supply"] },
+        "category": { "type": "string" },
+        "subcategory": { "type": "string" },
+        "hasCompareAt": { "type": "boolean" },
+        "isWysiwyg": { "type": "boolean" },
+        "careLevel": { "type": "string" },
+        "sort": { "type": "string", "enum": ["featured", "price-asc", "price-desc", "newest"] }
+      }
+    },
+    "productIds": {
+      "type": ["array", "null"],
+      "description": "For mode=manual: ordered, pinned product ids",
+      "items": { "type": "string" }
+    },
+    "showInMegaMenu": { "type": "boolean", "default": false },
+    "sortOrder": { "type": "integer", "default": 0 }
+  }
+}

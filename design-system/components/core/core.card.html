@@ -1,0 +1,86 @@
+<!-- @dsCard group="Components" viewport="700x440" name="Buttons, Badges & Cards" subtitle="Core primitives — variants, sizes, states" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../../styles.css" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>
+  body { margin: 0; padding: 26px 30px; background: var(--surface-page); }
+  .group { margin-bottom: 22px; }
+  .glabel { font: var(--type-caption); color: var(--text-muted); letter-spacing: var(--tracking-wide); text-transform: uppercase; margin-bottom: 10px; }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  svg.lucide { width: 16px; height: 16px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+  const Ic = (name) => <i data-lucide={name}></i>;
+
+  function Demo() {
+    const { Button, Badge, Card, CardHeader } = window.TheFishTankDesignSystem_a2acac;
+    return (
+      <div>
+        <div className="group">
+          <div className="glabel">Buttons — variants</div>
+          <div className="row">
+            <Button variant="primary" leftIcon={Ic("fish")}>Browse stock</Button>
+            <Button variant="gold">Hold item</Button>
+            <Button variant="ocean">Reef Club</Button>
+            <Button variant="secondary">Secondary</Button>
+            <Button variant="outline">Outline</Button>
+            <Button variant="ghost">Ghost</Button>
+            <Button variant="link">Learn more</Button>
+          </div>
+        </div>
+        <div className="group">
+          <div className="glabel">Buttons — sizes & state</div>
+          <div className="row">
+            <Button size="sm">Small</Button>
+            <Button size="md">Medium</Button>
+            <Button size="lg" rightIcon={Ic("arrow-right")}>Large CTA</Button>
+            <Button disabled>Disabled</Button>
+          </div>
+        </div>
+        <div className="group">
+          <div className="glabel">Badges</div>
+          <div className="row">
+            <Badge tone="gold" variant="solid">New arrival</Badge>
+            <Badge tone="ocean">Saltwater Fish</Badge>
+            <Badge tone="cyan">Featured</Badge>
+            <Badge tone="success" dot>In stock</Badge>
+            <Badge tone="warning" dot>On hold</Badge>
+            <Badge tone="neutral" variant="outline">SPS</Badge>
+          </div>
+        </div>
+        <div className="group">
+          <div className="glabel">Cards</div>
+          <div className="row" style={{ alignItems: "stretch" }}>
+            <Card hoverable style={{ width: 230 }}>
+              <CardHeader title="Reef Club" subtitle="Member rewards" />
+              <p style={{ font: "var(--type-small)", color: "var(--text-secondary)", margin: 0 }}>Earn store credit on every coral frag you bring home.</p>
+            </Card>
+            <Card tone="ocean" style={{ width: 230 }}>
+              <div style={{ font: "var(--type-h4)", marginBottom: 6 }}>Live arrivals</div>
+              <p style={{ font: "var(--type-small)", color: "var(--text-on-ocean-muted)", margin: 0 }}>Fresh shipment acclimating now — updated throughout the day.</p>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  function mount() {
+    const NS = window.TheFishTankDesignSystem_a2acac;
+    if (!NS || !NS.Button || !window.ReactDOM) { return setTimeout(mount, 40); }
+    ReactDOM.createRoot(document.getElementById("root")).render(<Demo />);
+    setTimeout(() => window.lucide && window.lucide.createIcons(), 60);
+  }
+  mount();
+</script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+<!-- @dsCard group="Components" viewport="700x480" name="Product Cards" subtitle="Reef e-commerce tiles — sale, WYSIWYG, sold out" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../../styles.css" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>
+  body { margin: 0; padding: 26px 30px; background: var(--surface-page); }
+  .grid { display: grid; grid-template-columns: repeat(3, 200px); gap: 18px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+  const { ProductCard } = window.TheFishTankDesignSystem_a2acac;
+  function Demo() {
+    return (
+      <div className="grid">
+        <ProductCard image="../../assets/placeholders/reef-5.jpg" vendor="Aquacultured" name="Electric Hammer Coral" scientificName="Euphyllia ancora" price={129.00} compareAt={179.00} stock="live" />
+        <ProductCard image="../../assets/placeholders/reef-2.jpg" vendor="Tank-Raised" name="Blue Hippo Tang" scientificName="Paracanthurus hepatus" price={189.00} stock="live" />
+        <ProductCard image="../../assets/placeholders/reef-3.jpg" vendor="Aquacultured" name="Sunburst Zoanthids" scientificName="Zoanthus sp." price={24.99} compareAt={79.99} badge="New" stock="live" />
+        <ProductCard image="../../assets/placeholders/reef-4.jpg" vendor="Aquacultured" name="Rainbow Acan Lord" scientificName="Acanthastrea lordhowensis" price={74.00} compareAt={99.00} stock="sold" />
+        <ProductCard image="../../assets/placeholders/reef-7.jpg" vendor="Wild-Sourced" name="Skunk Cleaner Shrimp" scientificName="Lysmata amboinensis" price={28.00} stock="live" />
+        <ProductCard image="../../assets/placeholders/reef-6.jpg" vendor="Aquacultured" name="Gold Torch Coral" scientificName="Euphyllia glabrescens" price={95.00} compareAt={140.00} stock="live" />
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById("root")).render(<Demo />);
+  setTimeout(() => window.lucide && window.lucide.createIcons(), 80);
+</script>
+</body>
+</html>

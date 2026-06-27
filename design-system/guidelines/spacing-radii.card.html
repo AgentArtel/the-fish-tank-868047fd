@@ -1,0 +1,24 @@
+<!-- @dsCard group="Spacing" viewport="700x180" name="Radii" subtitle="Corner radius scale, 4px → pill" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; padding: 26px 32px; background: var(--surface-page); display: flex; gap: 18px; align-items: flex-start; }
+  .item { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .box { width: 76px; height: 60px; background: var(--surface-card); box-shadow: var(--ring-hairline), var(--shadow-sm);
+         border-top: 3px solid var(--brand-primary); }
+  .n { font: var(--type-caption); color: var(--text-heading); }
+  .v { font: var(--text-2xs)/1 var(--font-mono); color: var(--text-muted); }
+</style>
+</head>
+<body>
+  <div class="item"><div class="box" style="border-radius:var(--radius-sm)"></div><div class="n">sm</div><div class="v">6px</div></div>
+  <div class="item"><div class="box" style="border-radius:var(--radius-md)"></div><div class="n">md</div><div class="v">8px</div></div>
+  <div class="item"><div class="box" style="border-radius:var(--radius-lg)"></div><div class="n">lg</div><div class="v">12px</div></div>
+  <div class="item"><div class="box" style="border-radius:var(--radius-xl)"></div><div class="n">xl</div><div class="v">16px</div></div>
+  <div class="item"><div class="box" style="border-radius:var(--radius-2xl)"></div><div class="n">2xl</div><div class="v">24px</div></div>
+  <div class="item"><div class="box" style="border-radius:var(--radius-full);width:60px"></div><div class="n">full</div><div class="v">pill</div></div>
+</body>
+</html>

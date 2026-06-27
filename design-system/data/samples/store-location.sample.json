@@ -1,0 +1,29 @@
+{
+  "id": "loc-sandy",
+  "slug": "sandy",
+  "name": "The Fish Tank — Sandy",
+  "address": {
+    "street": "8371 700 W",
+    "city": "Sandy",
+    "region": "UT",
+    "postal": "84070",
+    "country": "US"
+  },
+  "geo": { "lat": 40.5897, "lng": -111.9013 },
+  "phone": "(801) 887-7000",
+  "phoneHref": "tel:+18018877000",
+  "email": "hello@thefishtank.com",
+  "hours": [
+    { "day": "Sun", "open": "11:00", "close": "16:00" },
+    { "day": "Mon", "open": "11:30", "close": "20:00" },
+    { "day": "Tue", "open": "11:30", "close": "20:00" },
+    { "day": "Wed", "open": "11:30", "close": "20:00" },
+    { "day": "Thu", "open": "11:30", "close": "20:00" },
+    { "day": "Fri", "open": "11:30", "close": "20:00" },
+    { "day": "Sat", "open": "11:00", "close": "18:00" }
+  ],
+  "serviceAreas": ["Sandy", "Salt Lake City", "Draper", "South Jordan", "West Jordan", "Midvale", "Lehi", "Murray", "Cottonwood Heights"],
+  "photos": [
+    { "url": "https://cdn.thefishtank.com/store/sandy-storefront.jpg", "caption": "Our Sandy showroom", "isPrimary": true }
+  ]
+}

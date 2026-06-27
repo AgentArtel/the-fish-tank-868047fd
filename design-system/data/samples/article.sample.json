@@ -1,0 +1,26 @@
+{
+  "id": "guide-acclimate-corals-utah",
+  "slug": "how-to-acclimate-corals-utah-hard-water",
+  "kind": "guide",
+  "title": "How to Acclimate New Corals (and Why Utah's Hard Water Matters)",
+  "excerpt": "A step-by-step acclimation routine for new frags and colonies — tuned for the high-alkalinity tap water most Salt Lake Valley reefers start with.",
+  "bodyMarkdown": "## Before you leave the shop\n\nAsk us for the bag's drip time...\n\n## Temperature + light acclimation\n\n...",
+  "heroImage": { "url": "https://cdn.thefishtank.com/public-media/guides/acclimation-hero.jpg", "alt": "Drip acclimation setup on a reef tank" },
+  "author": { "slug": "head-aquarist", "name": "The Fish Tank Reef Team", "title": "Head Aquarist · 12 yrs reefkeeping", "avatarUrl": "https://cdn.thefishtank.com/public-media/authors/reef-team.jpg" },
+  "topics": ["Corals", "Beginner", "Water Chemistry"],
+  "tags": ["acclimation", "alkalinity", "salt lake valley"],
+  "readingMinutes": 6,
+  "relatedProductSlugs": ["gold-torch-coral-1a2b3c4d", "duncan-coral-colony-9f8e7d6c"],
+  "faqs": [
+    { "id": "faq-1", "question": "How long should I drip acclimate a coral?", "answerMarkdown": "Most corals do well with a 30–45 minute drip...", "category": "Livestock", "sortOrder": 0 }
+  ],
+  "seo": {
+    "title": "Acclimating Corals in Utah Hard Water | The Fish Tank, Sandy UT",
+    "description": "Step-by-step coral acclimation from Sandy's reef experts, tuned for Salt Lake Valley water. Serving SLC, Draper, South Jordan & the Wasatch Front.",
+    "ogImage": "https://cdn.thefishtank.com/public-media/guides/acclimation-hero.jpg",
+    "canonical": null,
+    "noindex": false
+  },
+  "publishedAt": "2026-06-10T16:00:00Z",
+  "updatedAt": "2026-06-22T19:30:00Z"
+}

@@ -1,0 +1,41 @@
+[
+  {
+    "id": "col-weekly-specials",
+    "slug": "weekly-specials",
+    "title": "Weekly Specials",
+    "subtitle": "Save big this week",
+    "description": "Discounted corals, fish, and inverts — fresh markdowns every week while supplies last.",
+    "heroImage": null,
+    "mode": "dynamic",
+    "query": { "hasCompareAt": true, "sort": "featured" },
+    "productIds": null,
+    "showInMegaMenu": false,
+    "sortOrder": 1
+  },
+  {
+    "id": "col-new-arrivals",
+    "slug": "new-arrivals",
+    "title": "New Arrivals",
+    "subtitle": "Fresh on the floor",
+    "description": "The latest corals, fish, and inverts to hit the Sandy showroom — acclimated and photographed this week.",
+    "heroImage": null,
+    "mode": "dynamic",
+    "query": { "sort": "newest" },
+    "productIds": null,
+    "showInMegaMenu": true,
+    "sortOrder": 2
+  },
+  {
+    "id": "col-sps",
+    "slug": "sps-corals",
+    "title": "SPS Corals",
+    "subtitle": null,
+    "description": "Acropora, Montipora, and other small-polyp stonies for the high-light, high-flow reef.",
+    "heroImage": null,
+    "mode": "dynamic",
+    "query": { "type": "coral", "subcategory": "SPS", "sort": "featured" },
+    "productIds": null,
+    "showInMegaMenu": true,
+    "sortOrder": 3
+  }
+]

@@ -1,0 +1,30 @@
+{
+  "id": "8371-c40100",
+  "slug": "electric-hammer-coral-c40100",
+  "name": "Electric Hammer Coral",
+  "scientificName": "Euphyllia ancora",
+  "type": "coral",
+  "category": "Corals",
+  "subcategory": "LPS",
+  "price": 129.00,
+  "compareAtPrice": 179.00,
+  "currency": "USD",
+  "availability": "available",
+  "isWysiwyg": false,
+  "isHouseLine": false,
+  "careLevel": "Intermediate",
+  "reefSafe": "Safe",
+  "originRegion": "Aquacultured",
+  "size": "3 heads",
+  "description": "A standout neon-green hammer with electric tips, acclimated and fully extended in our Sandy showroom system.",
+  "careNotes": "Low-to-medium flow and moderate light. Give it room to sweep; keep 6\"+ from neighbors.",
+  "vendorLine": "TFT Signature",
+  "tankLocation": "Sandy showroom · Tank C-12",
+  "images": [
+    { "url": "https://cdn.thefishtank.com/inventory/c40100-daylight.jpg", "alt": "Electric Hammer Coral under daylight", "isPrimary": true, "view": "daylight" },
+    { "url": "https://cdn.thefishtank.com/inventory/c40100-actinic.jpg", "alt": "Electric Hammer Coral under actinic", "isPrimary": false, "view": "actinic" }
+  ],
+  "badges": ["Sale"],
+  "rating": { "value": 4.9, "count": 128 },
+  "updatedAt": "2026-06-23T17:40:00Z"
+}

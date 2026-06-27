@@ -1,0 +1,10 @@
+/* The Fish Tank — Webfonts
+   The source codebase ships no custom font (default Tailwind/system stack).
+   These are tasteful SUBSTITUTIONS chosen to match the brand: a friendly,
+   contemporary display + a warm, legible body + a mono for SKUs/codes.
+   Loaded from Google Fonts. Flagged to the user — swap if brand fonts exist. */
+
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Plus+Jakarta+Sans:ital,wght@0,400..800;1,400..600&family=JetBrains+Mono:wght@400;500;600&family=Pacifico&display=swap');
+
+/* Pacifico stands in for the hand-lettered "The Fish Tank" wordmark script
+   seen in the badge logo — use ONLY for occasional brand flourishes, never body. */

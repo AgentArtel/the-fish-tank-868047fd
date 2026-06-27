@@ -1,0 +1,102 @@
+<!-- @dsCard group="Website" viewport="1280x900" name="Marketing Website — Home" subtitle="Interactive reef storefront: home → catalog → product → cart" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>The Fish Tank — Saltwater Fish &amp; Coral Store in Sandy, Utah</title>
+<meta name="description" content="The Fish Tank is Utah's destination for saltwater fish, aquacultured corals, and reef supplies. Visit our Sandy, UT showroom or shop live stock online — serving Salt Lake City, Draper, South Jordan & the Wasatch Front." />
+<link rel="stylesheet" href="../../styles.css" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "PetStore",
+  "name": "The Fish Tank",
+  "description": "Saltwater fish, coral, and reef aquarium supplies in Sandy, Utah.",
+  "image": "https://thefishtank.com/assets/logo-fish.png",
+  "url": "https://thefishtank.com",
+  "telephone": "+1-801-887-7000",
+  "priceRange": "$$",
+  "address": {
+    "@type": "PostalAddress",
+    "streetAddress": "8371 700 W",
+    "addressLocality": "Sandy",
+    "addressRegion": "UT",
+    "postalCode": "84070",
+    "addressCountry": "US"
+  },
+  "geo": { "@type": "GeoCoordinates", "latitude": 40.5897, "longitude": -111.9013 },
+  "areaServed": ["Sandy", "Salt Lake City", "Draper", "South Jordan", "West Jordan", "Midvale", "Lehi", "Murray", "Cottonwood Heights"],
+  "openingHoursSpecification": [
+    { "@type": "OpeningHoursSpecification", "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday"], "opens": "11:30", "closes": "20:00" },
+    { "@type": "OpeningHoursSpecification", "dayOfWeek": "Saturday", "opens": "11:00", "closes": "18:00" },
+    { "@type": "OpeningHoursSpecification", "dayOfWeek": "Sunday", "opens": "11:00", "closes": "16:00" }
+  ]
+}
+</script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>
+  html { scroll-behavior: smooth; }
+  .cat-tile img { transition: transform var(--dur-slow) var(--ease-out); }
+  .cat-tile:hover img { transform: scale(1.06); }
+  .mega-link:hover { color: var(--brand-primary); }
+  a { text-decoration: none; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" src="data.js" data-presets="env,react"></script>
+<script type="text/babel" src="SiteChrome.jsx" data-presets="env,react"></script>
+<script type="text/babel" src="CartDrawer.jsx" data-presets="env,react"></script>
+<script type="text/babel" src="Home.jsx" data-presets="env,react"></script>
+<script type="text/babel" src="Catalog.jsx" data-presets="env,react"></script>
+<script type="text/babel" src="Product.jsx" data-presets="env,react"></script>
+<script type="text/babel" data-presets="env,react">
+  function App() {
+    const [route, setRoute] = React.useState("home");
+    const [product, setProduct] = React.useState(null);
+    const [cart, setCart] = React.useState([]);
+    const [cartOpen, setCartOpen] = React.useState(false);
+
+    const go = (r, p) => {
+      if (p) setProduct(p);
+      setRoute(r);
+      window.scrollTo({ top: 0 });
+    };
+    const addToCart = (p) => {
+      setCart((c) => {
+        const ex = c.find((it) => it.id === p.id);
+        if (ex) return c.map((it) => it.id === p.id ? { ...it, qty: it.qty + 1 } : it);
+        return [...c, { id: p.id, name: p.name, vendor: p.vendor, price: p.price, img: p.img, qty: 1 }];
+      });
+      setCartOpen(true);
+    };
+    const changeQty = (id, d) => setCart((c) => c.map((it) => it.id === id ? { ...it, qty: Math.max(1, it.qty + d) } : it));
+    const removeItem = (id) => setCart((c) => c.filter((it) => it.id !== id));
+    const cartCount = cart.reduce((s, it) => s + it.qty, 0);
+
+    React.useLayoutEffect(() => { window.lucide && window.lucide.createIcons(); });
+
+    return (
+      <div>
+        <window.SiteHeader route={route} go={go} cartCount={cartCount} onCart={() => setCartOpen(true)} />
+        {route === "home" && <window.Home go={go} addToCart={addToCart} />}
+        {route === "catalog" && <window.Catalog go={go} addToCart={addToCart} />}
+        {route === "product" && <window.Product go={go} product={product} addToCart={addToCart} />}
+        <window.SiteFooter go={go} />
+        <window.CartDrawer open={cartOpen} items={cart} onClose={() => setCartOpen(false)} onQty={changeQty} onRemove={removeItem} go={go} />
+      </div>
+    );
+  }
+  function mount() {
+    if (!window.TheFishTankDesignSystem_a2acac || !window.Home || !window.CartDrawer) { return setTimeout(mount, 30); }
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  }
+  mount();
+</script>
+</body>
+</html>
