@@ -510,7 +510,7 @@ function PdpNotFound() {
         It may have sold — livestock moves fast. Browse what's swimming right now.
       </p>
       <Link
-        to="/catalog"
+        to="/shop"
         style={{
           display: "inline-block",
           marginTop: "var(--space-6)",
