@@ -19,30 +19,50 @@ function LoginPage() {
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     // Hard reload — avoids a stale route-chunk import rejecting and leaving us on /login.
     window.location.assign("/dashboard");
   };
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-background">
-      <img src="/brand/fish-tank-badge.png" alt="The Fish Tank" className="w-24 h-24 mb-4 rounded-full" />
+      <img src="/brand/logo-fish.png" alt="The Fish Tank" className="w-24 h-24 mb-4 rounded-full" />
       <h1 className="text-2xl font-semibold tracking-tight">The Fish Tank Workspace</h1>
       <p className="text-sm text-muted-foreground mb-6">Internal Business Operations Workspace</p>
       <div className="w-full max-w-sm rounded-xl border bg-card p-6 shadow-sm">
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" value={email} onChange={e=>setEmail(e.target.value)} required />
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="password">Password</Label>
-            <Input id="password" type="password" value={password} onChange={e=>setPassword(e.target.value)} required />
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
           </div>
-          <Button type="submit" className="w-full" disabled={loading}>{loading?"Signing in…":"Sign in"}</Button>
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? "Signing in…" : "Sign in"}
+          </Button>
         </form>
         <p className="mt-4 text-sm text-muted-foreground text-center">
-          No account? <Link to="/signup" className="text-primary hover:underline">Request access</Link>
+          No account?{" "}
+          <Link to="/signup" className="text-primary hover:underline">
+            Request access
+          </Link>
         </p>
       </div>
     </div>
