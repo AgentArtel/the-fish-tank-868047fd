@@ -586,11 +586,23 @@ export function SiteFooter({
         >
           <span
             style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "var(--space-3)",
               font: "var(--fw-regular) var(--text-xs)/1.4 var(--font-sans)",
               color: "var(--text-on-ocean-muted)",
+              flexWrap: "wrap",
             }}
           >
             © {new Date().getFullYear()} {napLine}
+            {/* Staff entry point: the public site is the home at /, so staff reach
+                the workspace via /login → /dashboard from here. */}
+            <Link
+              to="/login"
+              style={{ color: "var(--text-on-ocean-muted)", textDecoration: "underline" }}
+            >
+              Staff sign in
+            </Link>
           </span>
           <div style={{ display: "flex", gap: 6 }}>
             {pay.map((p) => (

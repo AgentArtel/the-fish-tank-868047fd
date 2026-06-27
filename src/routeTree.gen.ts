@@ -15,7 +15,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as CatalogRouteImport } from './routes/catalog'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as publicRouteRouteImport } from './routes/(public)/route'
-import { Route as IndexRouteImport } from './routes/index'
+import { Route as publicIndexRouteImport } from './routes/(public)/index'
 import { Route as AppVendorsRouteImport } from './routes/_app/vendors'
 import { Route as AppTasksRouteImport } from './routes/_app/tasks'
 import { Route as AppStoreLocationsRouteImport } from './routes/_app/store-locations'
@@ -29,6 +29,7 @@ import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppCampaignsRouteImport } from './routes/_app/campaigns'
 import { Route as AppCalendarRouteImport } from './routes/_app/calendar'
 import { Route as AppBatchesRouteImport } from './routes/_app/batches'
+import { Route as publicVisitRouteImport } from './routes/(public)/visit'
 import { Route as publicShopRouteImport } from './routes/(public)/shop'
 import { Route as AppVendorWatchIndexRouteImport } from './routes/_app/vendor-watch.index'
 import { Route as AppInventoryIndexRouteImport } from './routes/_app/inventory.index'
@@ -84,10 +85,10 @@ const publicRouteRoute = publicRouteRouteImport.update({
   id: '/(public)',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
+const publicIndexRoute = publicIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => publicRouteRoute,
 } as any)
 const AppVendorsRoute = AppVendorsRouteImport.update({
   id: '/vendors',
@@ -153,6 +154,11 @@ const AppBatchesRoute = AppBatchesRouteImport.update({
   id: '/batches',
   path: '/batches',
   getParentRoute: () => AppRoute,
+} as any)
+const publicVisitRoute = publicVisitRouteImport.update({
+  id: '/visit',
+  path: '/visit',
+  getParentRoute: () => publicRouteRoute,
 } as any)
 const publicShopRoute = publicShopRouteImport.update({
   id: '/shop',
@@ -289,12 +295,13 @@ const ApiPublicHooksRefreshScrapeSourcesRoute =
   } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
+  '/': typeof publicIndexRoute
   '/catalog': typeof CatalogRoute
   '/login': typeof LoginRoute
   '/pending-approval': typeof PendingApprovalRoute
   '/signup': typeof SignupRoute
   '/shop': typeof publicShopRoute
+  '/visit': typeof publicVisitRoute
   '/batches': typeof AppBatchesRouteWithChildren
   '/calendar': typeof AppCalendarRoute
   '/campaigns': typeof AppCampaignsRoute
@@ -335,12 +342,13 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/refresh-scrape-sources': typeof ApiPublicHooksRefreshScrapeSourcesRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
+  '/': typeof publicIndexRoute
   '/catalog': typeof CatalogRoute
   '/login': typeof LoginRoute
   '/pending-approval': typeof PendingApprovalRoute
   '/signup': typeof SignupRoute
   '/shop': typeof publicShopRoute
+  '/visit': typeof publicVisitRoute
   '/calendar': typeof AppCalendarRoute
   '/campaigns': typeof AppCampaignsRoute
   '/dashboard': typeof AppDashboardRoute
@@ -380,7 +388,6 @@ export interface FileRoutesByTo {
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
   '/(public)': typeof publicRouteRouteWithChildren
   '/_app': typeof AppRouteWithChildren
   '/catalog': typeof CatalogRoute
@@ -388,6 +395,7 @@ export interface FileRoutesById {
   '/pending-approval': typeof PendingApprovalRoute
   '/signup': typeof SignupRoute
   '/(public)/shop': typeof publicShopRoute
+  '/(public)/visit': typeof publicVisitRoute
   '/_app/batches': typeof AppBatchesRouteWithChildren
   '/_app/calendar': typeof AppCalendarRoute
   '/_app/campaigns': typeof AppCampaignsRoute
@@ -401,6 +409,7 @@ export interface FileRoutesById {
   '/_app/store-locations': typeof AppStoreLocationsRoute
   '/_app/tasks': typeof AppTasksRoute
   '/_app/vendors': typeof AppVendorsRoute
+  '/(public)/': typeof publicIndexRoute
   '/(public)/collections/$slug': typeof publicCollectionsSlugRoute
   '/(public)/products/$slug': typeof publicProductsSlugRoute
   '/_app/batches/$id': typeof AppBatchesIdRoute
@@ -436,6 +445,7 @@ export interface FileRouteTypes {
     | '/pending-approval'
     | '/signup'
     | '/shop'
+    | '/visit'
     | '/batches'
     | '/calendar'
     | '/campaigns'
@@ -482,6 +492,7 @@ export interface FileRouteTypes {
     | '/pending-approval'
     | '/signup'
     | '/shop'
+    | '/visit'
     | '/calendar'
     | '/campaigns'
     | '/dashboard'
@@ -520,7 +531,6 @@ export interface FileRouteTypes {
     | '/api/public/hooks/refresh-scrape-sources'
   id:
     | '__root__'
-    | '/'
     | '/(public)'
     | '/_app'
     | '/catalog'
@@ -528,6 +538,7 @@ export interface FileRouteTypes {
     | '/pending-approval'
     | '/signup'
     | '/(public)/shop'
+    | '/(public)/visit'
     | '/_app/batches'
     | '/_app/calendar'
     | '/_app/campaigns'
@@ -541,6 +552,7 @@ export interface FileRouteTypes {
     | '/_app/store-locations'
     | '/_app/tasks'
     | '/_app/vendors'
+    | '/(public)/'
     | '/(public)/collections/$slug'
     | '/(public)/products/$slug'
     | '/_app/batches/$id'
@@ -569,7 +581,6 @@ export interface FileRouteTypes {
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
   publicRouteRoute: typeof publicRouteRouteWithChildren
   AppRoute: typeof AppRouteWithChildren
   CatalogRoute: typeof CatalogRoute
@@ -623,12 +634,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof publicRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
+    '/(public)/': {
+      id: '/(public)/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof publicIndexRouteImport
+      parentRoute: typeof publicRouteRoute
     }
     '/_app/vendors': {
       id: '/_app/vendors'
@@ -720,6 +731,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/batches'
       preLoaderRoute: typeof AppBatchesRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/(public)/visit': {
+      id: '/(public)/visit'
+      path: '/visit'
+      fullPath: '/visit'
+      preLoaderRoute: typeof publicVisitRouteImport
+      parentRoute: typeof publicRouteRoute
     }
     '/(public)/shop': {
       id: '/(public)/shop'
@@ -908,12 +926,16 @@ declare module '@tanstack/react-router' {
 
 interface publicRouteRouteChildren {
   publicShopRoute: typeof publicShopRoute
+  publicVisitRoute: typeof publicVisitRoute
+  publicIndexRoute: typeof publicIndexRoute
   publicCollectionsSlugRoute: typeof publicCollectionsSlugRoute
   publicProductsSlugRoute: typeof publicProductsSlugRoute
 }
 
 const publicRouteRouteChildren: publicRouteRouteChildren = {
   publicShopRoute: publicShopRoute,
+  publicVisitRoute: publicVisitRoute,
+  publicIndexRoute: publicIndexRoute,
   publicCollectionsSlugRoute: publicCollectionsSlugRoute,
   publicProductsSlugRoute: publicProductsSlugRoute,
 }
@@ -1021,7 +1043,6 @@ const AppRouteChildren: AppRouteChildren = {
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
   publicRouteRoute: publicRouteRouteWithChildren,
   AppRoute: AppRouteWithChildren,
   CatalogRoute: CatalogRoute,
