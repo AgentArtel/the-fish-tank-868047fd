@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate, notFound, Link } from "@tanstack/react-ro
 import { queryOptions, useSuspenseQuery, keepPreviousData } from "@tanstack/react-query";
 import { z } from "zod";
 import { SearchX } from "lucide-react";
-import { getCollectionProducts } from "@/lib/public-site.functions";
+import { getCollectionProducts, getSiteSettings, pickupEtaLine } from "@/lib/public-site.functions";
 import { CatalogView } from "@/components/storefront/CatalogView";
 
 // /collections/$slug — collection-scoped catalog. Same CatalogView as /shop, but
@@ -27,11 +27,20 @@ const collectionQuery = (slug: string, page?: number) =>
     placeholderData: keepPreviousData,
   });
 
+const siteSettingsQuery = queryOptions({
+  queryKey: ["public-site-settings"],
+  queryFn: () => getSiteSettings(),
+  staleTime: 5 * 60_000,
+});
+
 export const Route = createFileRoute("/(public)/collections/$slug")({
   validateSearch: (s) => searchSchema.parse(s),
   loaderDeps: ({ search }) => ({ page: search.page }),
   loader: async ({ context, params, deps }) => {
-    const data = await context.queryClient.ensureQueryData(collectionQuery(params.slug, deps.page));
+    const [data] = await Promise.all([
+      context.queryClient.ensureQueryData(collectionQuery(params.slug, deps.page)),
+      context.queryClient.ensureQueryData(siteSettingsQuery),
+    ]);
     if (!data.collection) throw notFound();
     return data;
   },
@@ -89,7 +98,10 @@ function CollectionPage() {
   const nav = useNavigate({ from: "/collections/$slug" });
 
   const { data } = useSuspenseQuery(collectionQuery(slug, page));
+  const { data: settings } = useSuspenseQuery(siteSettingsQuery);
   if (!data.collection) return <CollectionNotFound />;
+
+  const etaLine = pickupEtaLine(settings.orderCycle);
 
   const blurb =
     data.collection.description ??
@@ -107,6 +119,7 @@ function CollectionPage() {
       total={data.total}
       page={page ?? 0}
       onPage={onPage}
+      etaLine={etaLine}
     />
   );
 }

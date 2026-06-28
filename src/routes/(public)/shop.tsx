@@ -1,7 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { queryOptions, useSuspenseQuery, keepPreviousData } from "@tanstack/react-query";
 import { z } from "zod";
-import { listProducts, type ProductSort } from "@/lib/public-site.functions";
+import {
+  getSiteSettings,
+  listProducts,
+  pickupEtaLine,
+  type ProductSort,
+} from "@/lib/public-site.functions";
 import { CatalogView, type CatalogFilterState } from "@/components/storefront/CatalogView";
 
 // /shop — the canonical public catalog (supersedes the old /catalog, which now
@@ -61,6 +66,12 @@ const productsQuery = (deps: {
     placeholderData: keepPreviousData,
   });
 
+const siteSettingsQuery = queryOptions({
+  queryKey: ["public-site-settings"],
+  queryFn: () => getSiteSettings(),
+  staleTime: 5 * 60_000,
+});
+
 export const Route = createFileRoute("/(public)/shop")({
   validateSearch: (s) => searchSchema.parse(s),
   loaderDeps: ({ search }) => ({
@@ -69,7 +80,11 @@ export const Route = createFileRoute("/(public)/shop")({
     sort: search.sort,
     page: search.page,
   }),
-  loader: ({ context, deps }) => context.queryClient.ensureQueryData(productsQuery(deps)),
+  loader: ({ context, deps }) =>
+    Promise.all([
+      context.queryClient.ensureQueryData(productsQuery(deps)),
+      context.queryClient.ensureQueryData(siteSettingsQuery),
+    ]).then(([data]) => data),
   head: ({ loaderData }) => {
     const url = `${SITE}/shop`;
     const products = loaderData?.products ?? [];
@@ -117,6 +132,8 @@ function ShopPage() {
   const { data } = useSuspenseQuery(
     productsQuery({ type: search.type, sale: search.sale, sort: search.sort, page: search.page }),
   );
+  const { data: settings } = useSuspenseQuery(siteSettingsQuery);
+  const etaLine = pickupEtaLine(settings.orderCycle);
 
   const filters: CatalogFilterState = {
     type: search.type ?? "all",
@@ -149,6 +166,7 @@ function ShopPage() {
       onPage={onPage}
       filters={filters}
       onFilters={onFilters}
+      etaLine={etaLine}
     />
   );
 }

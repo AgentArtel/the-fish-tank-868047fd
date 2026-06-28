@@ -41,6 +41,8 @@ export type CatalogViewProps = {
   onFilters?: (next: Partial<CatalogFilterState>) => void;
   /** subtle "updating…" hint while a new page/filter is fetching. */
   isFetching?: boolean;
+  /** Pickup-ETA copy for sold-out-but-sourceable (order-ahead) cards. */
+  etaLine?: string | null;
 };
 
 const CATEGORY_OPTIONS = [
@@ -61,6 +63,7 @@ export function CatalogView({
   filters,
   onFilters,
   isFetching = false,
+  etaLine,
 }: CatalogViewProps) {
   const showFilters = !!filters && !!onFilters;
 
@@ -192,7 +195,8 @@ export function CatalogView({
                       price={p.price ?? 0}
                       compareAt={p.compareAtPrice}
                       wysiwyg={p.isWysiwyg}
-                      stock={p.availability === "sold" ? "sold" : "live"}
+                      stock={p.orderState === "order_ahead" ? "order_ahead" : "live"}
+                      etaLine={p.orderState === "order_ahead" ? etaLine : null}
                     />
                   </Link>
                 ))}

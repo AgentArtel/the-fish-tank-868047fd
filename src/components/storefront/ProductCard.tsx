@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Heart, ShoppingCart } from "lucide-react";
+import { Heart, ShoppingCart, CalendarClock } from "lucide-react";
 
 /**
  * The Fish Tank — storefront ProductCard (ported from
@@ -7,9 +7,17 @@ import { Heart, ShoppingCart } from "lucide-react";
  *
  * Reef-livestock tile: photo, vendor/origin, name + scientific name, sale price
  * with struck compare-at, % OFF and WYSIWYG badges, a wishlist toggle, a hover
- * "Add to Cart" affordance, and a sold-out state. Uses the storefront design
- * tokens (defined under `.tft-storefront` in src/storefront.css). lucide-react
- * replaces the reference's `data-lucide` icons.
+ * "Add to Cart" affordance, plus three stock states:
+ *   - "live"        → in stock, fully orderable.
+ *   - "order_ahead" → sold out but sourceable; still looks orderable (full
+ *                     color, price, buy affordance) and shows a subtle pickup-ETA
+ *                     line. NOT greyed out — it reads as available with a date.
+ *   - "sold"        → defensive only (the storefront never passes it: non-
+ *                     sourceable sold items never reach v_public_inventory). Keeps
+ *                     the legacy greyed-out "Sold Out" treatment.
+ *
+ * Uses the storefront design tokens (defined under `.tft-storefront` in
+ * src/storefront.css). lucide-react replaces the reference's `data-lucide` icons.
  *
  * Cart/wishlist are local UI affordances only this phase (no commerce backend);
  * `onAddToCart` is optional.
@@ -26,7 +34,9 @@ export type ProductCardProps = {
   price: number;
   compareAt?: number | null;
   wysiwyg?: boolean;
-  stock?: "live" | "sold";
+  stock?: "live" | "order_ahead" | "sold";
+  /** Pickup-ETA copy shown on order-ahead cards (e.g. "Order by Sunday · pickup Wednesday"). */
+  etaLine?: string | null;
   badge?: string | null;
   onAddToCart?: () => void;
   onClick?: () => void;
@@ -74,6 +84,7 @@ export function ProductCard({
   compareAt,
   wysiwyg = false,
   stock = "live",
+  etaLine,
   badge,
   onAddToCart,
   onClick,
@@ -81,7 +92,9 @@ export function ProductCard({
 }: ProductCardProps) {
   const [hover, setHover] = React.useState(false);
   const [wish, setWish] = React.useState(false);
+  // Only the legacy non-sourceable "sold" state greys out. order_ahead reads as orderable.
   const sold = stock === "sold";
+  const orderAhead = stock === "order_ahead";
   const pct = compareAt && compareAt > price ? Math.round((1 - price / compareAt) * 100) : 0;
 
   return (
@@ -314,6 +327,26 @@ export function ProductCard({
             </span>
           )}
         </div>
+        {/* order-ahead pickup ETA — subtle, positive (NOT a sold-out treatment) */}
+        {orderAhead && etaLine && (
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              marginTop: "var(--space-2)",
+              padding: "4px 10px",
+              borderRadius: "var(--radius-full)",
+              alignSelf: "flex-start",
+              background: "var(--blue-50)",
+              color: "var(--brand-primary)",
+              font: "var(--fw-semibold) var(--text-2xs)/1.1 var(--font-sans)",
+            }}
+          >
+            <CalendarClock size={12} />
+            {etaLine}
+          </div>
+        )}
       </div>
     </div>
   );

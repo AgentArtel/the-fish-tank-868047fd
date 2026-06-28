@@ -5,7 +5,9 @@ import {
   getSiteSettings,
   getStoreLocation,
   listProducts,
+  pickupEtaLine,
   type Product,
+  type SiteSettings,
   type StoreLocation,
 } from "@/lib/public-site.functions";
 import { ProductCard } from "@/components/storefront/ProductCard";
@@ -177,6 +179,7 @@ function HomePage() {
           title="Weekly Specials"
           accent="var(--status-danger)"
           products={weeklySpecials}
+          orderCycle={settings.orderCycle}
         />
       )}
       {newArrivals.length > 0 && (
@@ -185,6 +188,7 @@ function HomePage() {
           title="New Arrivals"
           accent="var(--brand-primary)"
           products={newArrivals}
+          orderCycle={settings.orderCycle}
         />
       )}
       <LocationBlock location={location} serviceAreas={settings.serviceAreas} />
@@ -417,12 +421,15 @@ function ProductRow({
   title,
   accent,
   products,
+  orderCycle,
 }: {
   eyebrow: string;
   title: string;
   accent: string;
   products: Product[];
+  orderCycle: SiteSettings["orderCycle"];
 }) {
+  const etaLine = pickupEtaLine(orderCycle);
   return (
     <section
       style={{
@@ -498,7 +505,8 @@ function ProductRow({
               price={p.price ?? 0}
               compareAt={p.compareAtPrice}
               wysiwyg={p.isWysiwyg}
-              stock={p.availability === "sold" ? "sold" : "live"}
+              stock={p.orderState === "order_ahead" ? "order_ahead" : "live"}
+              etaLine={p.orderState === "order_ahead" ? etaLine : null}
             />
           </Link>
         ))}
