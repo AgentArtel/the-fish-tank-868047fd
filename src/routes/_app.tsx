@@ -374,10 +374,31 @@ function AppLayout() {
   const { data: me, isLoading } = useMe();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Auth render-gate. The Supabase session is localStorage-only, so the server
+  // can't know whether the visitor is authenticated — SSR would otherwise ship
+  // the full workspace shell (nav + structure) to anyone, including logged-out
+  // visitors. Start as "unchecked" so SSR and the first client paint render a
+  // neutral loader, never the shell; confirm the session client-side, then
+  // either reveal the app (authed) or bounce to /login (anon). This never
+  // flashes /login at a logged-in user because we only redirect once
+  // getSession() has resolved with no session.
+  const [authChecked, setAuthChecked] = useState(false);
   const [railCollapsed, setRailCollapsed] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("nav.railCollapsed") === "1";
   });
+
+  useEffect(() => {
+    let active = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!active) return;
+      if (data.session) setAuthChecked(true);
+      else nav({ to: "/login" });
+    });
+    return () => {
+      active = false;
+    };
+  }, [nav]);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -389,7 +410,10 @@ function AppLayout() {
     }
   }, [railCollapsed]);
 
-  if (isLoading) {
+  // Hold the neutral gate until the client has confirmed a session AND the
+  // profile (roles/active) has loaded — the workspace shell never renders
+  // without an authenticated user.
+  if (!authChecked || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center text-muted-foreground">
         Loading…
