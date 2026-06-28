@@ -988,6 +988,7 @@ export type Database = {
           source_colony_id: string | null
           source_vendor_batch_id: string | null
           source_vendor_line_item_id: string | null
+          sourceable: boolean | null
           specimen_notes: string | null
           subcategory: string | null
           updated_at: string
@@ -1033,6 +1034,7 @@ export type Database = {
           source_colony_id?: string | null
           source_vendor_batch_id?: string | null
           source_vendor_line_item_id?: string | null
+          sourceable?: boolean | null
           specimen_notes?: string | null
           subcategory?: string | null
           updated_at?: string
@@ -1078,6 +1080,7 @@ export type Database = {
           source_colony_id?: string | null
           source_vendor_batch_id?: string | null
           source_vendor_line_item_id?: string | null
+          sourceable?: boolean | null
           specimen_notes?: string | null
           subcategory?: string | null
           updated_at?: string
@@ -3253,6 +3256,7 @@ export type Database = {
           retail_price: number | null
           scientific_name: string | null
           slug: string | null
+          sourceable: boolean | null
           specimen_notes: string | null
           updated_at: string | null
         }
@@ -3386,6 +3390,7 @@ export type Database = {
           announcement: string | null
           data: Json | null
           default_og_image_path: string | null
+          order_cycle: Json | null
           service_areas: Json | null
           site_title: string | null
           social: Json | null
@@ -3397,6 +3402,7 @@ export type Database = {
           announcement?: string | null
           data?: never
           default_og_image_path?: string | null
+          order_cycle?: never
           service_areas?: never
           site_title?: string | null
           social?: Json | null
@@ -3408,6 +3414,7 @@ export type Database = {
           announcement?: string | null
           data?: never
           default_og_image_path?: string | null
+          order_cycle?: never
           service_areas?: never
           site_title?: string | null
           social?: Json | null
@@ -3651,6 +3658,61 @@ export type Database = {
           last_seen_at: string
           phone: string
         }[]
+      }
+      set_inventory_sourceable: {
+        Args: { _item_id: string; _value: boolean }
+        Returns: {
+          attrs: Json
+          availability_status: Database["public"]["Enums"]["inventory_availability_status"]
+          category: string | null
+          colony_gone: boolean
+          colony_gone_at: string | null
+          colony_gone_by: string | null
+          compare_at_price: number | null
+          created_at: string
+          created_by: string | null
+          id: string
+          is_house_line: boolean
+          is_website_ready: boolean
+          is_wysiwyg: boolean
+          item_name: string
+          item_type: Database["public"]["Enums"]["item_type"] | null
+          live_sale_status: Database["public"]["Enums"]["inventory_live_sale_status"]
+          location_id: string | null
+          needs_photo: boolean
+          notes: string | null
+          origin_region: string | null
+          pricing_status: Database["public"]["Enums"]["inventory_pricing_status"]
+          product_id: string | null
+          quantity_available: number
+          quantity_lost: number
+          quantity_on_hold: number
+          quantity_received: number
+          quantity_sold: number
+          rack_position: string | null
+          received_at: string | null
+          received_by: string | null
+          retail_price: number | null
+          scientific_name: string | null
+          size: string | null
+          slug: string | null
+          source_colony_id: string | null
+          source_vendor_batch_id: string | null
+          source_vendor_line_item_id: string | null
+          sourceable: boolean | null
+          specimen_notes: string | null
+          subcategory: string | null
+          updated_at: string
+          vendor_id: string | null
+          website_ready_later: boolean
+          wholesale_cost: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "inventory_items"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
