@@ -74,6 +74,11 @@ reviews its output; the human approves at the gates.**
 - **Frontend:** data-cache keys invalidated on every mutation; no white-screen on empty/null data;
   dialogs reset between opens.
 - **The human has tested the actual flow in the running app** — not just "it compiles."
+- **Smoke-test gate (deployed user-facing surfaces):** when a phase ships routes/pages a visitor can hit,
+  Lovable runs a **Playwright smoke-test against the live deploy** (their integration-testing lane) — each
+  route returns 200 (or the intended redirect), key elements render, no console errors, redirects/links
+  resolve. Claude specifies the checklist per phase in a `.lovable/handoff-*-smoke-test.md`; Lovable reports
+  pass/fail per check. Applies going forward to every phase with a testable front-end surface.
 
 ## Hand-off log
 
