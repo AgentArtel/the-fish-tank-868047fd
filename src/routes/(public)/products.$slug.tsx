@@ -10,8 +10,15 @@ import {
   MapPin,
   ChevronRight,
   SearchX,
+  CalendarClock,
 } from "lucide-react";
-import { getProductBySlug, type Product } from "@/lib/public-site.functions";
+import {
+  getProductBySlug,
+  getSiteSettings,
+  pickupEtaLine,
+  type Product,
+  type SiteSettings,
+} from "@/lib/public-site.functions";
 
 // PDP — ported from design-system/reference/ProductDetail.tsx.txt.
 // react-router → TanStack (Route.useParams, @tanstack/react-router Link),
@@ -38,9 +45,18 @@ const productQuery = (slug: string) =>
     staleTime: 30_000,
   });
 
+const siteSettingsQuery = queryOptions({
+  queryKey: ["public-site-settings"],
+  queryFn: () => getSiteSettings(),
+  staleTime: 5 * 60_000,
+});
+
 export const Route = createFileRoute("/(public)/products/$slug")({
   loader: async ({ context, params }) => {
-    const product = await context.queryClient.ensureQueryData(productQuery(params.slug));
+    const [product] = await Promise.all([
+      context.queryClient.ensureQueryData(productQuery(params.slug)),
+      context.queryClient.ensureQueryData(siteSettingsQuery),
+    ]);
     if (!product) throw notFound();
     return { product };
   },
@@ -66,9 +82,10 @@ export const Route = createFileRoute("/(public)/products/$slug")({
         "@type": "Offer",
         priceCurrency: product.currency || "USD",
         price: product.price ?? undefined,
+        // Order-ahead (sourceable sold-out) items stay orderable → BackOrder, not SoldOut.
         availability:
-          product.availability === "sold"
-            ? "https://schema.org/SoldOut"
+          product.orderState === "order_ahead"
+            ? "https://schema.org/BackOrder"
             : "https://schema.org/InStock",
         url,
         seller: { "@type": "Store", name: "The Fish Tank" },
@@ -94,6 +111,7 @@ export const Route = createFileRoute("/(public)/products/$slug")({
 function ProductDetailPage() {
   const { slug } = Route.useParams();
   const { data: product } = useSuspenseQuery(productQuery(slug));
+  const { data: settings } = useSuspenseQuery(siteSettingsQuery);
   if (!product) return <PdpNotFound />;
 
   return (
@@ -107,7 +125,7 @@ function ProductDetailPage() {
       <Breadcrumb name={product.name} />
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-10)" }}>
         <Gallery product={product} />
-        <Details product={product} />
+        <Details product={product} orderCycle={settings.orderCycle} />
       </div>
     </article>
   );
@@ -226,8 +244,17 @@ function Gallery({ product }: { product: Product }) {
 }
 
 /* ---------------- details / buy box ---------------- */
-function Details({ product }: { product: Product }) {
-  const sold = product.availability === "sold";
+function Details({
+  product,
+  orderCycle,
+}: {
+  product: Product;
+  orderCycle: SiteSettings["orderCycle"];
+}) {
+  // Only sourceable sold-out rows reach the public view, so "sold" here means
+  // order-ahead: still orderable, shown with a pickup ETA (NOT a dead sold-out).
+  const orderAhead = product.orderState === "order_ahead";
+  const etaLine = pickupEtaLine(orderCycle);
   const onSale = (product.compareAtPrice ?? 0) > (product.price ?? 0);
   const specs: Array<[React.ComponentType<{ size?: number }>, string, string]> = [
     [HeartPulse, "Care level", product.careLevel ?? ""],
@@ -303,18 +330,23 @@ function Details({ product }: { product: Product }) {
           gap: 7,
           marginTop: "var(--space-3)",
           font: "var(--fw-semibold) var(--text-sm)/1 var(--font-sans)",
-          color: sold ? "var(--text-muted)" : "var(--status-success)",
+          // order-ahead reads positive (brand tone), never the muted sold-out grey.
+          color: orderAhead ? "var(--brand-primary)" : "var(--status-success)",
         }}
       >
-        <span
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: "50%",
-            background: sold ? "var(--text-muted)" : "var(--status-success)",
-          }}
-        />
-        {sold ? "Sold out — check back soon" : "In stock · ready to ship overnight"}
+        {orderAhead ? (
+          <CalendarClock size={15} />
+        ) : (
+          <span
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: "var(--status-success)",
+            }}
+          />
+        )}
+        {orderAhead ? etaLine : "In stock · ready to ship overnight"}
       </div>
 
       {product.description && (
@@ -379,17 +411,18 @@ function Details({ product }: { product: Product }) {
       )}
 
       <div style={{ display: "flex", gap: "var(--space-3)" }}>
+        {/* Buy button is a sitewide shell (no checkout yet). Order-ahead keeps the
+            same enabled look as in-stock — we only change visibility + the ETA line. */}
         <button
-          disabled={sold}
           style={{
             flex: 1,
             height: "var(--control-lg)",
             border: "none",
             borderRadius: "var(--radius-md)",
-            background: sold ? "var(--surface-sunken)" : "var(--brand-primary)",
-            color: sold ? "var(--text-muted)" : "var(--text-on-brand)",
-            boxShadow: sold ? "none" : "var(--glow-blue)",
-            cursor: sold ? "not-allowed" : "pointer",
+            background: "var(--brand-primary)",
+            color: "var(--text-on-brand)",
+            boxShadow: "var(--glow-blue)",
+            cursor: "pointer",
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
@@ -398,7 +431,7 @@ function Details({ product }: { product: Product }) {
           }}
         >
           <ShoppingCart size={18} />
-          {sold ? "Sold out" : `Add to cart · ${formatPrice(product.price)}`}
+          {`Add to cart · ${formatPrice(product.price)}`}
         </button>
         <button
           style={{

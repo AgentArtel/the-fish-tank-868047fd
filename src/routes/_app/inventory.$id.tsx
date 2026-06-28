@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,7 +23,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { ArrowLeft, Upload, Trash2, AlertTriangle, Skull } from "lucide-react";
+import {
+  ArrowLeft,
+  Upload,
+  Trash2,
+  AlertTriangle,
+  Skull,
+  Globe,
+  ExternalLink,
+  CheckCircle2,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { useMe } from "@/hooks/use-me";
 import { toast } from "sonner";
@@ -157,6 +166,7 @@ function InventoryDetail() {
       <SalesCard item={item} onDone={refresh} />
       <ColonyFragsCard item={item} onDone={refresh} />
       <PerTypeCard item={item} onDone={refresh} />
+      <PublishCard item={item} onDone={refresh} />
       <NotesCard item={item} onDone={refresh} />
       <MediaSection inventoryItemId={id} />
       <ActivityLog logs={logs ?? []} />
@@ -659,6 +669,137 @@ function NotesCard({ item, onDone }: { item: any; onDone: () => void }) {
       <Button onClick={save} disabled={busy}>
         {busy ? "Saving…" : "Save notes"}
       </Button>
+    </div>
+  );
+}
+
+// Sourceable tri-state options. The column is nullable: null = "auto" (derive from
+// type), true/false = explicit staff override. Effective = sourceable ?? !is_wysiwyg.
+const SOURCEABLE_OPTIONS = [
+  { value: "auto", label: "Auto" },
+  { value: "yes", label: "Yes" },
+  { value: "no", label: "No" },
+] as const;
+
+// Publish-to-website + sourceable. Gating is app-enforced (per the approved model):
+// Publish needs approved pricing + a photo on file + a location. The image copy is
+// the publish-inventory-item edge fn (Engineering Rule 7) — the app only invokes it
+// and reacts to is_website_ready; sourceable writes via the set_inventory_sourceable RPC.
+function PublishCard({ item, onDone }: { item: any; onDone: () => void }) {
+  const [publishing, setPublishing] = useState(false);
+  const [sourceableBusy, setSourceableBusy] = useState(false);
+
+  // App-enforced publish gates.
+  const priceOk = item.pricing_status === "approved";
+  const photoOk = item.needs_photo === false;
+  const locationOk = !!item.location_id;
+  const missing: string[] = [];
+  if (!priceOk) missing.push("approved pricing");
+  if (!photoOk) missing.push("a photo");
+  if (!locationOk) missing.push("a location");
+  const canPublish = missing.length === 0;
+
+  const isLive = !!item.is_website_ready;
+
+  // Effective sourceable behavior (sourceable ?? !is_wysiwyg).
+  const effectiveSourceable = item.sourceable ?? !item.is_wysiwyg;
+  const sourceableValue: (typeof SOURCEABLE_OPTIONS)[number]["value"] =
+    item.sourceable == null ? "auto" : item.sourceable ? "yes" : "no";
+
+  const publish = async () => {
+    setPublishing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("publish-inventory-item", {
+        body: { inventory_item_id: item.id },
+      });
+      if (error) throw new Error(error.message);
+      if (!data?.ok) throw new Error(data?.error ?? "Publish failed");
+      toast.success("Published to website");
+      onDone();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const setSourceable = async (v: string) => {
+    const next = v === "auto" ? null : v === "yes";
+    setSourceableBusy(true);
+    try {
+      // _value accepts null (reset to auto); the generated Args type is narrower.
+      const { error } = await supabase.rpc("set_inventory_sourceable", {
+        _item_id: item.id,
+        _value: next as boolean,
+      });
+      if (error) throw new Error(error.message);
+      toast.success("Sourceable updated");
+      onDone();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSourceableBusy(false);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border bg-card p-5 space-y-5">
+      <h2 className="font-semibold flex items-center gap-2">
+        <Globe className="w-4 h-4" /> Website
+      </h2>
+
+      {/* Publish */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <Label className="text-sm">Publish to website</Label>
+            {isLive ? (
+              <p className="text-xs text-emerald-600 flex items-center gap-1 mt-0.5">
+                <CheckCircle2 className="w-3 h-3" /> Live on website
+                {item.slug && (
+                  <Link
+                    to="/products/$slug"
+                    params={{ slug: item.slug }}
+                    target="_blank"
+                    className="inline-flex items-center gap-0.5 underline hover:no-underline"
+                  >
+                    View <ExternalLink className="w-3 h-3" />
+                  </Link>
+                )}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground mt-0.5">Not published yet</p>
+            )}
+          </div>
+          <Button onClick={publish} disabled={!canPublish || publishing}>
+            {publishing ? "Publishing…" : isLive ? "Re-publish" : "Publish"}
+          </Button>
+        </div>
+        {!canPublish && <p className="text-xs text-amber-600">Needs: {missing.join(", ")}</p>}
+      </div>
+
+      {/* Sourceable tri-state */}
+      <div className="space-y-1.5 border-t pt-4">
+        <Label className="text-xs">Sourceable (when sold out)</Label>
+        <Select value={sourceableValue} onValueChange={setSourceable} disabled={sourceableBusy}>
+          <SelectTrigger className="h-9 w-40">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SOURCEABLE_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          {effectiveSourceable
+            ? "Stays listed & orderable when sold out."
+            : "Drops off the site when sold."}
+          {item.sourceable == null && " (Auto — derived from item type.)"}
+        </p>
+      </div>
     </div>
   );
 }

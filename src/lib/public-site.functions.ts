@@ -49,6 +49,8 @@ export type SiteSettings = {
   announcements: string[];
   /** Service areas for local SEO (v_public_site_settings.service_areas → site_settings.data.serviceAreas). */
   serviceAreas: string[];
+  /** Store order cycle → drives the sold-out-sourceable pickup-ETA copy (v_public_site_settings.order_cycle). */
+  orderCycle: { cutoffDay: string; readyDay: string } | null;
   updatedAt: string | null;
 };
 
@@ -103,6 +105,16 @@ export type Product = {
   compareAtPrice: number | null;
   currency: "USD";
   availability: "available" | "on_hold" | "sold" | "coming_soon";
+  /**
+   * Whether the item can be re-ordered when sold out. From v_public_inventory.sourceable
+   * (already `COALESCE(sourceable, NOT is_wysiwyg)` server-side), default true when null.
+   */
+  sourceable: boolean;
+  /**
+   * Derived display state: in-stock (available/on_hold) → "in_stock"; a sold-out
+   * sourceable row (the only sold-out rows the view keeps) → "order_ahead".
+   */
+  orderState: "in_stock" | "order_ahead";
   isWysiwyg: boolean;
   isHouseLine: boolean;
   careLevel: string | null;
@@ -136,6 +148,18 @@ const slugify = (name: string | null | undefined, id?: string) =>
     .replace(/(^-|-$)/g, "")}` + (id ? `-${String(id).slice(0, 8)}` : "");
 
 const stripTrailingSlash = (s: string) => s.replace(/\/$/, "");
+
+/**
+ * Pickup-ETA copy for a sold-out-but-sourceable (order-ahead) item. Deliberately
+ * simple: "Order by Sunday · pickup Wednesday" when the order cycle is set,
+ * falling back to "Available to order" when it isn't. No "special order" wording.
+ */
+export function pickupEtaLine(orderCycle: SiteSettings["orderCycle"] | null | undefined): string {
+  if (orderCycle?.cutoffDay && orderCycle?.readyDay) {
+    return `Order by ${orderCycle.cutoffDay} · pickup ${orderCycle.readyDay}`;
+  }
+  return "Available to order";
+}
 
 /** Absolute URL for a Storage path. storage_base already includes the public-media bucket. */
 function mediaUrl(base: string, path: string | null | undefined): string | null {
@@ -175,6 +199,13 @@ function mapProduct(r: any, cfg: Cfg): Product {
 
   const primaryUrl = mediaUrl(cfg.storageBase, r.primary_media_path);
 
+  // The view already coalesces sourceable (COALESCE(sourceable, NOT is_wysiwyg)),
+  // so a null here means the row predates the column — default to true (orderable).
+  const sourceable = r.sourceable == null ? true : !!r.sourceable;
+  const availability = AVAIL_MAP[r.availability_status] || "coming_soon";
+  // Only sold-out *sourceable* rows reach the view, so a "sold" row is order-ahead.
+  const orderState: Product["orderState"] = availability === "sold" ? "order_ahead" : "in_stock";
+
   return {
     id: r.id,
     slug: r.slug || slugify(r.item_name, r.id),
@@ -187,7 +218,9 @@ function mapProduct(r: any, cfg: Cfg): Product {
     price,
     compareAtPrice: compareAt,
     currency: "USD",
-    availability: AVAIL_MAP[r.availability_status] || "coming_soon",
+    availability,
+    sourceable,
+    orderState,
     isWysiwyg: !!r.is_wysiwyg,
     isHouseLine: !!r.is_house_line,
     careLevel: a.care_level ?? null,
@@ -230,6 +263,16 @@ function mapSiteSettings(s: any, storageBase: string): SiteSettings {
     ? rawAreas.filter((x: unknown): x is string => typeof x === "string")
     : [];
 
+  // order_cycle is a jsonb {cutoff_day, ready_day}; null-safe, snake→camel.
+  const oc = s?.order_cycle;
+  const orderCycle =
+    oc &&
+    typeof oc === "object" &&
+    typeof oc.cutoff_day === "string" &&
+    typeof oc.ready_day === "string"
+      ? { cutoffDay: oc.cutoff_day, readyDay: oc.ready_day }
+      : null;
+
   return {
     siteTitle: s?.site_title ?? null,
     tagline: s?.tagline ?? null,
@@ -239,6 +282,7 @@ function mapSiteSettings(s: any, storageBase: string): SiteSettings {
     announcement: ann ?? null,
     announcements,
     serviceAreas,
+    orderCycle,
     updatedAt: s?.updated_at ?? null,
   };
 }
