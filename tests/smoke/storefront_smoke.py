@@ -139,6 +139,49 @@ async def main() -> int:
                (on_login or not leaked) and not leaked,
                f"final_url={final_url} shell_leaked={leaked}")
 
+        # 10. Publish-flow proof — /shop product-card count ≥ 3 (3rd item was
+        # published through the staff Publish flow; assertion guards "intake →
+        # publish → live" without redeploy).
+        page = await ctx.new_page()
+        await page.goto(f"{BASE}/shop", wait_until="domcontentloaded")
+        await page.wait_for_timeout(1500)
+        card_count = await page.evaluate(
+            "document.querySelectorAll('a[href^=\"/products/\"]').length"
+        )
+        record("#10 /shop product card count ≥ 3 (publish-flow proof)",
+               card_count >= 3, f"card_count={card_count}")
+
+        # 11. Order-ahead PDP — sourceable sold_out item stays listed and orderable.
+        # Asserts pickup-ETA copy + JSON-LD Offer availability=BackOrder.
+        page = await ctx.new_page()
+        b = await basics(page, "/products/filter-sock-200-8a63bd82")
+        body = (await page.locator("body").inner_text()).lower()
+        offers = []
+        for ld in b["jsonld"]:
+            arr = ld if isinstance(ld, list) else [ld]
+            for n in arr:
+                if isinstance(n, dict) and n.get("@type") == "Product":
+                    off = n.get("offers")
+                    if isinstance(off, dict): offers.append(off)
+                    elif isinstance(off, list): offers.extend(o for o in off if isinstance(o, dict))
+        avails = [o.get("availability", "") for o in offers]
+        has_eta = ("order by" in body and "pickup" in body)
+        has_backorder = any("BackOrder" in a for a in avails)
+        record("#11 order-ahead PDP → 200 + pickup-ETA copy + Offer BackOrder",
+               b["status"] == 200 and has_eta and has_backorder,
+               f"status={b['status']} pickup_copy={has_eta} offer_avail={avails}")
+
+        # 12. Dropped WYSIWYG PDP — sold-out non-sourceable item drops from
+        # v_public_inventory and its PDP must not-found.
+        page = await ctx.new_page()
+        await page.goto(f"{BASE}/products/filter-sock-100-micron-7x16-d9b3c8a0",
+                        wait_until="domcontentloaded")
+        await page.wait_for_timeout(800)
+        body = (await page.locator("body").inner_text()).lower()
+        dropped = ("couldn't find" in body or "not found" in body or "browse" in body)
+        record("#12 dropped WYSIWYG PDP → not-found", dropped,
+               f"body_head={body[:120]!r}")
+
         await browser.close()
 
     fails = [n for n, ok, _ in results if not ok]
