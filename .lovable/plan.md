@@ -1,98 +1,36 @@
 
-## Migration: `2026_website_enablement.sql`
+## Goal
+Bring Reef Lounge Coral's whole catalog (fish, inverts, anemones, cleanup crew, corals — names + images) into `vendor_scrape_items` as a named image-anchor library the FB "New Arrivals" export and inventory image-picker can auto-match against. Owner has written permission to reuse product images.
 
-One migration, runs in dependency order. All new `public` tables get GRANTs + RLS + policies. All views are invoker-rights with explicit `GRANT SELECT ... TO anon`.
+## Steps
 
-### 1. Enum additions
-- `inventory_activity_action`: add `media_change`, `website_ready_change` (for trigger-driven log rows).
-- New enum `media_view`: `daylight | actinic | video_still | other`.
-- `inventory_media_tag` stays as-is (`website` remains the publish flag).
+1. **Confirm `FIRECRAWL_API_KEY`** is present in the deployed runtime (it's in the project secrets list, but verify via `fetch_secrets`). Reef Lounge 403s on direct fetch — the scrape must use the Firecrawl fallback.
 
-### 2. `inventory_items` column additions
-- `is_wysiwyg boolean not null default false` — staff-flagged at intake.
-- `specimen_notes text` — per-specimen blurb.
-- `compare_at_price numeric(10,2)` — strike-through price.
-- `is_house_line boolean not null default false`.
-- `product_id uuid references public.products(id) on delete set null` (nullable; PDP falls back).
-- `is_website_ready boolean not null default false` — derived, trigger-maintained.
+2. **Seed the source via migration** (idempotent, matches the pattern in `handoff-vendor-watch-seed-vendors.md`):
+   - `INSERT … ON CONFLICT DO NOTHING` into `public.vendors`:
+     - slug `reef-lounge-coral`, name `Reef Lounge Coral`, website `https://reefloungecoral.com`, notes call out the permission.
+   - `INSERT … ON CONFLICT DO NOTHING` into `public.vendor_scrape_sources`:
+     - name: `Reef Lounge Coral — catalog`
+     - kind: `shopify_public`
+     - source_url: `https://reefloungecoral.com/products.json` (the scraper paginates itself)
+     - cadence: `weekly`
+     - prefer_firecrawl: `true`
+     - auth_method: `none`
+     - notes: `"Official image source — owner has written permission to reuse product images. Permissioned 2026-06-30."`
 
-### 3. `inventory_media` column additions
-- `view media_view` (nullable).
-- `is_primary boolean not null default false`.
-- Partial unique index: `(inventory_item_id) WHERE is_primary`.
+   Using a seed migration (not the admin Add-Source dialog) so the source is version-controlled and reproducible across environments.
 
-### 4. `products`
-- `description text` — evergreen species copy (if not already present; confirm and skip if so).
+3. **Run the first refresh** by invoking `runScrapeForSource` for the new source id (via the existing app server function, same path the admin "Refresh now" button uses). This populates `vendor_scrape_items` with the whole-catalog `products.json` payload through Firecrawl.
 
-### 5. `store_locations` NAP + hours
-- `address_line1/2 text`, `city text`, `region text`, `postal_code text`, `country text default 'US'`.
-- `phone text`, `public_email text`.
-- `hours jsonb` (shape: `{ mon: [{open,close}], ... }`).
-- `lat double precision`, `lng double precision`.
+4. **Verify the haul** with read-only SQL against `vendor_scrape_items` for this source:
+   - total items ingested
+   - count with `image_url IS NOT NULL`
+   - rough breakdown by `product_type` (and a fallback bucket count from title keywords for collections that come through as blank `product_type`)
+   - spot-check 5–10 titles read as species names ("Blue Hippo Tang", "Dragon Soul Torch", etc.)
 
-### 6. New table `collections`
-- `id uuid pk`, `slug text unique not null`, `title text not null`, `description text`, `hero_media_id uuid → inventory_media`, `sort_order int default 0`, `is_published boolean default false`, `filter jsonb` (saved query), timestamps.
-- GRANT SELECT to anon (published only via view), full CRUD to authenticated gated by `is_admin_or_dev`.
-- RLS: anon — none on base; authenticated read all; write admin/dev only.
+5. **Reply with the haul numbers** and the spot-check so you can confirm coverage of fish / inverts / anemones / coral / cleanup-crew.
 
-### 7. New table `site_settings`
-- Singleton (`id bool pk default true check (id)`).
-- `site_title text`, `tagline text`, `default_og_image_path text`, `social jsonb`, `announcement text`, `storage_base text`, timestamps.
-- Admin/dev write only; authenticated read; anon read via view.
-
-### 8. Storage: `public-media` bucket
-- `insert into storage.buckets ... public = true on conflict do nothing`.
-- Policies: public SELECT; admin/dev INSERT/UPDATE/DELETE.
-- Staff "copy for website" action lives in a later app PR — out of scope here.
-
-### 9. `is_website_ready` trigger
-Trigger function recomputes per item:
-```
-is_website_ready := (
-  pricing_status = 'approved'
-  AND retail_price IS NOT NULL
-  AND needs_photo = false
-  AND item_name IS NOT NULL
-  AND EXISTS (SELECT 1 FROM inventory_media
-              WHERE inventory_item_id = items.id AND tag = 'website')
-)
-```
-Triggers:
-- `BEFORE INSERT/UPDATE ON inventory_items` — recompute on the NEW row.
-- `AFTER INSERT/DELETE/UPDATE ON inventory_media` — UPDATE the parent `inventory_items.is_website_ready` for the affected `inventory_item_id` (covers tag flips). Re-entrancy safe because the inventory_items UPDATE only writes `is_website_ready`.
-- Log `website_ready_change` to `inventory_activity_logs` on transitions.
-
-### 10. Public read views (`public_read_models.sql` — same migration file)
-All invoker-rights, `GRANT SELECT ... TO anon`, filter inside view WHERE:
-
-- `v_public_inventory` — joins items + primary media + optional product. Filters: `is_website_ready = true AND availability_status IN ('available','on_hold') AND NOT is_house_line` (house-line gated separately if needed).
-- `v_public_media` — only rows with `tag='website'` whose parent is website-ready; exposes `storage_path`, `view`, `is_primary`, `alt`.
-- `v_public_collections` — published collections + hero media.
-- `v_public_locations` — store_locations with NAP/hours where `is_public = true`.
-- `v_public_site_settings` — singleton row.
-
-Underlying base-table RLS stays locked to authenticated; anon reaches data only through these views.
-
-### 11. GRANTs (every new table)
-```
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.collections TO authenticated;
-GRANT ALL ON public.collections TO service_role;
--- no anon on base; anon reads via v_public_collections
-```
-Same shape for `site_settings`.
-
-### 12. Backfill
-- `UPDATE inventory_items SET is_website_ready = <expr>` once at end of migration so existing approved/photographed items light up immediately.
-
-### Out of scope (deferred PRs)
-- "Copy media to public-media" staff action.
-- Collections admin UI.
-- Site-settings admin UI.
-- Public website code that consumes the views.
-
-### Open confirmations before I write SQL
-1. `products.description` — exists already? I'll check; if present, skip the ADD COLUMN.
-2. `store_locations.is_public` — does it exist, or should the migration add it (default true for retail-facing kinds)?
-3. House-line visibility on website: hide entirely from `v_public_inventory`, or include with a flag the frontend can filter? My default = include with the flag exposed (so house lines can be browsable on a dedicated collection).
-
-Once you confirm those three, I'll ship the single migration in build mode.
+## Notes / scope
+- No new app code. No UI changes. No edge function. Only: one seed migration + one refresh invocation + read-only verification.
+- If the first refresh errors with "Firecrawl not configured", I'll stop and surface that before retrying.
+- Workspace-level "vendor photos OK" attestation (the optional item 4 in the handoff) is **not** in scope here — the per-source `notes` permission line satisfies provenance for Reef Lounge specifically. Flag separately if you want the attestation setting built.
