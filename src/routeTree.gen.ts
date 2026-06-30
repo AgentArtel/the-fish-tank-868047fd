@@ -31,6 +31,10 @@ import { Route as AppCalendarRouteImport } from './routes/_app/calendar'
 import { Route as AppBatchesRouteImport } from './routes/_app/batches'
 import { Route as publicVisitRouteImport } from './routes/(public)/visit'
 import { Route as publicShopRouteImport } from './routes/(public)/shop'
+import { Route as publicGuidesRouteImport } from './routes/(public)/guides'
+import { Route as publicFaqRouteImport } from './routes/(public)/faq'
+import { Route as publicEventsRouteImport } from './routes/(public)/events'
+import { Route as publicBlogRouteImport } from './routes/(public)/blog'
 import { Route as AppVendorWatchIndexRouteImport } from './routes/_app/vendor-watch.index'
 import { Route as AppInventoryIndexRouteImport } from './routes/_app/inventory.index'
 import { Route as AppCustomersIndexRouteImport } from './routes/_app/customers.index'
@@ -54,7 +58,9 @@ import { Route as AppContentNewRouteImport } from './routes/_app/content.new'
 import { Route as AppContentIdRouteImport } from './routes/_app/content.$id'
 import { Route as AppBatchesIdRouteImport } from './routes/_app/batches.$id'
 import { Route as publicProductsSlugRouteImport } from './routes/(public)/products.$slug'
+import { Route as publicGuidesSlugRouteImport } from './routes/(public)/guides.$slug'
 import { Route as publicCollectionsSlugRouteImport } from './routes/(public)/collections.$slug'
+import { Route as publicBlogSlugRouteImport } from './routes/(public)/blog.$slug'
 import { Route as ApiPublicHooksRefreshScrapeSourcesRouteImport } from './routes/api/public/hooks/refresh-scrape-sources'
 
 const SignupRoute = SignupRouteImport.update({
@@ -163,6 +169,26 @@ const publicVisitRoute = publicVisitRouteImport.update({
 const publicShopRoute = publicShopRouteImport.update({
   id: '/shop',
   path: '/shop',
+  getParentRoute: () => publicRouteRoute,
+} as any)
+const publicGuidesRoute = publicGuidesRouteImport.update({
+  id: '/guides',
+  path: '/guides',
+  getParentRoute: () => publicRouteRoute,
+} as any)
+const publicFaqRoute = publicFaqRouteImport.update({
+  id: '/faq',
+  path: '/faq',
+  getParentRoute: () => publicRouteRoute,
+} as any)
+const publicEventsRoute = publicEventsRouteImport.update({
+  id: '/events',
+  path: '/events',
+  getParentRoute: () => publicRouteRoute,
+} as any)
+const publicBlogRoute = publicBlogRouteImport.update({
+  id: '/blog',
+  path: '/blog',
   getParentRoute: () => publicRouteRoute,
 } as any)
 const AppVendorWatchIndexRoute = AppVendorWatchIndexRouteImport.update({
@@ -282,10 +308,20 @@ const publicProductsSlugRoute = publicProductsSlugRouteImport.update({
   path: '/products/$slug',
   getParentRoute: () => publicRouteRoute,
 } as any)
+const publicGuidesSlugRoute = publicGuidesSlugRouteImport.update({
+  id: '/$slug',
+  path: '/$slug',
+  getParentRoute: () => publicGuidesRoute,
+} as any)
 const publicCollectionsSlugRoute = publicCollectionsSlugRouteImport.update({
   id: '/collections/$slug',
   path: '/collections/$slug',
   getParentRoute: () => publicRouteRoute,
+} as any)
+const publicBlogSlugRoute = publicBlogSlugRouteImport.update({
+  id: '/$slug',
+  path: '/$slug',
+  getParentRoute: () => publicBlogRoute,
 } as any)
 const ApiPublicHooksRefreshScrapeSourcesRoute =
   ApiPublicHooksRefreshScrapeSourcesRouteImport.update({
@@ -300,6 +336,10 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/pending-approval': typeof PendingApprovalRoute
   '/signup': typeof SignupRoute
+  '/blog': typeof publicBlogRouteWithChildren
+  '/events': typeof publicEventsRoute
+  '/faq': typeof publicFaqRoute
+  '/guides': typeof publicGuidesRouteWithChildren
   '/shop': typeof publicShopRoute
   '/visit': typeof publicVisitRoute
   '/batches': typeof AppBatchesRouteWithChildren
@@ -315,7 +355,9 @@ export interface FileRoutesByFullPath {
   '/store-locations': typeof AppStoreLocationsRoute
   '/tasks': typeof AppTasksRoute
   '/vendors': typeof AppVendorsRoute
+  '/blog/$slug': typeof publicBlogSlugRoute
   '/collections/$slug': typeof publicCollectionsSlugRoute
+  '/guides/$slug': typeof publicGuidesSlugRoute
   '/products/$slug': typeof publicProductsSlugRoute
   '/batches/$id': typeof AppBatchesIdRoute
   '/content/$id': typeof AppContentIdRoute
@@ -347,6 +389,10 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/pending-approval': typeof PendingApprovalRoute
   '/signup': typeof SignupRoute
+  '/blog': typeof publicBlogRouteWithChildren
+  '/events': typeof publicEventsRoute
+  '/faq': typeof publicFaqRoute
+  '/guides': typeof publicGuidesRouteWithChildren
   '/shop': typeof publicShopRoute
   '/visit': typeof publicVisitRoute
   '/calendar': typeof AppCalendarRoute
@@ -360,7 +406,9 @@ export interface FileRoutesByTo {
   '/store-locations': typeof AppStoreLocationsRoute
   '/tasks': typeof AppTasksRoute
   '/vendors': typeof AppVendorsRoute
+  '/blog/$slug': typeof publicBlogSlugRoute
   '/collections/$slug': typeof publicCollectionsSlugRoute
+  '/guides/$slug': typeof publicGuidesSlugRoute
   '/products/$slug': typeof publicProductsSlugRoute
   '/batches/$id': typeof AppBatchesIdRoute
   '/content/$id': typeof AppContentIdRoute
@@ -394,6 +442,10 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/pending-approval': typeof PendingApprovalRoute
   '/signup': typeof SignupRoute
+  '/(public)/blog': typeof publicBlogRouteWithChildren
+  '/(public)/events': typeof publicEventsRoute
+  '/(public)/faq': typeof publicFaqRoute
+  '/(public)/guides': typeof publicGuidesRouteWithChildren
   '/(public)/shop': typeof publicShopRoute
   '/(public)/visit': typeof publicVisitRoute
   '/_app/batches': typeof AppBatchesRouteWithChildren
@@ -410,7 +462,9 @@ export interface FileRoutesById {
   '/_app/tasks': typeof AppTasksRoute
   '/_app/vendors': typeof AppVendorsRoute
   '/(public)/': typeof publicIndexRoute
+  '/(public)/blog/$slug': typeof publicBlogSlugRoute
   '/(public)/collections/$slug': typeof publicCollectionsSlugRoute
+  '/(public)/guides/$slug': typeof publicGuidesSlugRoute
   '/(public)/products/$slug': typeof publicProductsSlugRoute
   '/_app/batches/$id': typeof AppBatchesIdRoute
   '/_app/content/$id': typeof AppContentIdRoute
@@ -444,6 +498,10 @@ export interface FileRouteTypes {
     | '/login'
     | '/pending-approval'
     | '/signup'
+    | '/blog'
+    | '/events'
+    | '/faq'
+    | '/guides'
     | '/shop'
     | '/visit'
     | '/batches'
@@ -459,7 +517,9 @@ export interface FileRouteTypes {
     | '/store-locations'
     | '/tasks'
     | '/vendors'
+    | '/blog/$slug'
     | '/collections/$slug'
+    | '/guides/$slug'
     | '/products/$slug'
     | '/batches/$id'
     | '/content/$id'
@@ -491,6 +551,10 @@ export interface FileRouteTypes {
     | '/login'
     | '/pending-approval'
     | '/signup'
+    | '/blog'
+    | '/events'
+    | '/faq'
+    | '/guides'
     | '/shop'
     | '/visit'
     | '/calendar'
@@ -504,7 +568,9 @@ export interface FileRouteTypes {
     | '/store-locations'
     | '/tasks'
     | '/vendors'
+    | '/blog/$slug'
     | '/collections/$slug'
+    | '/guides/$slug'
     | '/products/$slug'
     | '/batches/$id'
     | '/content/$id'
@@ -537,6 +603,10 @@ export interface FileRouteTypes {
     | '/login'
     | '/pending-approval'
     | '/signup'
+    | '/(public)/blog'
+    | '/(public)/events'
+    | '/(public)/faq'
+    | '/(public)/guides'
     | '/(public)/shop'
     | '/(public)/visit'
     | '/_app/batches'
@@ -553,7 +623,9 @@ export interface FileRouteTypes {
     | '/_app/tasks'
     | '/_app/vendors'
     | '/(public)/'
+    | '/(public)/blog/$slug'
     | '/(public)/collections/$slug'
+    | '/(public)/guides/$slug'
     | '/(public)/products/$slug'
     | '/_app/batches/$id'
     | '/_app/content/$id'
@@ -746,6 +818,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof publicShopRouteImport
       parentRoute: typeof publicRouteRoute
     }
+    '/(public)/guides': {
+      id: '/(public)/guides'
+      path: '/guides'
+      fullPath: '/guides'
+      preLoaderRoute: typeof publicGuidesRouteImport
+      parentRoute: typeof publicRouteRoute
+    }
+    '/(public)/faq': {
+      id: '/(public)/faq'
+      path: '/faq'
+      fullPath: '/faq'
+      preLoaderRoute: typeof publicFaqRouteImport
+      parentRoute: typeof publicRouteRoute
+    }
+    '/(public)/events': {
+      id: '/(public)/events'
+      path: '/events'
+      fullPath: '/events'
+      preLoaderRoute: typeof publicEventsRouteImport
+      parentRoute: typeof publicRouteRoute
+    }
+    '/(public)/blog': {
+      id: '/(public)/blog'
+      path: '/blog'
+      fullPath: '/blog'
+      preLoaderRoute: typeof publicBlogRouteImport
+      parentRoute: typeof publicRouteRoute
+    }
     '/_app/vendor-watch/': {
       id: '/_app/vendor-watch/'
       path: '/vendor-watch'
@@ -907,12 +1007,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof publicProductsSlugRouteImport
       parentRoute: typeof publicRouteRoute
     }
+    '/(public)/guides/$slug': {
+      id: '/(public)/guides/$slug'
+      path: '/$slug'
+      fullPath: '/guides/$slug'
+      preLoaderRoute: typeof publicGuidesSlugRouteImport
+      parentRoute: typeof publicGuidesRoute
+    }
     '/(public)/collections/$slug': {
       id: '/(public)/collections/$slug'
       path: '/collections/$slug'
       fullPath: '/collections/$slug'
       preLoaderRoute: typeof publicCollectionsSlugRouteImport
       parentRoute: typeof publicRouteRoute
+    }
+    '/(public)/blog/$slug': {
+      id: '/(public)/blog/$slug'
+      path: '/$slug'
+      fullPath: '/blog/$slug'
+      preLoaderRoute: typeof publicBlogSlugRouteImport
+      parentRoute: typeof publicBlogRoute
     }
     '/api/public/hooks/refresh-scrape-sources': {
       id: '/api/public/hooks/refresh-scrape-sources'
@@ -924,7 +1038,35 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface publicBlogRouteChildren {
+  publicBlogSlugRoute: typeof publicBlogSlugRoute
+}
+
+const publicBlogRouteChildren: publicBlogRouteChildren = {
+  publicBlogSlugRoute: publicBlogSlugRoute,
+}
+
+const publicBlogRouteWithChildren = publicBlogRoute._addFileChildren(
+  publicBlogRouteChildren,
+)
+
+interface publicGuidesRouteChildren {
+  publicGuidesSlugRoute: typeof publicGuidesSlugRoute
+}
+
+const publicGuidesRouteChildren: publicGuidesRouteChildren = {
+  publicGuidesSlugRoute: publicGuidesSlugRoute,
+}
+
+const publicGuidesRouteWithChildren = publicGuidesRoute._addFileChildren(
+  publicGuidesRouteChildren,
+)
+
 interface publicRouteRouteChildren {
+  publicBlogRoute: typeof publicBlogRouteWithChildren
+  publicEventsRoute: typeof publicEventsRoute
+  publicFaqRoute: typeof publicFaqRoute
+  publicGuidesRoute: typeof publicGuidesRouteWithChildren
   publicShopRoute: typeof publicShopRoute
   publicVisitRoute: typeof publicVisitRoute
   publicIndexRoute: typeof publicIndexRoute
@@ -933,6 +1075,10 @@ interface publicRouteRouteChildren {
 }
 
 const publicRouteRouteChildren: publicRouteRouteChildren = {
+  publicBlogRoute: publicBlogRouteWithChildren,
+  publicEventsRoute: publicEventsRoute,
+  publicFaqRoute: publicFaqRoute,
+  publicGuidesRoute: publicGuidesRouteWithChildren,
   publicShopRoute: publicShopRoute,
   publicVisitRoute: publicVisitRoute,
   publicIndexRoute: publicIndexRoute,

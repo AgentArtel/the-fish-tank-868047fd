@@ -570,3 +570,327 @@ export const getCollectionProducts = createServerFn({ method: "GET" })
       total: count ?? (rows ?? []).length,
     };
   });
+
+// ============================================================
+// Content layer — blog / guides / events / FAQ + author bylines
+// (Phase 4). All over the anon-readable v_public_* views, which
+// already gate to published rows server-side:
+//   v_public_articles  → status='published' AND publish_at<=now()
+//   v_public_faqs      → is_published=true
+//   v_public_events    → status='published'
+//   v_public_authors   → is_active=true
+// so the fns don't re-gate; they just shape snake→camel.
+//
+// IMAGE PATHS — projection gap [DB=Lovable]:
+//   Article/event hero + author avatar are exposed as *_media_id UUIDs
+//   (hero_media_id / avatar_media_id), NOT storage paths. v_public_media is
+//   keyed by inventory_item_id (livestock photos only), so those ids can't be
+//   resolved to a public URL from the anon views. We therefore use the
+//   article/event `og_image_path` (a real Storage path) as the hero/OG image,
+//   and render author avatars only if a future view projects an avatar path.
+//   Until a `hero_media_path` / `avatar_media_path` is projected onto the
+//   views, hero/avatar images degrade gracefully (no broken <img>).
+// ============================================================
+
+// ---------- article `kind` → public surface ----------
+// The DB `article_kind` enum is care_guide | event_recap | news |
+// species_spotlight | how_to | other — it is NOT a blog/guide flag. We map
+// the how-to-shaped kinds to the "guides" surface and everything else to the
+// "blog" surface so /blog and /guides each get a coherent feed.
+export type ArticleSurface = "blog" | "guide";
+const GUIDE_KINDS = ["care_guide", "how_to"] as const;
+const BLOG_KINDS = ["event_recap", "news", "species_spotlight", "other"] as const;
+const surfaceForKind = (kind: string | null | undefined): ArticleSurface =>
+  kind && (GUIDE_KINDS as readonly string[]).includes(kind) ? "guide" : "blog";
+
+export type Author = {
+  id: string;
+  slug: string | null;
+  name: string;
+  /** credentials line (e.g. "Lead aquarist") — closest field to a job title */
+  credentials: string | null;
+  bioMarkdown: string | null;
+  links: Json;
+  /**
+   * Avatar URL. Currently always null — v_public_authors exposes avatar_media_id
+   * (a UUID) but no resolvable path. TODO[DB=Lovable]: project avatar_media_path.
+   */
+  avatarUrl: string | null;
+};
+
+export type Article = {
+  id: string;
+  slug: string;
+  surface: ArticleSurface;
+  kind: string | null;
+  title: string;
+  subtitle: string | null;
+  excerpt: string | null;
+  bodyMarkdown: string | null;
+  tags: string[];
+  /** Hero/OG image from og_image_path + storage_base. Null when unset. */
+  heroImage: string | null;
+  seoTitle: string | null;
+  seoDescription: string | null;
+  publishedAt: string | null;
+  updatedAt: string | null;
+  author: Author | null;
+};
+
+export type ArticleListResult = {
+  articles: Article[];
+  total: number;
+};
+
+export type ArticleDetail = Article & {
+  /** Featured/related products pinned to the post (v_public_article_products). */
+  featuredProducts: Product[];
+};
+
+export type Faq = {
+  id: string;
+  question: string;
+  answerMarkdown: string | null;
+  category: string;
+  sortOrder: number;
+};
+
+export type EventItem = {
+  id: string;
+  slug: string | null;
+  title: string;
+  descriptionMarkdown: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  timezone: string | null;
+  locationText: string | null;
+  heroImage: string | null;
+  seoTitle: string | null;
+  seoDescription: string | null;
+  updatedAt: string | null;
+};
+
+// ---------- content mappers ----------
+function mapAuthor(r: any): Author {
+  return {
+    id: r.id,
+    slug: r.slug ?? null,
+    name: r.display_name ?? "The Fish Tank",
+    credentials: r.credentials ?? null,
+    bioMarkdown: r.bio_md ?? null,
+    links: r.links ?? null,
+    // avatar_media_id is a UUID with no public path projection yet — render none.
+    // TODO[DB=Lovable]: project an avatar path onto v_public_authors.
+    avatarUrl: null,
+  };
+}
+
+function mapArticle(r: any, storageBase: string, author: Author | null): Article {
+  return {
+    id: r.id,
+    slug: r.slug,
+    surface: surfaceForKind(r.kind),
+    kind: r.kind ?? null,
+    title: r.title,
+    subtitle: r.subtitle ?? null,
+    excerpt: r.excerpt ?? null,
+    bodyMarkdown: r.body_md ?? null,
+    tags: Array.isArray(r.tags)
+      ? r.tags.filter((t: unknown): t is string => typeof t === "string")
+      : [],
+    heroImage: mediaUrl(storageBase, r.og_image_path),
+    seoTitle: r.seo_title ?? null,
+    seoDescription: r.seo_description ?? null,
+    publishedAt: r.publish_at ?? null,
+    updatedAt: r.updated_at ?? null,
+    author,
+  };
+}
+
+function mapFaq(r: any): Faq {
+  return {
+    id: r.id,
+    question: r.question,
+    answerMarkdown: r.answer_md ?? null,
+    category: r.category || "General",
+    sortOrder: typeof r.sort_order === "number" ? r.sort_order : 0,
+  };
+}
+
+function mapEvent(r: any, storageBase: string): EventItem {
+  return {
+    id: r.id,
+    slug: r.slug ?? null,
+    title: r.title,
+    descriptionMarkdown: r.description_md ?? null,
+    startsAt: r.starts_at ?? null,
+    endsAt: r.ends_at ?? null,
+    timezone: r.timezone ?? null,
+    locationText: r.location_text ?? null,
+    heroImage: mediaUrl(storageBase, r.og_image_path),
+    seoTitle: r.seo_title ?? null,
+    seoDescription: r.seo_description ?? null,
+    updatedAt: r.updated_at ?? null,
+  };
+}
+
+/** Fetch + index authors referenced by a set of articles (one round-trip). */
+async function loadAuthorsFor(
+  supabaseAdmin: any,
+  authorIds: Array<string | null | undefined>,
+): Promise<Record<string, Author>> {
+  const ids = Array.from(new Set(authorIds.filter((x): x is string => !!x)));
+  if (ids.length === 0) return {};
+  const { data } = await supabaseAdmin.from("v_public_authors").select("*").in("id", ids);
+  return Object.fromEntries((data ?? []).map((a: any) => [a.id as string, mapAuthor(a)]));
+}
+
+const ARTICLE_PAGE_SIZE = 12;
+
+/**
+ * List published articles → v_public_articles, optionally filtered to a public
+ * surface ("blog" | "guide"; see surfaceForKind). Sorted newest-first by
+ * publish_at. Joins v_public_authors for the byline. Returns `{ articles, total }`.
+ */
+export const listArticles = createServerFn({ method: "GET" })
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        surface: z.enum(["blog", "guide"]).optional(),
+        page: z.number().int().min(0).max(1000).optional(),
+      })
+      .optional()
+      .parse(d ?? {}),
+  )
+  .handler(async ({ data }): Promise<ArticleListResult> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: s } = await supabaseAdmin
+      .from("v_public_site_settings")
+      .select("storage_base")
+      .maybeSingle();
+    const storageBase = stripTrailingSlash(String(s?.storage_base || ""));
+
+    const page = data?.page ?? 0;
+    const from = page * ARTICLE_PAGE_SIZE;
+    const to = from + ARTICLE_PAGE_SIZE - 1;
+
+    let q = supabaseAdmin.from("v_public_articles").select("*", { count: "exact" });
+    if (data?.surface === "guide") q = q.in("kind", GUIDE_KINDS as unknown as string[]);
+    else if (data?.surface === "blog") q = q.in("kind", BLOG_KINDS as unknown as string[]);
+    q = q.order("publish_at", { ascending: false, nullsFirst: false });
+
+    const { data: rows, error, count } = await q.range(from, to);
+    if (error) throw new Error(error.message);
+
+    const authors = await loadAuthorsFor(
+      supabaseAdmin,
+      (rows ?? []).map((r: any) => r.author_id),
+    );
+    return {
+      articles: (rows ?? []).map((r: any) =>
+        mapArticle(r, storageBase, r.author_id ? (authors[r.author_id] ?? null) : null),
+      ),
+      total: count ?? (rows ?? []).length,
+    };
+  });
+
+/**
+ * Single published article by slug → v_public_articles, with its byline
+ * (v_public_authors) and pinned featured products (v_public_article_products →
+ * v_public_inventory). Returns null when the slug isn't a published article.
+ */
+export const getArticleBySlug = createServerFn({ method: "GET" })
+  .inputValidator((d: unknown) => z.object({ slug: z.string().min(1).max(200) }).parse(d))
+  .handler(async ({ data }): Promise<ArticleDetail | null> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const cfg = await loadCfg(supabaseAdmin);
+
+    const { data: row, error } = await supabaseAdmin
+      .from("v_public_articles")
+      .select("*")
+      .eq("slug", data.slug)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!row) return null;
+
+    let author: Author | null = null;
+    if (row.author_id) {
+      const { data: a } = await supabaseAdmin
+        .from("v_public_authors")
+        .select("*")
+        .eq("id", row.author_id as string)
+        .maybeSingle();
+      if (a) author = mapAuthor(a);
+    }
+
+    const article = mapArticle(row, cfg.storageBase, author) as ArticleDetail;
+
+    // Featured products pinned to the post (both sides publicly visible).
+    const { data: links } = await supabaseAdmin
+      .from("v_public_article_products")
+      .select("inventory_item_id,sort_order")
+      .eq("article_id", row.id as string)
+      .order("sort_order", { ascending: true, nullsFirst: false });
+    const itemIds = (links ?? [])
+      .map((l: any) => l.inventory_item_id)
+      .filter((x: unknown): x is string => !!x);
+    let featuredProducts: Product[] = [];
+    if (itemIds.length) {
+      const { data: prodRows } = await supabaseAdmin
+        .from("v_public_inventory")
+        .select("*")
+        .in("id", itemIds);
+      const byId = new Map<string, Product>(
+        (prodRows ?? []).map((p: any) => [p.id as string, mapProduct(p, cfg)]),
+      );
+      // preserve the curated sort_order from the join
+      featuredProducts = itemIds.map((id) => byId.get(id)).filter((p): p is Product => !!p);
+    }
+    article.featuredProducts = featuredProducts;
+
+    return article;
+  });
+
+/** Published FAQs → v_public_faqs, ordered by sort_order (then insertion). */
+export const listFaqs = createServerFn({ method: "GET" }).handler(async (): Promise<Faq[]> => {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data, error } = await supabaseAdmin
+    .from("v_public_faqs")
+    .select("*")
+    .order("sort_order", { ascending: true, nullsFirst: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(mapFaq);
+});
+
+/**
+ * Published events → v_public_events. `upcomingOnly` (default true) keeps events
+ * whose start is in the future OR currently running (ends_at >= now). Ordered by
+ * start ascending so the soonest event is first.
+ */
+export const listEvents = createServerFn({ method: "GET" })
+  .inputValidator((d: unknown) =>
+    z
+      .object({ upcomingOnly: z.boolean().optional() })
+      .optional()
+      .parse(d ?? {}),
+  )
+  .handler(async ({ data }): Promise<EventItem[]> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: s } = await supabaseAdmin
+      .from("v_public_site_settings")
+      .select("storage_base")
+      .maybeSingle();
+    const storageBase = stripTrailingSlash(String(s?.storage_base || ""));
+
+    let q = supabaseAdmin.from("v_public_events").select("*");
+    if (data?.upcomingOnly !== false) {
+      // Upcoming = not yet ended (ongoing counts), or no end set but starts in the future.
+      const nowIso = new Date().toISOString();
+      q = q.or(`ends_at.gte.${nowIso},and(ends_at.is.null,starts_at.gte.${nowIso})`);
+    }
+    q = q.order("starts_at", { ascending: true, nullsFirst: false });
+
+    const { data: rows, error } = await q;
+    if (error) throw new Error(error.message);
+    return (rows ?? []).map((r: any) => mapEvent(r, storageBase));
+  });
