@@ -33,6 +33,16 @@ const NAV: Array<{ key: string; label: string }> = [
   { key: "learn", label: "Learn" },
 ];
 
+// The Learn dropdown — the only nav entry with live routes this phase (the
+// product categories remain inert placeholders until their collection routes
+// land). Content pages (Phase 4) live here. `to` is a typed TanStack route.
+const LEARN_LINKS: Array<{ to: "/guides" | "/blog" | "/events" | "/faq"; label: string }> = [
+  { to: "/guides", label: "Care Guides" },
+  { to: "/blog", label: "Blog" },
+  { to: "/events", label: "Events" },
+  { to: "/faq", label: "FAQ" },
+];
+
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function openStatus(
@@ -166,6 +176,79 @@ function IconBtn({
         </span>
       )}
     </button>
+  );
+}
+
+/**
+ * Learn nav entry — a hover/focus dropdown of the Phase 4 content routes
+ * (Guides / Blog / Events / FAQ). Reuses the existing header nav slot; it does
+ * NOT restructure the header. Other NAV entries stay inert placeholders until
+ * their routes exist.
+ */
+function LearnMenu({ label }: { label: string }) {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <div
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      style={{ position: "relative", display: "flex", alignItems: "stretch" }}
+    >
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-haspopup="true"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 5,
+          padding: "0 var(--space-4)",
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          font: "var(--fw-semibold) var(--text-sm)/1 var(--font-sans)",
+          color: "var(--text-heading)",
+        }}
+      >
+        {label}
+        <ChevronDown size={14} />
+      </button>
+      {open && (
+        <div
+          style={{
+            position: "absolute",
+            top: "100%",
+            left: 0,
+            minWidth: 180,
+            background: "var(--surface-card)",
+            borderRadius: "var(--radius-md)",
+            boxShadow: "var(--shadow-md)",
+            border: "1px solid var(--border-default)",
+            padding: "var(--space-2)",
+            zIndex: 60,
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          {LEARN_LINKS.map((l) => (
+            <Link
+              key={l.to}
+              to={l.to}
+              onClick={() => setOpen(false)}
+              style={{
+                padding: "var(--space-2) var(--space-3)",
+                borderRadius: "var(--radius-sm)",
+                textDecoration: "none",
+                font: "var(--fw-medium) var(--text-sm)/1.2 var(--font-sans)",
+                color: "var(--text-heading)",
+              }}
+              activeProps={{ style: { color: "var(--brand-primary)" } }}
+            >
+              {l.label}
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -303,23 +386,27 @@ export function SiteHeader({
             height: 46,
           }}
         >
-          {NAV.map((entry) => (
-            <span
-              key={entry.key}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 5,
-                padding: "0 var(--space-4)",
-                cursor: "default",
-                font: "var(--fw-semibold) var(--text-sm)/1 var(--font-sans)",
-                color: "var(--text-heading)",
-              }}
-            >
-              {entry.label}
-              <ChevronDown size={14} />
-            </span>
-          ))}
+          {NAV.map((entry) =>
+            entry.key === "learn" ? (
+              <LearnMenu key={entry.key} label={entry.label} />
+            ) : (
+              <span
+                key={entry.key}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 5,
+                  padding: "0 var(--space-4)",
+                  cursor: "default",
+                  font: "var(--fw-semibold) var(--text-sm)/1 var(--font-sans)",
+                  color: "var(--text-heading)",
+                }}
+              >
+                {entry.label}
+                <ChevronDown size={14} />
+              </span>
+            ),
+          )}
           <span
             style={{
               display: "flex",
@@ -359,31 +446,40 @@ export function SiteFooter({
   settings: SiteSettings | null;
   location: StoreLocation | null;
 }) {
-  const cols = [
+  // Footer link columns. `to` (a typed content route) makes an item a real Link;
+  // items without `to` stay inert placeholders until their routes land. The
+  // Learn column is reconciled to the Phase 4 content pages.
+  type FooterItem = { label: string; to?: "/guides" | "/blog" | "/events" | "/faq" };
+  const cols: Array<{ h: string; items: FooterItem[] }> = [
     {
       h: "Shop",
       items: [
-        "Live Corals",
-        "New Arrivals",
-        "Saltwater Fish",
-        "Inverts & CUC",
-        "Dry Goods",
-        "Coral Frag Packs",
+        { label: "Live Corals" },
+        { label: "New Arrivals" },
+        { label: "Saltwater Fish" },
+        { label: "Inverts & CUC" },
+        { label: "Dry Goods" },
+        { label: "Coral Frag Packs" },
       ],
     },
     {
       h: "Learn",
       items: [
-        "Care Guides",
-        "Acclimation Guide",
-        "New to Reefing?",
-        "Reef Rewards",
-        "The Fish Tank Blog",
+        { label: "Care Guides", to: "/guides" },
+        { label: "The Fish Tank Blog", to: "/blog" },
+        { label: "Events", to: "/events" },
+        { label: "FAQ", to: "/faq" },
       ],
     },
     {
       h: "Support",
-      items: ["My Account", "Shipping Policy", "Arrival Guarantee", "Returns & DOA", "Contact Us"],
+      items: [
+        { label: "My Account" },
+        { label: "Shipping Policy" },
+        { label: "Arrival Guarantee" },
+        { label: "Returns & DOA" },
+        { label: "Contact Us" },
+      ],
     },
   ];
   const pay = ["Visa", "Mastercard", "Amex", "PayPal", "Shop Pay", "Apple Pay"];
@@ -554,18 +650,32 @@ export function SiteFooter({
               {c.h}
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
-              {c.items.map((it) => (
-                <span
-                  key={it}
-                  style={{
-                    font: "var(--fw-regular) var(--text-sm)/1 var(--font-sans)",
-                    color: "var(--text-on-ocean-muted)",
-                    cursor: "default",
-                  }}
-                >
-                  {it}
-                </span>
-              ))}
+              {c.items.map((it) =>
+                it.to ? (
+                  <Link
+                    key={it.label}
+                    to={it.to}
+                    style={{
+                      font: "var(--fw-regular) var(--text-sm)/1 var(--font-sans)",
+                      color: "var(--text-on-ocean-muted)",
+                      textDecoration: "none",
+                    }}
+                  >
+                    {it.label}
+                  </Link>
+                ) : (
+                  <span
+                    key={it.label}
+                    style={{
+                      font: "var(--fw-regular) var(--text-sm)/1 var(--font-sans)",
+                      color: "var(--text-on-ocean-muted)",
+                      cursor: "default",
+                    }}
+                  >
+                    {it.label}
+                  </span>
+                ),
+              )}
             </div>
           </div>
         ))}
