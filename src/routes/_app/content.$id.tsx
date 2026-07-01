@@ -25,8 +25,10 @@ import {
   updateContentStatus, getSignedUrl, getSignedUrls, getMe, deleteContentItem,
   listSpeciesMediaForPost, attachMediaToPost, speciesKeyFromLine,
 } from "@/lib/cms.functions";
-import { Copy, Trash2, ArrowLeft, Upload, Check, ImageIcon } from "lucide-react";
+import { Copy, Trash2, ArrowLeft, Upload, Check, ImageIcon, Download, X, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { VendorImagePicker } from "@/components/vendor-image-picker";
+import JSZip from "jszip";
 
 export const Route = createFileRoute("/_app/content/$id")({ component: ContentDetail });
 
@@ -196,6 +198,16 @@ function ContentDetail() {
                 );
               })}
             </div>
+            {(platforms ?? []).length > 0 && (
+              <div className="mt-3 space-y-2 border-t pt-3">
+                <p className="text-xs text-muted-foreground">
+                  After posting by hand, paste the live post URL here.
+                </p>
+                {(platforms ?? []).map((cp: any) => (
+                  <PostUrlRow key={cp.id} cp={cp} onSaved={refetchPlatforms} />
+                ))}
+              </div>
+            )}
           </Section>
 
           <Section title="Media">
@@ -224,6 +236,10 @@ function ContentDetail() {
 
           {item.source_vendor_batch_id && (
             <SpeciesMediaSection contentItemId={id} onChanged={refetchMedia} />
+          )}
+
+          {item.content_type === "announcement" && (
+            <FacebookExportSection caption={item.caption ?? ""} />
           )}
 
           <Button onClick={save}>Save changes</Button>
@@ -294,6 +310,33 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <div className="space-y-1.5"><Label className="text-xs">{label}</Label>{children}</div>;
+}
+
+// Per-platform live-post URL paste-back. Same content_platforms.post_url /
+// posted_at write used on the publishing page — reused here so the whole
+// manual-publish loop (export → post → record) stays on one page.
+function PostUrlRow({ cp, onSaved }: { cp: any; onSaved: () => void }) {
+  const [url, setUrl] = useState<string>(cp.post_url ?? "");
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    setSaving(true);
+    const { error } = await supabase.from("content_platforms").update({
+      post_url: url || null, posted_at: url ? new Date().toISOString() : null,
+    }).eq("id", cp.id);
+    setSaving(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success(url ? "Post URL saved" : "Post URL cleared");
+    onSaved();
+  };
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-24 shrink-0 text-xs text-muted-foreground">{PLATFORM_LABELS[cp.platform as Platform]}</span>
+      <Input className="h-8 text-xs" placeholder="https://facebook.com/…" value={url} onChange={(e) => setUrl(e.target.value)} />
+      <Button size="sm" variant="outline" className="h-8 shrink-0" disabled={saving || url === (cp.post_url ?? "")} onClick={save}>
+        {saving ? "Saving…" : "Save"}
+      </Button>
+    </div>
+  );
 }
 
 function MediaTile({ asset, onRemove }: { asset: any; onRemove: () => void }) {
@@ -592,6 +635,245 @@ function GalleryPickButton({ contentItemId, speciesKey, attachedIds, onDone }: {
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Export for Facebook (Phase A — manual publish, zero Meta API)
+// ---------------------------------------------------------------------------
+// The owner posts to Facebook by hand. We just hand them (1) the caption and
+// (2) a name-matched image set from the existing vendor scrape library. The
+// item list is derived by parsing the generated caption: each livestock line
+// is `- <name> (*<scientific>*) — N available`. We strip the scientific
+// parenthetical and the "— N available" suffix to recover the display name,
+// then pre-search the vendor library with it via VendorImagePicker.
+
+type ParsedCaptionItem = { key: string; name: string };
+
+// Parse `- <name> (*sci*) — N available` lines out of the caption. Returns the
+// cleaned display name per line (used as the image-search query + zip filename).
+export function parseCaptionItems(caption: string): ParsedCaptionItem[] {
+  const items: ParsedCaptionItem[] = [];
+  const seen = new Set<string>();
+  for (const raw of (caption ?? "").split("\n")) {
+    const line = raw.trim();
+    if (!line.startsWith("- ")) continue;
+    let name = line.slice(2).trim();
+    // Drop the "— N available" quantity suffix (em dash or hyphen variants).
+    name = name.replace(/\s*[—–-]\s*\d+\s+available\s*$/i, "").trim();
+    // Drop the "(*scientific name*)" parenthetical.
+    name = name.replace(/\s*\(\*[^)]*\*\)\s*$/, "").trim();
+    // Drop any remaining trailing "(...)" parenthetical just in case.
+    name = name.replace(/\s*\([^)]*\)\s*$/, "").trim();
+    if (!name) continue;
+    const k = name.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    items.push({ key: k, name });
+  }
+  return items;
+}
+
+// Filesystem-safe filename from a species name (for zip entries).
+function safeFileName(name: string): string {
+  return (
+    name
+      .replace(/[^a-zA-Z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase()
+      .slice(0, 60) || "image"
+  );
+}
+
+type PickedImage = { photoPath: string; previewUrl: string };
+
+function FacebookExportSection({ caption }: { caption: string }) {
+  const parsed = parseCaptionItems(caption);
+  // Keyed by parsed item key; free-form manual picks use "manual:N" keys.
+  const [picks, setPicks] = useState<Record<string, PickedImage>>({});
+  const [manualPicks, setManualPicks] = useState<PickedImage[]>([]);
+  const [zipping, setZipping] = useState(false);
+
+  const setPick = (key: string, name: string, img: PickedImage | null) => {
+    setPicks((prev) => {
+      const next = { ...prev };
+      if (img) next[key] = img;
+      else delete next[key];
+      return next;
+    });
+  };
+
+  const copyCaption = async () => {
+    try {
+      await navigator.clipboard.writeText(caption ?? "");
+      toast.success("Caption copied to clipboard");
+    } catch {
+      toast.error("Couldn't copy — copy it manually from the caption field.");
+    }
+  };
+
+  // Collect every picked image (per-item + manual) with a filename base.
+  const collected: { name: string; img: PickedImage }[] = [
+    ...parsed.filter((p) => picks[p.key]).map((p) => ({ name: p.name, img: picks[p.key] })),
+    ...manualPicks.map((img, i) => ({ name: `extra-${i + 1}`, img })),
+  ];
+
+  const downloadZip = async () => {
+    if (collected.length === 0) {
+      toast.error("Pick at least one image first.");
+      return;
+    }
+    setZipping(true);
+    try {
+      const zip = new JSZip();
+      const usedNames = new Set<string>();
+      let ok = 0;
+      for (const { name, img } of collected) {
+        try {
+          const res = await fetch(img.previewUrl);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const blob = await res.blob();
+          const ext = (blob.type.split("/")[1] || "jpg").split("+")[0].slice(0, 5);
+          let base = safeFileName(name);
+          let fileName = `${base}.${ext}`;
+          let n = 2;
+          while (usedNames.has(fileName)) fileName = `${base}-${n++}.${ext}`;
+          usedNames.add(fileName);
+          zip.file(fileName, blob);
+          ok++;
+        } catch (e: any) {
+          console.error("zip image failed", name, e?.message);
+        }
+      }
+      if (ok === 0) throw new Error("None of the images could be fetched.");
+      const out = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(out);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "facebook-new-arrivals.zip";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success(`Downloaded ${ok} image${ok === 1 ? "" : "s"}${ok < collected.length ? ` (${collected.length - ok} failed)` : ""}`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Download failed");
+    } finally {
+      setZipping(false);
+    }
+  };
+
+  const pickedCount = collected.length;
+
+  return (
+    <Section title="Export for Facebook">
+      <p className="text-xs text-muted-foreground mb-3">
+        Phase A is manual publish. Match an image per item from the vendor library, then
+        <strong> Copy caption</strong> and <strong>Download image set</strong> — post them to Facebook
+        by hand, then paste the post URL back on the right (under Platforms).
+      </p>
+
+      <div className="flex flex-wrap gap-2 mb-4">
+        <Button type="button" variant="secondary" size="sm" onClick={copyCaption}>
+          <Copy className="w-3.5 h-3.5 mr-1" /> Copy caption
+        </Button>
+        <Button type="button" size="sm" onClick={downloadZip} disabled={zipping || pickedCount === 0}>
+          {zipping ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Download className="w-3.5 h-3.5 mr-1" />}
+          {zipping ? "Zipping…" : `Download image set${pickedCount ? ` (${pickedCount})` : ""}`}
+        </Button>
+      </div>
+
+      {parsed.length === 0 ? (
+        <div className="rounded-md border border-dashed p-3">
+          <p className="text-xs text-muted-foreground mb-2">
+            No items parsed from the caption — search the vendor library manually to add images.
+          </p>
+          <ManualPickRow picks={manualPicks} setPicks={setManualPicks} />
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {parsed.map((p) => (
+            <ExportItemRow
+              key={p.key}
+              name={p.name}
+              picked={picks[p.key] ?? null}
+              onPick={(img) => setPick(p.key, p.name, img)}
+            />
+          ))}
+          <div className="pt-2 border-t">
+            <p className="text-[11px] text-muted-foreground mb-2">Add extra images (optional):</p>
+            <ManualPickRow picks={manualPicks} setPicks={setManualPicks} />
+          </div>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// One row per parsed item: name + thumbnail (if picked) + pick/change/clear.
+function ExportItemRow({ name, picked, onPick }: {
+  name: string; picked: PickedImage | null; onPick: (img: PickedImage | null) => void;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-md border p-2">
+      <div className="h-12 w-12 shrink-0 overflow-hidden rounded bg-muted">
+        {picked ? (
+          <img src={picked.previewUrl} alt={name} className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+            <ImageIcon className="h-4 w-4" />
+          </div>
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-medium">{name}</div>
+        <div className="text-[11px] text-muted-foreground">
+          {picked ? "Image matched" : "No image yet"}
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        <VendorImagePicker
+          initialQuery={name}
+          triggerLabel={picked ? "Change" : "Match image"}
+          onPick={(photoPath, previewUrl) => onPick({ photoPath, previewUrl })}
+        />
+        {picked && (
+          <Button type="button" variant="ghost" size="sm" className="px-2" onClick={() => onPick(null)}>
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Free-form vendor-image picker(s) for items the parser missed or extra shots.
+function ManualPickRow({ picks, setPicks }: {
+  picks: PickedImage[]; setPicks: React.Dispatch<React.SetStateAction<PickedImage[]>>;
+}) {
+  return (
+    <div className="space-y-2">
+      {picks.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {picks.map((p, i) => (
+            <div key={i} className="relative h-14 w-14 overflow-hidden rounded border bg-muted">
+              <img src={p.previewUrl} alt="" className="h-full w-full object-cover" />
+              <button
+                type="button"
+                onClick={() => setPicks((prev) => prev.filter((_, j) => j !== i))}
+                className="absolute right-0 top-0 bg-destructive p-0.5 text-destructive-foreground"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <VendorImagePicker
+        triggerLabel="Search vendor images"
+        onPick={(photoPath, previewUrl) => setPicks((prev) => [...prev, { photoPath, previewUrl }])}
+      />
+    </div>
   );
 }
 
